@@ -104,111 +104,111 @@ export default function MarketplacePage() {
   }
 
   if (status === "loading" || loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>
+    return <div className="flex items-center justify-center h-screen bg-[#0B1220] text-gray-100">Loading...</div>
   }
 
   if (!session) return null
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-[#0B1220]">
       <Sidebar role={session.user.role} />
       
-      <main className="flex-1 p-8 bg-gray-100 min-h-screen">
-        <h1 className="text-3xl font-bold mb-8">Tax Credit Marketplace</h1>
+      <main className="flex-1 p-8">
+        <h1 className="text-3xl font-bold mb-8 text-white">Tax Credit Marketplace</h1>
 
         {inventory.length === 0 ? (
-          <Card>
-            <p className="text-gray-600">No credits available at this time.</p>
-          </Card>
+          <div className="bg-[#0F172A] border border-white/5 rounded-xl p-8 text-center">
+            <p className="text-gray-300">No credits available at this time.</p>
+          </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {inventory.map((item) => {
               const discount = 1 - Number(item.pricePerDollar)
               
               return (
-                <Card key={item.id}>
-                  <h3 className="text-xl font-bold mb-2">
+                <div key={item.id} className="bg-[#0F172A] border border-white/5 rounded-xl shadow-md hover:shadow-lg transition p-6">
+                  <h3 className="text-xl font-bold mb-4 text-white">
                     {item.creditType} {item.taxYear}
                   </h3>
                   
                   <div className="space-y-2 mb-4">
-                    <p className="text-sm">
-                      <span className="font-semibold">Available:</span>{" "}
+                    <p className="text-sm text-gray-100">
+                      <span className="font-semibold text-gray-200">Available:</span>{" "}
                       ${Number(item.availableUSD).toLocaleString()}
                     </p>
-                    <p className="text-sm">
-                      <span className="font-semibold">Min Block:</span>{" "}
+                    <p className="text-sm text-gray-100">
+                      <span className="font-semibold text-gray-200">Min Block:</span>{" "}
                       ${Number(item.minBlockUSD).toLocaleString()}
                     </p>
-                    <p className="text-sm">
-                      <span className="font-semibold">Price:</span>{" "}
+                    <p className="text-sm text-gray-100">
+                      <span className="font-semibold text-gray-200">Price:</span>{" "}
                       ${item.pricePerDollar} per $1
                     </p>
                     <p className="text-sm">
-                      <span className="font-semibold text-green-600">
+                      <span className="font-semibold text-green-400">
                         Discount: {(discount * 100).toFixed(1)}%
                       </span>
                     </p>
                     {item.stateRestriction && (
-                      <p className="text-sm">
-                        <span className="font-semibold">State:</span>{" "}
+                      <p className="text-sm text-gray-100">
+                        <span className="font-semibold text-gray-200">State:</span>{" "}
                         {item.stateRestriction}
                       </p>
                     )}
                   </div>
 
-                  <Button
+                  <button
                     onClick={() => setSelectedCredit(item)}
-                    className="w-full"
+                    className="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-black font-semibold rounded-xl transition"
                   >
                     View Details
-                  </Button>
-                </Card>
+                  </button>
+                </div>
               )
             })}
           </div>
         )}
 
         {selectedCredit && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-[#0F172A] border border-white/5 rounded-xl shadow-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <h2 className="text-2xl font-bold mb-4 text-white">
                 {selectedCredit.creditType} {selectedCredit.taxYear}
               </h2>
 
               <div className="space-y-3 mb-6">
-                <p>
-                  <span className="font-semibold">Face Value Available:</span>{" "}
+                <p className="text-gray-100">
+                  <span className="font-semibold text-gray-200">Face Value Available:</span>{" "}
                   ${Number(selectedCredit.availableUSD).toLocaleString()}
                 </p>
-                <p>
-                  <span className="font-semibold">Minimum Block:</span>{" "}
+                <p className="text-gray-100">
+                  <span className="font-semibold text-gray-200">Minimum Block:</span>{" "}
                   ${Number(selectedCredit.minBlockUSD).toLocaleString()}
                 </p>
-                <p>
-                  <span className="font-semibold">Price per Dollar:</span>{" "}
+                <p className="text-gray-100">
+                  <span className="font-semibold text-gray-200">Price per Dollar:</span>{" "}
                   ${selectedCredit.pricePerDollar}
                 </p>
-                <p className="text-green-600 font-semibold">
+                <p className="text-green-400 font-semibold">
                   Effective Discount:{" "}
                   {((1 - Number(selectedCredit.pricePerDollar)) * 100).toFixed(1)}%
                 </p>
                 {selectedCredit.brokerName && (
-                  <p>
-                    <span className="font-semibold">Broker:</span>{" "}
+                  <p className="text-gray-100">
+                    <span className="font-semibold text-gray-200">Broker:</span>{" "}
                     {selectedCredit.brokerName}
                   </p>
                 )}
                 {selectedCredit.closeBy && (
-                  <p>
-                    <span className="font-semibold">Transfer Window:</span>{" "}
+                  <p className="text-gray-100">
+                    <span className="font-semibold text-gray-200">Transfer Window:</span>{" "}
                     {new Date(selectedCredit.closeBy).toLocaleDateString()}
                   </p>
                 )}
               </div>
 
               <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-semibold mb-2 text-gray-200">
                   Purchase Amount (Face Value USD)
                 </label>
                 <input
@@ -216,10 +216,10 @@ export default function MarketplacePage() {
                   value={purchaseAmount}
                   onChange={(e) => setPurchaseAmount(e.target.value)}
                   placeholder={`Min: ${Number(selectedCredit.minBlockUSD)}`}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-500"
                 />
                 {purchaseAmount && (
-                  <p className="text-sm text-gray-600 mt-2">
+                  <p className="text-sm text-gray-400 mt-2">
                     Subtotal: $
                     {(
                       parseFloat(purchaseAmount) *
@@ -230,32 +230,30 @@ export default function MarketplacePage() {
               </div>
 
               <div className="flex gap-4">
-                <Button
+                <button
                   onClick={() => handleReserve(selectedCredit)}
-                  variant="secondary"
-                  className="flex-1"
+                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-100 font-semibold rounded-xl transition"
                 >
                   Reserve (72h Hold)
-                </Button>
-                <Button
+                </button>
+                <button
                   onClick={() => handlePurchase(selectedCredit)}
-                  className="flex-1"
+                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-black font-semibold rounded-xl transition"
                 >
                   Purchase Now
-                </Button>
+                </button>
               </div>
 
-              <Button
+              <button
                 onClick={() => {
                   setSelectedCredit(null)
                   setPurchaseAmount("")
                 }}
-                variant="secondary"
-                className="w-full mt-4"
+                className="w-full mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-100 font-semibold rounded-xl transition"
               >
                 Close
-              </Button>
-            </Card>
+              </button>
+            </div>
           </div>
         )}
       </main>

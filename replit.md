@@ -219,19 +219,33 @@ Database location: `prisma/dev.db` (SQLite)
   - Background: #0B1220 (deep navy/black)
   - Card/Section: #0F172A (dark blue)
   - Sidebar: #0E1526 with borders
-  - Brand color: #10B981 (green accent)
+  - Brand color: #10B981 (emerald green - Clario-style)
 - ✅ Enhanced typography for readability on dark backgrounds
-  - Headers: text-gray-100
-  - Body text: text-gray-200/300
-  - Labels: text-gray-200
-  - Placeholders: text-gray-400
-  - Input text: text-gray-100
-- ✅ Updated all components with dark theme:
+  - Headers: text-white
+  - Body text: text-gray-100
+  - Labels: text-gray-200 with font-semibold
+  - Placeholders: placeholder-gray-500
+  - Price values: text-green-400
+- ✅ Updated all pages with consistent dark theme:
   - Login page: Dark centered card with green CTA button
   - Register page: Dark form with improved contrast
   - Homepage: Dark landing page with subtle borders
   - Dashboard: Role-based dark cards with navigation
   - Sidebar: Dark navigation with green active states
+  - Admin Inventory: Dark cards with readable values and green price highlights
+  - Admin Purchases: Dark cards with centered empty state
+  - Marketplace: Dark grid cards with green accents and modal
+  - Clients: Dark table with proper contrast
+  - Audit Log: Dark table layout
+- ✅ Button styling standardization:
+  - Primary (green): bg-green-500 hover:bg-green-600 text-black
+  - Secondary (gray): bg-white/10 hover:bg-white/20 text-gray-100
+  - Export CSV: bg-green-600 hover:bg-green-700 with shadow
+- ✅ Card & panel styling:
+  - All cards: bg-[#0F172A] border border-white/5 rounded-xl shadow-md
+  - Hover states: hover:shadow-lg transition
+  - Empty states: Centered with text-gray-300
+  - Status badges: bg-green-600/red-600/yellow-600 text-white font-medium
 - ✅ Created RequireRole HOC for role-based page access control
 - ✅ Built /clients page for accountants (view assigned companies)
 - ✅ Built /admin/audit page for system activity logs
@@ -240,4 +254,5 @@ Database location: `prisma/dev.db` (SQLite)
   - 3 demo companies with realistic data
   - Sample audit log entries
 - ✅ Fixed all dashboard card links to properly navigate
-- ✅ Updated Tailwind config with brand colors and custom spacing
+- ✅ Updated Tailwind config with brand colors (#10B981)
+- ✅ Applied global body styling: @apply bg-[#0B1220] text-gray-100

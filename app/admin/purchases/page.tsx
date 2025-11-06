@@ -62,50 +62,50 @@ export default function AdminPurchasesPage() {
   }
 
   if (status === "loading" || loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>
+    return <div className="flex items-center justify-center h-screen bg-[#0B1220] text-gray-100">Loading...</div>
   }
 
   if (!session || session.user.role !== "ADMIN") return null
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-[#0B1220]">
       <Sidebar role={session.user.role} />
       
-      <main className="flex-1 p-8 bg-gray-100 min-h-screen">
+      <main className="flex-1 p-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Purchase Order Management</h1>
+          <h1 className="text-3xl font-bold text-white">Purchase Order Management</h1>
           <a
             href="/api/admin/export/purchases"
-            className="inline-block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow transition"
           >
             Export CSV
           </a>
         </div>
 
         {purchases.length === 0 ? (
-          <Card>
-            <p className="text-gray-600">No purchase orders yet.</p>
-          </Card>
+          <div className="bg-[#0F172A] border border-white/5 rounded-xl p-8 text-center">
+            <p className="text-gray-300">No purchase orders yet.</p>
+          </div>
         ) : (
           <div className="space-y-4">
             {purchases.map((po: any) => (
-              <Card key={po.id}>
+              <div key={po.id} className="bg-[#0F172A] border border-white/5 rounded-xl shadow-md hover:shadow-lg transition p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-xl font-bold">
+                    <h3 className="text-xl font-bold text-white">
                       {po.inventory.creditType} {po.inventory.taxYear}
                     </h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-400">
                       Order #{po.id.slice(0, 8)} - {po.company.legalName}
                     </p>
                   </div>
                   <div>
-                    <span className={`px-3 py-1 rounded-full text-sm ${
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                       po.brokerStatus === "APPROVED"
-                        ? "bg-green-100 text-green-800"
+                        ? "bg-green-600 text-white"
                         : po.brokerStatus === "REJECTED"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-yellow-100 text-yellow-800"
+                        ? "bg-red-600 text-white"
+                        : "bg-yellow-600 text-white"
                     }`}>
                       {po.brokerStatus}
                     </span>
@@ -114,28 +114,28 @@ export default function AdminPurchasesPage() {
 
                 <div className="grid md:grid-cols-4 gap-4 mb-4">
                   <div>
-                    <p className="text-sm text-gray-600">Face Value</p>
-                    <p className="font-semibold">
+                    <p className="text-sm font-semibold text-gray-200">Face Value</p>
+                    <p className="text-white font-semibold">
                       ${Number(po.amountUSD).toLocaleString()}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Paid</p>
-                    <p className="font-semibold">
+                    <p className="text-sm font-semibold text-gray-200">Total Paid</p>
+                    <p className="text-white font-semibold">
                       ${Number(po.totalUSD).toLocaleString()}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Payment Status</p>
+                    <p className="text-sm font-semibold text-gray-200">Payment Status</p>
                     <p className={`font-semibold ${
-                      po.status === "PAID" ? "text-green-600" : "text-yellow-600"
+                      po.status === "PAID" ? "text-green-400" : "text-yellow-400"
                     }`}>
                       {po.status}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Created</p>
-                    <p className="text-sm">
+                    <p className="text-sm font-semibold text-gray-200">Created</p>
+                    <p className="text-sm text-gray-100">
                       {new Date(po.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -143,27 +143,27 @@ export default function AdminPurchasesPage() {
 
                 {po.status === "PAID" && po.brokerStatus === "PENDING" && (
                   <div className="flex gap-2 mt-4">
-                    <Button
+                    <button
                       onClick={() => updateBrokerStatus(po.id, "APPROVED")}
-                      variant="primary"
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-black font-semibold rounded-xl transition"
                     >
                       Approve
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       onClick={() => updateBrokerStatus(po.id, "NEEDS_INFO")}
-                      variant="secondary"
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-100 font-semibold rounded-xl transition"
                     >
                       Needs Info
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       onClick={() => updateBrokerStatus(po.id, "REJECTED")}
-                      variant="danger"
+                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition"
                     >
                       Reject
-                    </Button>
+                    </button>
                   </div>
                 )}
-              </Card>
+              </div>
             ))}
           </div>
         )}
