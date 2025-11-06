@@ -3,69 +3,15 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum Role {
-  COMPANY
-  ACCOUNTANT
-  ADMIN
-}
-
-enum CreditType {
-  ITC
-  PTC
-  C45Q
-  C48C
-  C48E
-  OTHER
-}
-
-enum InventoryStatus {
-  ACTIVE
-  INACTIVE
-  SOLD_OUT
-}
-
-enum HoldStatus {
-  ACTIVE
-  EXPIRED
-  CONVERTED
-}
-
-enum POStatus {
-  PENDING_PAYMENT
-  PAID
-  CANCELLED
-  REFUNDED
-}
-
-enum ComplianceStatus {
-  MISSING
-  IN_REVIEW
-  COMPLETE
-}
-
-enum BrokerStatus {
-  PENDING
-  APPROVED
-  NEEDS_INFO
-  REJECTED
-}
-
-enum DocType {
-  W9
-  ID
-  IRS_TRANSFER_STATEMENT
-  OTHER
 }
 
 model User {
   id             String              @id @default(cuid())
   email          String              @unique
   hashedPassword String?
-  role           Role                @default(COMPANY)
+  role           String              @default("COMPANY")
   name           String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
@@ -103,7 +49,7 @@ model AccountantClient {
 
 model CreditInventory {
   id               String          @id @default(cuid())
-  creditType       CreditType
+  creditType       String
   taxYear          Int
   jurisdiction     String?
   stateRestriction String?
@@ -116,7 +62,7 @@ model CreditInventory {
   notes            String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-  status           InventoryStatus @default(ACTIVE)
+  status           String          @default("ACTIVE")
   holds            Hold[]
   purchaseOrders   PurchaseOrder[]
 }
@@ -128,7 +74,7 @@ model Hold {
   amountUSD   Decimal
   expiresAt   DateTime
   createdAt   DateTime        @default(now())
-  status      HoldStatus      @default(ACTIVE)
+  status      String          @default("ACTIVE")
   inventory   CreditInventory @relation(fields: [inventoryId], references: [id])
   company     Company         @relation(fields: [companyId], references: [id])
 }
@@ -143,11 +89,11 @@ model PurchaseOrder {
   feesUSD               Decimal
   totalUSD              Decimal
   stripeSessionId       String?
-  status                POStatus          @default(PENDING_PAYMENT)
+  status                String            @default("PENDING_PAYMENT")
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
-  complianceStatus      ComplianceStatus  @default(MISSING)
-  brokerStatus          BrokerStatus      @default(PENDING)
+  complianceStatus      String            @default("MISSING")
+  brokerStatus          String            @default("PENDING")
   closingCertificateUrl String?
   brokerPackageUrl      String?
   company               Company           @relation(fields: [companyId], references: [id])
@@ -157,7 +103,7 @@ model PurchaseOrder {
 model Document {
   id         String   @id @default(cuid())
   companyId  String
-  type       DocType
+  type       String
   url        String
   uploadedAt DateTime @default(now())
   company    Company  @relation(fields: [companyId], references: [id])
