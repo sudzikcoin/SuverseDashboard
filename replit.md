@@ -6,13 +6,13 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 ## Tech Stack
 - **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes, NextAuth.js for authentication
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: SQLite (development) with Prisma ORM
 - **Payments**: Stripe Checkout with webhook integration
 - **Email**: Resend for transactional emails
 - **PDF Generation**: @react-pdf/renderer
 
 ## Current Status
-**Status**: MVP Complete - Functional with external API keys required
+**Status**: MVP Complete - Authentication & Database Fully Operational ✅
 
 ### Implemented Features
 ✅ User authentication with three roles (Company, Accountant, Admin)
@@ -66,9 +66,9 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 ## Environment Variables Required
 
 ### Core (Already Set)
-- `DATABASE_URL` - PostgreSQL connection string (Replit DB)
-- `NEXTAUTH_SECRET` - Session encryption key (generated)
-- `NEXTAUTH_URL` - Application URL (http://localhost:5000)
+- `DATABASE_URL` - SQLite database (file:./prisma/dev.db) - overridden in lib/db.ts for development
+- `NEXTAUTH_SECRET` - Session encryption key ("dev-secret")
+- `AUTH_TRUST_HOST` - Enable NextAuth in Replit preview (true)
 
 ### External Services Needed
 - `STRIPE_SECRET_KEY` - Stripe API key (sk_test_...)
@@ -84,7 +84,7 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 - **Email**: admin@suverse.io
 - **Password**: ChangeMe_2025
 
-## Database Schema
+## Database Schema (SQLite)
 - **User**: Authentication and role management
 - **Company**: Business entity details
 - **CreditInventory**: Tax credit lots for sale
@@ -93,6 +93,12 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 - **Document**: Uploaded compliance files
 - **AuditLog**: System activity tracking
 - **AccountantClient**: Accountant-client relationships
+
+### Database Setup
+Database location: `prisma/dev.db` (SQLite)
+- Auto-created on first run via lib/db.ts override
+- Seeded with admin user and 5 demo tax credits
+- Reset endpoint available: `POST /api/debug/reset` (dev only)
 
 ## User Flows
 
@@ -177,9 +183,12 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 7. Add rate limiting on POST endpoints
 8. Configure custom domain
 
-## Recent Changes
-- Fixed critical security issue: Admin self-registration now blocked
-- Implemented admin purchase order listing with data fetch
-- Added broker approval UI with status buttons
-- Created comprehensive README with setup instructions
-- Seeded database with 5 demo tax credit items
+## Recent Changes (November 6, 2025)
+- ✅ Migrated database from PostgreSQL to SQLite for local development
+- ✅ Fixed NextAuth integration with trustHost configuration
+- ✅ Updated lib/db.ts to force SQLite DATABASE_URL in development
+- ✅ Database fully seeded with admin user and 5 demo tax credits
+- ✅ Enhanced UI readability: labels text-gray-800, inputs text-gray-900, placeholders placeholder-gray-500
+- ✅ Created POST /api/debug/reset endpoint for database reset (dev only)
+- ✅ Verified end-to-end: registration, login, session management all working
+- ✅ Server running on port 5000 with proper Replit preview compatibility
