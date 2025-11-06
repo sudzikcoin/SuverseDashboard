@@ -205,7 +205,27 @@ Database location: `prisma/dev.db` (SQLite)
 
 ## Recent Changes (November 6, 2025)
 
-### Phase 3: Payment Fallback System (Latest)
+### Phase 4: Landing Page Revamp (Latest)
+- ✅ Completely redesigned landing page with modern Clario-style dark UI
+  - Created 7 modular components in `components/landing/`
+  - Hero section with radial gradient, emerald badge, and 3 CTA buttons
+  - TrustRow with pill badges (SOC-style Logs, Audit Trail, etc.)
+  - Benefits section with 3 cards (Transparent Pricing, Compliance-First, Fast Closing)
+  - HowItWorks section with numbered steps
+  - RoleStrip with role-based CTAs for Company, Accountant, Admin
+  - FAQ section with 5 expandable items
+  - Footer with copyright and navigation links
+- ✅ Design system implementation
+  - Background: slate-950 (#0b1220)
+  - Cards: bg-slate-900 with ring-1 ring-white/10
+  - Accent color: emerald-500 (#22c55e) for CTAs and highlights
+  - Rounded-2xl cards with hover effects
+  - High-contrast typography (text-white headings, text-gray-300 body)
+- ✅ Updated Stripe API version to latest stable (2025-10-29.clover)
+- ✅ All existing routes (/login, /register, /marketplace) remain functional
+- ✅ Responsive design verified (mobile-first, grid layouts for desktop)
+
+### Phase 3: Payment Fallback System
 - ✅ Implemented demo mode payment fallback when Stripe is not configured
   - Created `lib/isStripeEnabled.ts` helper function
   - Updated `app/api/checkout/route.ts` to handle both Stripe and demo mode
