@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  COMPANY
+  ACCOUNTANT
+  ADMIN
+}
+
+enum CreditType {
+  ITC
+  PTC
+  C45Q
+  C48C
+  C48E
+  OTHER
+}
+
+enum InventoryStatus {
+  ACTIVE
+  INACTIVE
+  SOLD_OUT
+}
+
+enum HoldStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+}
+
+enum POStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum ComplianceStatus {
+  MISSING
+  IN_REVIEW
+  COMPLETE
+}
+
+enum BrokerStatus {
+  PENDING
+  APPROVED
+  NEEDS_INFO
+  REJECTED
+}
+
+enum DocType {
+  W9
+  ID
+  IRS_TRANSFER_STATEMENT
+  OTHER
+}
+
+model User {
+  id             String              @id @default(cuid())
+  email          String              @unique
+  hashedPassword String?
+  role           Role                @default(COMPANY)
+  name           String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  companyId      String?
+  company        Company?            @relation(fields: [companyId], references: [id])
+  accountantClients AccountantClient[]
+}
+
+model Company {
+  id            String          @id @default(cuid())
+  legalName     String
+  ein           String?         @unique
+  state         String?
+  contactEmail  String
+  taxLiability  Decimal?
+  targetCloseYear Int?
+  ownerId       String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  users         User[]
+  purchases     PurchaseOrder[]
+  documents     Document[]
+  holds         Hold[]
+}
+
+model AccountantClient {
+  id           String   @id @default(cuid())
+  accountantId String
+  companyId    String
+  createdAt    DateTime @default(now())
+  accountant   User     @relation(fields: [accountantId], references: [id])
+
+  @@unique([accountantId, companyId])
+}
+
+model CreditInventory {
+  id               String          @id @default(cuid())
+  creditType       CreditType
+  taxYear          Int
+  jurisdiction     String?
+  stateRestriction String?
+  faceValueUSD     Decimal
+  minBlockUSD      Decimal
+  pricePerDollar   Decimal
+  availableUSD     Decimal
+  closeBy          DateTime?
+  brokerName       String?
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  status           InventoryStatus @default(ACTIVE)
+  holds            Hold[]
+  purchaseOrders   PurchaseOrder[]
+}
+
+model Hold {
+  id          String          @id @default(cuid())
+  inventoryId String
+  companyId   String
+  amountUSD   Decimal
+  expiresAt   DateTime
+  createdAt   DateTime        @default(now())
+  status      HoldStatus      @default(ACTIVE)
+  inventory   CreditInventory @relation(fields: [inventoryId], references: [id])
+  company     Company         @relation(fields: [companyId], references: [id])
+}
+
+model PurchaseOrder {
+  id                    String            @id @default(cuid())
+  companyId             String
+  inventoryId           String
+  amountUSD             Decimal
+  pricePerDollar        Decimal
+  subtotalUSD           Decimal
+  feesUSD               Decimal
+  totalUSD              Decimal
+  stripeSessionId       String?
+  status                POStatus          @default(PENDING_PAYMENT)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  complianceStatus      ComplianceStatus  @default(MISSING)
+  brokerStatus          BrokerStatus      @default(PENDING)
+  closingCertificateUrl String?
+  brokerPackageUrl      String?
+  company               Company           @relation(fields: [companyId], references: [id])
+  inventory             CreditInventory   @relation(fields: [inventoryId], references: [id])
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  companyId  String
+  type       DocType
+  url        String
+  uploadedAt DateTime @default(now())
+  company    Company  @relation(fields: [companyId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  createdAt DateTime @default(now())
+}
