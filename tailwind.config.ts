@@ -11,6 +11,14 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        brand: {
+          DEFAULT: '#22c55e',
+          dark: '#16a34a',
+        },
+      },
+      borderRadius: {
+        DEFAULT: '12px',
+        lg: '16px',
       },
     },
   },

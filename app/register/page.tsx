@@ -66,25 +66,25 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <Card className="max-w-2xl w-full">
-        <h1 className="text-3xl font-bold mb-6 text-center">Sign Up</h1>
+    <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-[#0F172A] border border-white/5 rounded-xl shadow-lg p-8">
+        <h1 className="text-3xl font-bold mb-6 text-center text-gray-100">Sign Up</h1>
         
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">Role</label>
+            <label className="block text-sm font-medium text-gray-200 mb-2">Role</label>
             <select
               value={formData.role}
               onChange={(e) =>
                 setFormData({ ...formData, role: e.target.value })
               }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+              className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
             >
               <option value="COMPANY">Company (Buyer)</option>
               <option value="ACCOUNTANT">Accountant</option>
@@ -93,28 +93,28 @@ export default function RegisterPage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-2">Email</label>
+              <label className="block text-sm font-medium text-gray-200 mb-2">Email</label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                 placeholder="your.email@example.com"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-2">Password</label>
+              <label className="block text-sm font-medium text-gray-200 mb-2">Password</label>
               <input
                 type="password"
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                 placeholder="Min. 8 characters"
                 required
                 minLength={8}
@@ -125,7 +125,7 @@ export default function RegisterPage() {
           {formData.role === "COMPANY" && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-2">
+                <label className="block text-sm font-medium text-gray-200 mb-2">
                   Company Legal Name
                 </label>
                 <input
@@ -134,7 +134,7 @@ export default function RegisterPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, companyLegalName: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                  className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                   placeholder="Acme Corporation Inc."
                   required
                 />
@@ -142,7 +142,7 @@ export default function RegisterPage() {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-2">
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
                     State
                   </label>
                   <input
@@ -151,13 +151,13 @@ export default function RegisterPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, state: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                     placeholder="CA, NY, TX..."
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-2">
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
                     EIN (Optional)
                   </label>
                   <input
@@ -166,7 +166,7 @@ export default function RegisterPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, ein: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                     placeholder="12-3456789"
                   />
                 </div>
@@ -174,7 +174,7 @@ export default function RegisterPage() {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-2">
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
                     Est. Tax Liability (Optional)
                   </label>
                   <input
@@ -183,13 +183,13 @@ export default function RegisterPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, taxLiability: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                     placeholder="100000"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-2">
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
                     Target Close Year (Optional)
                   </label>
                   <input
@@ -198,7 +198,7 @@ export default function RegisterPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, targetCloseYear: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                     placeholder="2025"
                   />
                 </div>
@@ -206,18 +206,22 @@ export default function RegisterPage() {
             </>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-brand hover:bg-brand-dark text-black font-semibold py-3 rounded-xl transition disabled:opacity-60"
+          >
             {loading ? "Creating account..." : "Sign Up"}
-          </Button>
+          </button>
         </form>
 
-        <p className="mt-4 text-center text-gray-700">
+        <p className="mt-6 text-center text-gray-400">
           Already have an account?{" "}
-          <Link href="/login" className="text-blue-600 hover:underline font-medium">
+          <Link href="/login" className="text-brand hover:text-brand-dark font-medium">
             Login
           </Link>
         </p>
-      </Card>
+      </div>
     </div>
   )
 }

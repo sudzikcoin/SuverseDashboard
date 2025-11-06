@@ -1,0 +1,94 @@
+You are the project AI engineer. Apply these changes end-to-end and confirm with screenshots + working preview links.
+
+0) Scope & success criteria
+	•	After login/registration all pages must use readable text (no pale placeholders).
+	•	/clients and /admin/audit must render without 404 and show real data from the DB.
+	•	“Clients” cards/buttons on the dashboard must navigate and work.
+	•	Global style = softer, rounded, dark theme with green accents similar to Clario.
+	•	Keep SQLite seed and protect pages by role.
+
+1) Typography & readability (global)
+	•	In app/globals.css (or tailwind config/layout) set base text color and placeholders:
+	•	body text: text-gray-100 (on dark) or text-gray-800 (if light components).
+	•	placeholders: placeholder-gray-400.
+	•	form labels: text-gray-200 (dark).
+	•	Create a Tailwind theme preset:
+	•	Add custom colors: brand: { DEFAULT: '#22c55e', dark: '#16a34a' }.
+	•	Set borderRadius: { DEFAULT: '12px', lg: '16px' }.
+	•	Ensure all inputs/buttons use text-gray-100 (dark), not text-gray-400.
+	•	Replace any inline text-gray-300/400 on value text with text-gray-100/200.
+
+2) Dark Clario-like theme
+	•	Wrap the app root (app/layout.tsx) with a dark container:
+	•	className="min-h-screen bg-[#0B1220] text-gray-100".
+	•	Update sidebar and cards:
+	•	Sidebar: bg-[#0E1526], links hover:bg-[#111B34], active bg-[#111B34] text-brand.
+	•	Cards: bg-[#0F172A] border border-white/5 rounded-xl shadow-lg/10.
+	•	Primary button: bg-brand hover:bg-brand-dark text-black font-semibold rounded-xl.
+	•	Secondary button: bg-white/5 hover:bg-white/10 text-gray-100 rounded-xl.
+	•	Apply consistent spacing and rounded corners across forms and tables.
+
+3) Fix routes & pages
+
+3.1 /clients
+	•	Create app/clients/page.tsx (for accountants only).
+	•	Page shows:
+	•	Table of client companies (name, state, EIN, total purchases).
+	•	“Add Client” button → modal/form (name, state, EIN).
+	•	Backend:
+	•	Add app/api/clients/route.ts with GET/POST (using Prisma).
+	•	Ensure only role="ACCOUNTANT" or ADMIN can access.
+	•	Wire sidebar “Clients” to /clients.
+	•	Empty state → “No clients yet” with CTA.
+
+3.2 /admin/audit
+	•	Create app/admin/audit/page.tsx (admin only).
+	•	Fetch last 100 rows from AuditLog (actor, action, entity, timestamp).
+	•	Add filters (entity type, actor email) client-side.
+	•	Add API route app/api/audit/route.ts with GET (admin guard).
+
+3.3 Buttons that don’t work
+	•	On /dashboard, make each white tile a <Link> to the correct route:
+	•	“Clients” → /clients
+	•	“Client Purchases” → /clients/purchases (create stub page with TODO text)
+	•	“Marketplace” → /marketplace
+	•	Ensure tiles have cursor-pointer and proper aria-label.
+
+4) Auth & guards
+	•	Add role-based guards HOC:
+	•	Create components/auth/RequireRole.tsx that checks session and user.role.
+	•	Wrap /clients with roles ['ACCOUNTANT','ADMIN'].
+	•	Wrap /admin/audit with ['ADMIN'].
+	•	If unauthorized → redirect to /login with toast “Access denied”.
+
+5) Seed & data checks
+	•	Extend seed to include:
+	•	3 demo companies tied to a demo accountant user.
+	•	6 audit events.
+	•	Run:
+	•	npx prisma db push
+	•	npm run seed (or npx prisma db seed)
+	•	Confirm tables User, Company, AuditLog have rows.
+
+6) UX polish
+	•	Increase form label contrast (text-gray-300) and input text (text-gray-100) on dark.
+	•	Inputs: bg-white/5 focus:bg-white/10 focus:ring-2 focus:ring-brand.
+	•	Buttons: disabled state opacity-60.
+	•	Tables: zebra rows even:bg-white/5 and sticky header.
+	•	Add page titles breadcrumbs:
+	•	/clients → “Clients”
+	•	/admin/audit → “Audit Log”
+
+7) Testing checklist (show proof)
+	•	Provide a short video or screenshots:
+	1.	Login as admin → open /admin/audit shows log rows.
+	2.	Login as accountant → open /clients, add a client, see it in table.
+	3.	From dashboard tiles, navigation works (no 404).
+	4.	All text readable; no pale labels/values.
+	•	Include the preview URL(s) I can click in Replit.
+
+8) Commit & summary
+	•	Commit message: feat(ui,routes): dark theme + clients page + audit log + fixes.
+	•	Paste a changelog listing edited/created files.
+
+If any error occurs, fix autonomously. Do not ask me for values; choose sensible defaults. If Prisma schema mismatches, migrate to match current models and re-seed.

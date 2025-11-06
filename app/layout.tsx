@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="min-h-screen bg-[#0B1220] text-gray-100">
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

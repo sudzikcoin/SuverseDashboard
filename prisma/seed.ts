@@ -23,6 +23,53 @@ async function main() {
   console.log('Created admin user:', admin.email)
   console.log('Admin password:', adminPassword)
 
+  const accountantPassword = await bcrypt.hash('AccountTest123', 12)
+  const accountant = await prisma.user.upsert({
+    where: { email: 'accountant@example.com' },
+    update: {},
+    create: {
+      email: 'accountant@example.com',
+      hashedPassword: accountantPassword,
+      role: 'ACCOUNTANT',
+      name: 'Demo Accountant',
+    },
+  })
+  console.log('Created accountant user:', accountant.email)
+
+  const demoCompanies = [
+    {
+      legalName: 'Acme Solar Inc',
+      state: 'CA',
+      ein: '12-3456789',
+      contactEmail: 'contact@acmesolar.com',
+      taxLiability: 500000,
+      targetCloseYear: 2025,
+    },
+    {
+      legalName: 'GreenTech Manufacturing LLC',
+      state: 'TX',
+      ein: '98-7654321',
+      contactEmail: 'info@greentech.com',
+      taxLiability: 750000,
+      targetCloseYear: 2025,
+    },
+    {
+      legalName: 'Renewable Energy Partners',
+      state: 'NY',
+      ein: '45-6789012',
+      contactEmail: 'hello@renewablepartners.com',
+      taxLiability: 1200000,
+      targetCloseYear: 2025,
+    },
+  ]
+
+  for (const companyData of demoCompanies) {
+    const company = await prisma.company.create({
+      data: companyData as any,
+    })
+    console.log(`Created company: ${company.legalName}`)
+  }
+
   const inventory = [
     {
       creditType: 'ITC',
@@ -87,6 +134,52 @@ async function main() {
     })
     console.log(`Created inventory: ${created.creditType} ${created.taxYear}`)
   }
+
+  const auditLogs = [
+    {
+      actorId: admin.id,
+      action: 'CREATE',
+      entity: 'User',
+      entityId: admin.id,
+    },
+    {
+      actorId: admin.id,
+      action: 'CREATE',
+      entity: 'User',
+      entityId: accountant.id,
+    },
+    {
+      actorId: admin.id,
+      action: 'CREATE',
+      entity: 'CreditInventory',
+      entityId: 'demo-1',
+    },
+    {
+      actorId: admin.id,
+      action: 'UPDATE',
+      entity: 'CreditInventory',
+      entityId: 'demo-1',
+    },
+    {
+      actorId: accountant.id,
+      action: 'CREATE',
+      entity: 'Company',
+      entityId: 'company-1',
+    },
+    {
+      actorId: null,
+      action: 'SYSTEM_INIT',
+      entity: 'Database',
+      entityId: null,
+    },
+  ]
+
+  for (const log of auditLogs) {
+    await prisma.auditLog.create({
+      data: log as any,
+    })
+  }
+  console.log(`Created ${auditLogs.length} audit log entries`)
 
   console.log('Seeding completed!')
 }
