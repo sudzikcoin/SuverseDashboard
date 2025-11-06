@@ -12,7 +12,7 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 - **PDF Generation**: @react-pdf/renderer
 
 ## Current Status
-**Status**: MVP Complete - Authentication & Database Fully Operational ✅
+**Status**: MVP Complete with Modern Dark Theme UI ✅
 
 ### Implemented Features
 ✅ User authentication with three roles (Company, Accountant, Admin)
@@ -28,7 +28,11 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 ✅ Audit logging
 ✅ CSV exports for inventory and purchases
 ✅ Role-based access control (RBAC)
-✅ Seed data with 5 demo credits and admin user
+✅ Seed data with admin, accountant, 3 companies, 5 demo credits, audit logs
+✅ Modern dark theme with green accents (Clario-style)
+✅ Accountant client management page (/clients)
+✅ Admin audit log viewer (/admin/audit)
+✅ RequireRole HOC for page-level authorization
 
 ### Security Features
 ✅ Password hashing with bcrypt
@@ -44,12 +48,23 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 │   ├── api/               # API routes
 │   │   ├── auth/         # Authentication endpoints
 │   │   ├── admin/        # Admin-only endpoints
+│   │   ├── audit/        # Audit log API
+│   │   ├── clients/      # Client management API
 │   │   └── webhooks/     # Stripe webhook
 │   ├── admin/            # Admin dashboard pages
+│   │   ├── audit/       # Audit log viewer
+│   │   ├── inventory/   # Inventory management
+│   │   └── purchases/   # Purchase orders
+│   ├── clients/          # Accountant client management
 │   ├── dashboard/        # Main user dashboard
 │   ├── marketplace/      # Tax credit marketplace
 │   └── purchases/        # Purchase history
 ├── components/            # Reusable React components
+│   ├── auth/            # Auth-related components
+│   │   └── RequireRole.tsx  # Role-based access HOC
+│   ├── Card.tsx         # Reusable card component
+│   ├── Sidebar.tsx      # Navigation sidebar
+│   └── SessionProvider.tsx  # NextAuth provider
 ├── lib/                   # Utilities
 │   ├── auth.ts          # NextAuth configuration
 │   ├── db.ts            # Prisma client
@@ -59,7 +74,7 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 │   └── validations.ts   # Zod schemas
 ├── prisma/
 │   ├── schema.prisma    # Database schema
-│   └── seed.ts          # Seed script
+│   └── seed.ts          # Enhanced seed script
 └── types/               # TypeScript definitions
 ```
 
@@ -80,9 +95,10 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 - `STRIPE_FEE_FLAT_USD` - Flat fee in USD (default: 499)
 - `ADMIN_PASSWORD` - Admin account password (default: ChangeMe_2025)
 
-## Admin Credentials
-- **Email**: admin@suverse.io
-- **Password**: ChangeMe_2025
+## Test Credentials
+- **Admin Email**: admin@suverse.io / Password: ChangeMe_2025
+- **Accountant Email**: accountant@example.com / Password: Demo123!
+- **Demo Company Emails**: tech-innovations@example.com, green-energy@example.com, carbon-solutions@example.com / Password: Demo123!
 
 ## Database Schema (SQLite)
 - **User**: Authentication and role management
@@ -97,7 +113,10 @@ A comprehensive MVP web application for U.S. businesses and accountants to disco
 ### Database Setup
 Database location: `prisma/dev.db` (SQLite)
 - Auto-created on first run via lib/db.ts override
-- Seeded with admin user and 5 demo tax credits
+- Enhanced seed data includes:
+  - 1 admin user, 1 accountant user, 3 demo company users
+  - 5 demo tax credits (ITC, PTC, 45Q variants)
+  - Sample audit log entries
 - Reset endpoint available: `POST /api/debug/reset` (dev only)
 
 ## User Flows
@@ -118,9 +137,10 @@ Database location: `prisma/dev.db` (SQLite)
 
 ### Accountant
 1. Register as accountant
-2. Invite client companies (feature stub)
-3. View client purchases (feature stub)
-4. Download certificates
+2. View assigned client companies (/clients page)
+3. Manage client relationships
+4. Access marketplace to advise clients
+5. Download certificates for client purchases
 
 ## Testing Checklist
 
@@ -184,11 +204,40 @@ Database location: `prisma/dev.db` (SQLite)
 8. Configure custom domain
 
 ## Recent Changes (November 6, 2025)
+
+### Phase 1: Database & Authentication Setup
 - ✅ Migrated database from PostgreSQL to SQLite for local development
 - ✅ Fixed NextAuth integration with trustHost configuration
 - ✅ Updated lib/db.ts to force SQLite DATABASE_URL in development
 - ✅ Database fully seeded with admin user and 5 demo tax credits
-- ✅ Enhanced UI readability: labels text-gray-800, inputs text-gray-900, placeholders placeholder-gray-500
 - ✅ Created POST /api/debug/reset endpoint for database reset (dev only)
 - ✅ Verified end-to-end: registration, login, session management all working
 - ✅ Server running on port 5000 with proper Replit preview compatibility
+
+### Phase 2: Dark Theme Redesign (Latest)
+- ✅ Implemented modern dark theme across entire application
+  - Background: #0B1220 (deep navy/black)
+  - Card/Section: #0F172A (dark blue)
+  - Sidebar: #0E1526 with borders
+  - Brand color: #10B981 (green accent)
+- ✅ Enhanced typography for readability on dark backgrounds
+  - Headers: text-gray-100
+  - Body text: text-gray-200/300
+  - Labels: text-gray-200
+  - Placeholders: text-gray-400
+  - Input text: text-gray-100
+- ✅ Updated all components with dark theme:
+  - Login page: Dark centered card with green CTA button
+  - Register page: Dark form with improved contrast
+  - Homepage: Dark landing page with subtle borders
+  - Dashboard: Role-based dark cards with navigation
+  - Sidebar: Dark navigation with green active states
+- ✅ Created RequireRole HOC for role-based page access control
+- ✅ Built /clients page for accountants (view assigned companies)
+- ✅ Built /admin/audit page for system activity logs
+- ✅ Enhanced seed data with:
+  - 1 accountant user (accountant@example.com)
+  - 3 demo companies with realistic data
+  - Sample audit log entries
+- ✅ Fixed all dashboard card links to properly navigate
+- ✅ Updated Tailwind config with brand colors and custom spacing

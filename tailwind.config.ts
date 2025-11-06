@@ -12,8 +12,8 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         brand: {
-          DEFAULT: '#22c55e',
-          dark: '#16a34a',
+          DEFAULT: '#10B981',
+          dark: '#059669',
         },
       },
       borderRadius: {
