@@ -1,0 +1,81 @@
+Make the SuVerse UI brighter and glossier (no carousels). Do not ask questions; apply changes and show a preview.
+
+GOALS
+- Dark navy theme, lighter emerald accents, soft rounded cards, readable text.
+- Add gentle halo/glow on cards and CTAs.
+- Add smooth on-scroll reveals and a subtle hero parallax (sections “appear from nowhere”).
+- Unify styles across landing + dashboards. Fix any pale text.
+
+1) INSTALL
+- Run: npm i framer-motion tailwindcss-animate
+- Enable the plugin in tailwind.config.ts
+
+2) TAILWIND THEME (tailwind.config.ts)
+Extend theme with:
+  colors: {
+    'su-base':'#0B1220',
+    'su-card':'#0F172A',
+    'su-text':'#EAF2FB',
+    'su-muted':'#AFC3D6',
+    'su-emerald':'#34D399',       // lighter + brighter
+    'su-emerald-700':'#059669',
+    'su-sky':'#38BDF8'
+  },
+  borderRadius: { xl:'16px', '2xl':'24px' }
+Include: require('tailwindcss-animate')
+
+3) GLOBALS (app/globals.css)
+- Body bg and default text:
+  body{color:#EAF2FB;background:
+    radial-gradient(1100px 520px at 50% -10%, rgba(52,211,153,.18), transparent 55%),
+    #0B1220;}
+  *{text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+- Utilities:
+  .glass{background:rgba(255,255,255,.06);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12)}
+  .glow-emerald{box-shadow:0 12px 48px -12px rgba(52,211,153,.35)}
+  .halo{position:relative}
+  .halo:before{content:"";position:absolute;inset:-1px;border-radius:inherit;background:linear-gradient(120deg,rgba(52,211,153,.55),rgba(56,189,248,.35),transparent);filter:blur(14px);opacity:.6;z-index:-1}
+
+4) HERO (app/page.tsx)
+- Replace hero with: gradient text H1 (from-emerald-300 via-sky-300 to-emerald-200 bg-clip-text text-transparent), two CTAs:
+  Primary: class "rounded-2xl bg-su-emerald hover:bg-su-emerald-700 text-black font-semibold py-3 px-6 glow-emerald"
+  Secondary: class "rounded-2xl glass border-white/20 text-white hover:bg-white/10"
+- Wrap hero in framer-motion parallax:
+  Use `useScroll` + `useTransform` to animate a radial gradient circle behind the title (translateY from -10 to 30).
+
+5) SECTIONS (“Features”, “How it works”, Role cards)
+- Convert boxes to soft cards:
+  class="glass halo rounded-2xl border-white/10 transition hover:bg-white/10"
+- Headings `text-white`, body `text-su-muted`. Ensure contrast ≥ AA.
+
+6) ANIMATIONS (no carousels)
+- Add framer-motion reveal on scroll to each section/card:
+  initial={{opacity:0,y:12}} whileInView={{opacity:1,y:0}} viewport={{once:true, amount:.2}} transition={{duration:.4, ease:'easeOut'}}
+- Page transitions: in root layout, wrap with <AnimatePresence> and fade 150ms between routes.
+- Buttons: whileTap={{scale:.98}}
+
+7) DASHBOARD POLISH
+- Sidebar bg `#0E1526`; content cards `glass`.
+- All form labels/values use `text-white/90`; placeholders `text-white/45`.
+- Inventory/Purchase cards: numbers `font-mono tabular-nums text-white`, badges use GradientBadge (below).
+- Fix any 404: ensure /clients links point to the actual clients route; ensure /admin/audit points to /admin/audit-log.
+
+8) SHARED UI (create components)
+- components/ui/Button.tsx: variants `primary | glass | danger` using classes above, rounded-2xl.
+- components/ui/GradientBadge.tsx: pill with emerald gradient + subtle glow for statuses (ACTIVE/HOLD).
+- components/ui/Section.tsx: container with max-w-6xl, padding `py-16 lg:py-24`, and motion wrapper for reveal.
+
+9) LANDING FINER TOUCHES
+- Add subtle gradient chips under hero (“Broker-Verified · Role-Based · Stripe Ready”) with `glass` + border-white/10.
+- Add “See Inventory” tertiary link under CTAs.
+- Increase overall spacing; ensure mobile first.
+
+10) CLEANUP
+- Replace any `text-gray-300/400` on dark bg with `text-su-text` or `text-white/80`.
+- Run build, open preview, and share before/after screenshots (Hero, Features card, Inventory card, Purchase modal).
+- Check Lighthouse Accessibility ≥ 90 on landing; fix any contrast issues.
+
+OUTPUT
+- Show the diffs you made.
+- Confirm animations work and that text is no longer pale.
+- Provide a short note with where to tweak emerald intensity later (single token `su-emerald`).
