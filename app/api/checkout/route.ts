@@ -17,7 +17,7 @@ const PLATFORM_FEE_FLAT = parseFloat(
 let stripe: Stripe | null = null
 if (isStripeEnabled()) {
   stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2024-11-20.acacia",
+    apiVersion: "2025-10-29.clover",
   })
 }
 
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
       const result = await prisma.$transaction(async (tx) => {
         const purchaseOrder = await tx.purchaseOrder.create({
           data: {
-            companyId: session.user.companyId,
+            companyId: session.user.companyId || undefined,
             inventoryId: validated.inventoryId,
             amountUSD: validated.amountUSD,
             pricePerDollar: inventory.pricePerDollar,

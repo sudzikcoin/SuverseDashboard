@@ -1,0 +1,230 @@
+Revamp the landing page at "/" with a modern dark UI (Clario vibe): rounded cards, deep navy background, emerald accents. Use Tailwind. Do not break auth/routes.
+
+GOALS
+- Dark, soft, trustworthy hero with gradient.
+- Clear CTAs: "Enter Dashboard", "Sign Up", "See Inventory".
+- 3 benefit cards, 3-step "How it works", role-based CTA strip.
+- Trust/Compliance row (icons), short FAQ, clean footer.
+- All text must be readable (>= text-gray-200 on dark bg).
+
+PALETTE & TOKENS
+- bg: slate-950 (#0b1220)
+- surface: slate-900/800
+- card: #0f172a with border-white/10
+- accent: emerald-500/400 (#22c55e / #34d399)
+- gradient: from-emerald-400/20 via-cyan-400/10 to-transparent
+- radii: rounded-2xl on cards, rounded-full for pills
+- shadows: shadow-xl/2xl on hover, ring-1 ring-white/10
+
+FILE CHANGES
+1) app/page.tsx → replace with new JSX that imports components from components/landing/*
+2) Create components/landing:
+   - Hero.tsx
+   - Benefits.tsx
+   - HowItWorks.tsx
+   - RoleStrip.tsx
+   - TrustRow.tsx
+   - FAQ.tsx
+   - Footer.tsx
+3) Update globals.css (or app/globals.css) to add a soft grain + gradient overlay for hero.
+
+COPY (use exactly, links must work)
+- Hero:
+  Title: "SuVerse"
+  Subtitle: "Tax Credit Dashboard"
+  Body: "Discover, reserve, and purchase transferable tax credits (ITC, PTC, 45Q, 48C, 48E) with transparent pricing and a broker-verified closing flow."
+  CTAs:
+    Primary (accent): href="/register", label="Sign Up"
+    Secondary (outline): href="/login", label="Enter Dashboard"
+    Tertiary (ghost): href="/marketplace", label="See Inventory"
+  Badges (pills): "Broker-Verified", "Role-Based Access", "Stripe Ready"
+- Benefits (3 cards):
+  1) "Transparent Pricing" — “Live discounts, min blocks, fees, all in one card.”
+  2) "Compliance-First" — “KYC, W-9/ID, IRS transfer docs checklist in-app.”
+  3) "Fast Closing" — “72-hour holds, purchase orders, auto PDFs.”
+- HowItWorks (3 steps, numbered):
+  1) “Browse credits” → “Filter by type, vintage, state, price.”
+  2) “Reserve or buy” → “Place a 72-hour hold or pay now via Stripe.”
+  3) “Close” → “Broker package + closing certificate in your inbox.”
+- RoleStrip (3 soft cards with icons + CTAs):
+  Company (Buyer) → "/register"
+  Accountant → "/register"
+  Admin → "/login"
+- TrustRow (muted pill icons):
+  “SOC-style Logs”, “Audit Trail”, “Email Receipts”, “PDF Certificates”
+- FAQ (5 items):
+  Q1: “Can I test without Stripe?” A: “Yes — test mode creates demo orders without charge.”
+  Q2: “Which credits are supported?” A: “ITC, PTC, 45Q, 48C, 48E (demo set).”
+  Q3: “How do holds work?” A: “A 72-hour reserved quantity reduces available inventory.”
+  Q4: “Do you support accountants?” A: “Yes, invite clients and manage purchases.”
+  Q5: “Can I export data?” A: “CSV export for inventory and purchases.”
+
+DESIGN DETAILS
+- Hero: full-width section with subtle radial gradient + noisy overlay. Big title, tight leading. Under title — pill badges.
+- Buttons: use a shared Button component with variants (accent, outline, ghost). Rounded-full, px-6 py-3, font-medium.
+- Cards: rounded-2xl, ring-1 ring-white/10, hover:ring-white/20, bg-slate-900.
+- Typography: text-white on hero headings, body text-gray-300, card headings text-gray-100.
+- Mobile first, stack sections with gap-8; desktop grid (3 cols) for Benefits.
+
+CODE SKELETONS
+
+// components/landing/Hero.tsx
+export default function Hero() {
+  return (
+    <section className="relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(34,197,94,0.15),transparent)]" />
+      <div className="absolute inset-0 pointer-events-none mix-blend-overlay bg-[url('/noise.png')] opacity-20" />
+      <div className="relative mx-auto max-w-6xl px-4 py-20 sm:py-28 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 ring-1 ring-emerald-400/30 px-3 py-1 text-emerald-300 text-xs">
+          Broker-Verified • Role-Based • Stripe Ready
+        </span>
+        <h1 className="mt-6 text-5xl sm:text-6xl font-bold tracking-tight text-white">SuVerse</h1>
+        <p className="mt-2 text-2xl text-gray-300">Tax Credit Dashboard</p>
+        <p className="mt-6 text-gray-300 max-w-3xl mx-auto">
+          Discover, reserve, and purchase transferable tax credits (ITC, PTC, 45Q, 48C, 48E) with transparent pricing and a broker-verified closing flow.
+        </p>
+        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a href="/register" className="rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-3 font-medium shadow-xl">Sign Up</a>
+          <a href="/login" className="rounded-full ring-1 ring-white/20 hover:ring-white/40 text-white px-6 py-3 font-medium">Enter Dashboard</a>
+          <a href="/marketplace" className="rounded-full hover:bg-white/5 text-gray-200 px-6 py-3 font-medium">See Inventory</a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// components/landing/Benefits.tsx
+export default function Benefits() {
+  const items = [
+    { title: "Transparent Pricing", body: "Live discounts, min blocks, fees, all in one card." },
+    { title: "Compliance-First", body: "KYC, W-9/ID, IRS transfer docs checklist in-app." },
+    { title: "Fast Closing", body: "72-hour holds, purchase orders, auto PDFs." },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-10 grid gap-4 sm:grid-cols-3">
+      {items.map(x => (
+        <div key={x.title} className="rounded-2xl bg-slate-900 ring-1 ring-white/10 p-6 hover:ring-white/20">
+          <h3 className="text-gray-100 font-semibold">{x.title}</h3>
+          <p className="mt-2 text-gray-300">{x.body}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+// components/landing/HowItWorks.tsx
+export default function HowItWorks() {
+  const steps = [
+    ["Browse credits", "Filter by type, vintage, state, price."],
+    ["Reserve or buy", "Place a 72-hour hold or pay now via Stripe."],
+    ["Close", "Broker package + closing certificate in your inbox."],
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-10">
+      <h2 className="text-white text-2xl font-semibold">How it works</h2>
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        {steps.map(([t, b], i) => (
+          <div key={t} className="rounded-2xl bg-slate-900 ring-1 ring-white/10 p-6">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-slate-900 font-bold">{i+1}</span>
+            <h3 className="mt-4 text-gray-100 font-semibold">{t}</h3>
+            <p className="mt-2 text-gray-300">{b}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// components/landing/RoleStrip.tsx
+export default function RoleStrip() {
+  const roles = [
+    ["Company (Buyer)", "/register", "Create account"],
+    ["Accountant", "/register", "Invite clients"],
+    ["Admin", "/login", "Sign in"],
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-8 grid gap-4 sm:grid-cols-3">
+      {roles.map(([r, href, cta]) => (
+        <a key={r} href={href} className="rounded-2xl bg-slate-900 ring-1 ring-white/10 p-6 hover:ring-white/20">
+          <h3 className="text-gray-100 font-semibold">{r}</h3>
+          <p className="mt-2 text-gray-300">Role-based dashboards and permissions.</p>
+          <span className="mt-4 inline-block rounded-full bg-emerald-500 text-slate-900 px-4 py-2 font-medium">{cta}</span>
+        </a>
+      ))}
+    </section>
+  );
+}
+
+// components/landing/TrustRow.tsx
+export default function TrustRow() {
+  const items = ["SOC-style Logs", "Audit Trail", "Email Receipts", "PDF Certificates"];
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-6 flex flex-wrap items-center justify-center gap-3">
+      {items.map(x => (
+        <span key={x} className="rounded-full bg-white/5 text-gray-300 ring-1 ring-white/10 px-3 py-1">{x}</span>
+      ))}
+    </section>
+  );
+}
+
+// components/landing/FAQ.tsx
+export default function FAQ() {
+  const items = [
+    ["Can I test without Stripe?", "Yes — test mode creates demo orders without charge."],
+    ["Which credits are supported?", "ITC, PTC, 45Q, 48C, 48E (demo set)."],
+    ["How do holds work?", "A 72-hour reserved quantity reduces available inventory."],
+    ["Do you support accountants?", "Yes, invite clients and manage purchases."],
+    ["Can I export data?", "CSV export for inventory and purchases."],
+  ];
+  return (
+    <section className="mx-auto max-w-4xl px-4 py-10">
+      <h2 className="text-white text-2xl font-semibold">FAQ</h2>
+      <div className="mt-6 space-y-4">
+        {items.map(([q, a]) => (
+          <details key={q} className="rounded-2xl bg-slate-900 ring-1 ring-white/10 p-5">
+            <summary className="cursor-pointer text-gray-100 font-medium">{q}</summary>
+            <p className="mt-2 text-gray-300">{a}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// components/landing/Footer.tsx
+export default function Footer() {
+  return (
+    <footer className="mx-auto max-w-6xl px-4 py-10 text-gray-400">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p>© {new Date().getFullYear()} SuVerse. All rights reserved.</p>
+        <div className="flex gap-4">
+          <a href="/login" className="hover:text-gray-200">Dashboard</a>
+          <a href="/marketplace" className="hover:text-gray-200">Inventory</a>
+          <a href="/register" className="hover:text-gray-200">Sign Up</a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+PAGE WIRING
+- app/page.tsx should render:
+  <main className="min-h-screen bg-slate-950">
+    <Hero />
+    <TrustRow />
+    <Benefits />
+    <HowItWorks />
+    <RoleStrip />
+    <FAQ />
+    <Footer />
+  </main>
+
+STYLES
+- In globals.css add:
+  body { background-color: #0b1220; }
+  /* optional subtle noise asset */ 
+  /* if /public/noise.png doesn't exist, create a tiny png or skip the overlay */
+  
+VERIFY
+- Build locally in Replit Preview: Open "/", check readability (WCAG AA), hover states, responsive.
+- Make sure existing /login, /register, /marketplace URLs still work.
