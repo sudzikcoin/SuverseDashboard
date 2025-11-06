@@ -1,0 +1,50 @@
+Fix "Purchase Now" by adding payment fallback when Stripe is not configured, plus better error messages.
+
+Tasks:
+1) Create helper lib/isStripeEnabled.ts:
+   export function isStripeEnabled() {
+     return !!process.env.STRIPE_SECRET_KEY;
+   }
+
+2) Update app/api/purchase/route.ts (or whichever API handles "Purchase Now"):
+   - Import isStripeEnabled.
+   - Wrap current Stripe logic:
+       if (isStripeEnabled()) {
+         // keep existing Stripe Checkout creation + return URL/sessionId
+       } else {
+         // DEMO FALLBACK:
+         // a) validate body (creditId, amount, brokerFee, userId)
+         // b) write PurchaseOrder in Prisma with:
+         //    status: 'PAID_TEST',
+         //    subtotal, brokerFee, total, createdAt,
+         //    link to user and credit,
+         // c) decrease available amount on that credit (atomic transaction),
+         // d) push AuditLog entry: action 'PURCHASE_TEST', actor = user.email,
+         // e) return { ok: true, orderId }.
+       }
+   - On any error: log to server console with error.message and return JSON { ok:false, error: error.message } + status 400.
+
+3) Update client handler (marketplace modal on "Purchase Now"):
+   - After fetch('/api/purchase', ...), if response.ok and data.ok:
+       show success toast "Order created (test mode)"; navigate to '/admin/purchases' for admin or '/dashboard' for others.
+     else:
+       show error toast with server message: data.error ?? 'Unknown error'.
+   - Also change the generic alert("An error occurred") to toasts.
+
+4) Add Stripe test guard in UI:
+   - On marketplace modal, show small note:
+     if (!process.env.NEXT_PUBLIC_STRIPE_ON):
+        "Payments running in demo mode — no real charges."
+   - In next.config.js expose NEXT_PUBLIC_STRIPE_ON = Boolean(process.env.STRIPE_SECRET_KEY).toString()
+
+5) Prisma changes (if needed):
+   - Ensure PurchaseOrder model allows status 'PAID_TEST' (enum or string). If enum exists, extend to include PAID_TEST and run:
+       npx prisma db push
+     (SQLite)
+
+6) Rebuild and verify:
+   - Click "Purchase Now" → should create test order and reduce Available in Inventory.
+   - Go to /admin/purchases → new row should appear.
+   - Audit Log shows 'PURCHASE_TEST'.
+
+7) Optional: when STRIPE_SECRET_KEY present, keep full Stripe flow; after success, status 'PAID' and same inventory/audit logic.

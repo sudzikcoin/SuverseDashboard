@@ -66,15 +66,20 @@ export default function MarketplacePage() {
       })
 
       if (res.ok) {
-        alert("Hold created successfully! Expires in 72 hours.")
+        alert("✅ Hold created successfully! Expires in 72 hours.")
         setSelectedCredit(null)
+        setPurchaseAmount("")
         fetchInventory()
       } else {
         const data = await res.json()
-        alert(data.error || "Failed to create hold")
+        const errorMsg = data.error || "Failed to create hold"
+        console.error("Hold error:", errorMsg)
+        alert(`❌ Error: ${errorMsg}`)
       }
-    } catch (error) {
-      alert("An error occurred")
+    } catch (error: any) {
+      const errorMsg = error.message || "An error occurred while creating hold"
+      console.error("Reserve error:", error)
+      alert(`❌ Error: ${errorMsg}`)
     }
   }
 
@@ -91,15 +96,31 @@ export default function MarketplacePage() {
         }),
       })
 
+      const data = await res.json()
+
       if (res.ok) {
-        const data = await res.json()
-        window.location.href = data.url
+        if (data.url) {
+          window.location.href = data.url
+        } else if (data.ok) {
+          alert(`✅ ${data.message || "Order created successfully (demo mode)"}`)
+          setSelectedCredit(null)
+          setPurchaseAmount("")
+          
+          if (session?.user.role === "ADMIN") {
+            router.push("/admin/purchases")
+          } else {
+            router.push("/dashboard")
+          }
+        }
       } else {
-        const data = await res.json()
-        alert(data.error || "Failed to create checkout")
+        const errorMsg = data.error || "Failed to create checkout"
+        console.error("Checkout error:", errorMsg)
+        alert(`❌ Error: ${errorMsg}`)
       }
-    } catch (error) {
-      alert("An error occurred")
+    } catch (error: any) {
+      const errorMsg = error.message || "An error occurred while processing your request"
+      console.error("Purchase error:", error)
+      alert(`❌ Error: ${errorMsg}`)
     }
   }
 
@@ -175,6 +196,14 @@ export default function MarketplacePage() {
               <h2 className="text-2xl font-bold mb-4 text-white">
                 {selectedCredit.creditType} {selectedCredit.taxYear}
               </h2>
+
+              {process.env.NEXT_PUBLIC_STRIPE_ON !== 'true' && (
+                <div className="mb-4 px-4 py-3 bg-yellow-600/20 border border-yellow-600/30 rounded-lg">
+                  <p className="text-sm text-yellow-200">
+                    💡 <strong>Demo Mode:</strong> Payments are simulated — no real charges will be made.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-3 mb-6">
                 <p className="text-gray-100">

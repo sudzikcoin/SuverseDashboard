@@ -205,6 +205,31 @@ Database location: `prisma/dev.db` (SQLite)
 
 ## Recent Changes (November 6, 2025)
 
+### Phase 3: Payment Fallback System (Latest)
+- ✅ Implemented demo mode payment fallback when Stripe is not configured
+  - Created `lib/isStripeEnabled.ts` helper function
+  - Updated `app/api/checkout/route.ts` to handle both Stripe and demo mode
+  - Demo mode creates test purchase orders with status 'PAID_TEST'
+  - Atomic transactions ensure inventory decrements and audit logs are created
+- ✅ Enhanced error handling throughout checkout flow
+  - Better error messages with detailed logging
+  - User-friendly alerts with ✅/❌ emojis
+  - Proper error response format: `{ ok: false, error: message }`
+- ✅ Updated marketplace modal UI
+  - Added yellow banner indicating demo mode when Stripe not configured
+  - Improved purchase flow to handle both Stripe redirect and demo mode
+  - Better error handling in Reserve and Purchase buttons
+  - Auto-redirect to admin/purchases or dashboard after demo purchase
+- ✅ Environment configuration
+  - Added `NEXT_PUBLIC_STRIPE_ON` to next.config.js
+  - Exposes Stripe availability to client-side code
+- ✅ Demo mode features
+  - Creates purchase order with PAID_TEST status
+  - Decrements available inventory automatically
+  - Logs PURCHASE_TEST action to audit log
+  - No payment required for testing
+  - Admin can approve demo purchases same as real ones
+
 ### Phase 1: Database & Authentication Setup
 - ✅ Migrated database from PostgreSQL to SQLite for local development
 - ✅ Fixed NextAuth integration with trustHost configuration
