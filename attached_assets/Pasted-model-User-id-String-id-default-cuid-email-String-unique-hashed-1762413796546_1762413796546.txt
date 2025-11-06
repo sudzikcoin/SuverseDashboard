@@ -1,0 +1,115 @@
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  hashedPassword String?
+  role          Role     @default(COMPANY)
+  name          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id])
+  accounts      AccountantClient[] // if role = ACCOUNTANT
+}
+
+model Company {
+  id            String   @id @default(cuid())
+  legalName     String
+  ein           String?  @unique
+  state         String?
+  contactEmail  String
+  ownerId       String?  // primary user
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  users         User[]
+  purchases     PurchaseOrder[]
+  documents     Document[]
+}
+
+enum Role { COMPANY ACCOUNTANT ADMIN }
+
+model AccountantClient {
+  id            String   @id @default(cuid())
+  accountantId  String
+  companyId     String
+  createdAt     DateTime @default(now())
+  @@unique([accountantId, companyId])
+}
+
+model CreditInventory {
+  id              String   @id @default(cuid())
+  creditType      CreditType
+  taxYear         Int
+  jurisdiction    String?  // e.g. Federal; or state code
+  stateRestriction String? // if applicable
+  faceValueUSD    Decimal  // total face value available
+  minBlockUSD     Decimal  // min purchase block
+  pricePerDollar  Decimal  // e.g. 0.88
+  availableUSD    Decimal  // remaining face value
+  closeBy         DateTime?
+  brokerName      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  status          InventoryStatus @default(ACTIVE)
+  holds           Hold[]
+}
+
+enum CreditType { ITC PTC C45Q C48C C48E OTHER }
+enum InventoryStatus { ACTIVE INACTIVE SOLD_OUT }
+
+model Hold {
+  id              String   @id @default(cuid())
+  inventoryId     String
+  companyId       String
+  amountUSD       Decimal  // face value reserved
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  status          HoldStatus @default(ACTIVE)
+  inventory       CreditInventory @relation(fields: [inventoryId], references: [id])
+  company         Company @relation(fields: [companyId], references: [id])
+}
+enum HoldStatus { ACTIVE EXPIRED CONVERTED }
+
+model PurchaseOrder {
+  id                 String   @id @default(cuid())
+  companyId          String
+  inventoryId        String
+  amountUSD          Decimal   // face value purchased
+  pricePerDollar     Decimal   // snapshot
+  subtotalUSD        Decimal
+  feesUSD            Decimal    // platform + KYC
+  totalUSD           Decimal
+  stripeSessionId    String?
+  status             POStatus   @default(PENDING_PAYMENT)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  complianceStatus   ComplianceStatus @default(MISSING)
+  brokerStatus       BrokerStatus @default(PENDING)
+  closingCertificateUrl String?
+  company            Company @relation(fields: [companyId], references: [id])
+  inventory          CreditInventory @relation(fields: [inventoryId], references: [id])
+}
+
+enum POStatus { PENDING_PAYMENT PAID CANCELLED REFUNDED }
+enum ComplianceStatus { MISSING IN_REVIEW COMPLETE }
+enum BrokerStatus { PENDING APPROVED NEEDS_INFO REJECTED }
+
+model Document {
+  id          String   @id @default(cuid())
+  companyId   String
+  type        DocType
+  url         String
+  uploadedAt  DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id])
+}
+
+enum DocType { W9 ID IRS_TRANSFER_STATEMENT OTHER }
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  createdAt DateTime @default(now())
+}

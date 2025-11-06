@@ -1,0 +1,60 @@
+API endpoints (Next.js route handlers under app/api/...)
+
+All JSON, throw 401 if unauthenticated, 403 if role mismatch.
+	•	POST /api/auth/register {role, email, password, companyLegalName, state} → creates user+company
+	•	POST /api/auth/login (NextAuth credentials)
+	•	GET /api/inventory → list with filters
+	•	POST /api/holds {inventoryId, amountUSD} → creates 72h hold (respect availableUSD)
+	•	POST /api/checkout {purchase: inventoryId, amountUSD} → create Stripe Checkout; return url
+	•	POST /api/webhooks/stripe → mark PO as PAID; create Broker Package PDF; email buyer
+	•	GET /api/purchases → list my company POs
+	•	POST /api/documents (multipart) → upload document; link to company
+	•	Admin only:
+	•	POST /api/admin/inventory (CRUD)
+	•	POST /api/admin/purchases/:id/broker-status {status} → APPROVED/NEEDS_INFO/REJECTED → on APPROVED generate Closing Certificate PDF + email buyer
+	•	GET /api/admin/export/inventory.csv
+	•	GET /api/admin/export/purchases.csv
+
+Pages (App Router)
+	•	/ – marketing-lite page + CTA “Enter Dashboard”
+	•	/login, /register
+	•	/dashboard (role-aware):
+	•	Company: tiles (My Purchases, Marketplace, Compliance, Documents)
+	•	Accountant: Clients, Client Purchases, Invites
+	•	Admin: Inventory, Orders, Audit
+	•	/marketplace – list of credits with filters; Reserve / Buy
+	•	/checkout/success | /checkout/cancel
+	•	/purchases/[id] – PO detail (status tracker, docs checklist, download PDFs)
+
+Stripe
+	•	One-time Checkout, currency USD, amount = totalUSD.
+	•	Create Products on the fly (name: “{CreditType} {TaxYear} – ${amountUSD} face @ ${pricePerDollar}”).
+	•	Platform fee: flat $499 or 2% (make this configurable in .env).
+	•	Webhook secures PO status update.
+
+PDFs to render
+	1.	Broker Package (when paid): PO summary + KYC summary + docs list.
+	2.	Closing Certificate (when Admin approves): buyer, inventory snapshot, face value, price, total paid, timestamp, signature block (typed), unique hash ID.
+
+Store both PDFs in storage; keep URLs in PurchaseOrder.
+
+Email notifications
+	•	On reserve, send “Hold Confirmation” (expiresAt)
+	•	On paid, send “Thank you – we are preparing your Broker Package”
+	•	On approved, send “Closing Certificate attached”
+
+Accountant flow
+	•	/dashboard/accountant – invite client by email → creates “pending company” record on acceptance; then accountant can view client’s purchases and download their certificates.
+
+Seed data
+
+Create seed script with 5 inventory items:
+	•	ITC 2024, face $2,000,000, min block $25,000, price $0.88
+	•	PTC 2024, face $1,000,000, min block $10,000, price $0.86
+	•	45Q 2025, face $500,000, min block $5,000, price $0.85
+	•	48C 2025, face $750,000, min block $10,000, price $0.90
+	•	48E 2025, face $300,000, min block $5,000, price $0.89
+
+Create an Admin user (email admin@suverse.io, password set from .env).
+
+.env template (print in README)

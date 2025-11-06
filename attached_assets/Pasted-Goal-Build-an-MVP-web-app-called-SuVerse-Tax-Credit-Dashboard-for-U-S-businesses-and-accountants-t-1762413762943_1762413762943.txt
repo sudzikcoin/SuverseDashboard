@@ -1,0 +1,52 @@
+Goal: Build an MVP web app called SuVerse Tax Credit Dashboard for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC/PTC/45Q/48C/48E). Include roles, KYC-lite, Stripe payments, e-sign, and broker handoff.
+
+Tech stack (use defaults unless stated)
+	•	Next.js 14 (App Router) + React + TypeScript
+	•	Postgres (Supabase or Replit Postgres; use Prisma ORM)
+	•	Auth: NextAuth (email + password; magic link optional)
+	•	Payments: Stripe Checkout (one-time + invoicing)
+	•	File storage: Supabase storage (for docs)
+	•	Email: Resend or Postmark (transactional)
+	•	PDF generation: React-PDF or @react-pdf/renderer
+	•	E-sign stub: capture typed-signature + checkbox consent; store signed PDF
+	•	Deploy: Vercel (provide build & env instructions)
+
+User roles
+	•	Company (Buyer) – small/mid businesses that want to buy credits
+	•	Accountant – manages one or many companies (via invites)
+	•	Broker Admin (SuVerse internal) – manages inventory, compliance, final approvals
+
+Core user stories
+	1.	Sign up / Onboarding
+	•	Company selects role (Company or Accountant), provides legal name, EIN (optional in MVP), contact, state, est. tax liability, and target close date (year).
+	•	Upload basic docs (W-9; optional).
+	2.	Marketplace
+	•	Browse available tax credits (list + filters: credit type, vintage (tax year), dollar amount, price per $ of credit, min block, state restrictions, transfer window).
+	•	Click an item → detail modal with terms, risks, expected discount (e.g., $0.88 per $1), required closing docs, broker.
+	•	Reserve a block (soft hold for 72h), or Purchase (Stripe).
+	3.	Cart / Checkout
+	•	Show fees (platform + KYC fee if any), subtotal, total.
+	•	Stripe Checkout → on success: create Purchase Order, status = “Pending Broker Approval”.
+	4.	KYC-lite & Compliance
+	•	Collect company legal name, EIN (optional), officer contact, and upload ID (PDF/image), and IRS transfer statement stub (just a placeholder PDF with fields).
+	•	Store all uploaded docs in storage, link to Purchase Order.
+	5.	Broker Handoff
+	•	When PO is paid, create Broker Package PDF with:
+	•	Cover sheet (PO#, buyer, amount, credit type, price, net)
+	•	KYC summary
+	•	Uploaded docs list
+	•	Execution checklist
+	•	Allow Broker Admin to mark: Approved / Needs Info / Rejected.
+	6.	Closing & Evidence
+	•	On Approved, generate Closing Certificate PDF (receipt + key terms) for the buyer.
+	•	Send transactional email with the PDF to buyer + accountant.
+	7.	Accountant Workspace
+	•	Accountants can invite client companies by email.
+	•	View clients, pending orders, download certificates.
+	8.	Admin (Broker)
+	•	CRUD Inventory (credit lots).
+	•	CRUD buyers, orders, statuses.
+	•	Audit log (who changed what).
+	•	Export CSV of sales and inventory.
+
+Data model (Prisma schema – create and migrate)
