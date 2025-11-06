@@ -1,0 +1,43 @@
+Auth is not working in Replit Preview: login does nothing and /register shows "User already exists". 
+Please fix end-to-end:
+
+1) ENV: Create/ensure `.env.local` with:
+   DATABASE_URL="file:./prisma/dev.db"
+   NEXTAUTH_SECRET="dev-secret"
+   AUTH_TRUST_HOST=true
+   # Detect current Preview origin and set it explicitly:
+   NEXTAUTH_URL="<PUT_PREVIEW_ORIGIN_HERE>"
+
+   • Replace <PUT_PREVIEW_ORIGIN_HERE> with the actual Preview origin (the base URL shown in the Replit Preview address bar, e.g. http://localhost:5000 or the replit preview hostname). Do this automatically.
+
+2) Prisma: run `npx prisma generate`, then `npx prisma db push` and `npx prisma db seed`. 
+   If the seed already inserted users, that's fine.
+
+3) NextAuth config:
+   • Ensure we're on NextAuth v5 style config and the auth route exists at `app/api/auth/[...nextauth]/route.ts`.
+   • In the config set `trustHost: true` and `debug: true`.
+   • Keep the Credentials provider working with email+password against Prisma (bcrypt compare).
+   • Return proper errors from `authorize` so the client sees why login failed.
+
+4) Fix duplicate during register:
+   • If POST /api/register gets a duplicate email, return 409 with message "User already exists".
+   • Add a temporary debug endpoint `/api/debug/delete-user` (POST, body { email }) that deletes a user by email via Prisma for development only. Guard it with `process.env.NODE_ENV !== 'production'`.
+
+5) Frontend:
+   • On /login and /register show server validation errors under the button (not silently).
+   • After successful register -> auto redirect to /login with a green toast.
+   • Keep the increased contrast you already applied.
+
+6) Testing:
+   • Seed admin user: email `admin@suverse.io`, password `ChangeMe_2025`.
+   • After server restart, I must be able to:
+       - login at /login with admin@suverse.io / ChangeMe_2025
+       - register a new user (Company role), then login with it
+
+7) Restart the dev server and print server logs for the login request. 
+   Confirm in a comment: 
+   - current NEXTAUTH_URL value 
+   - that cookies are set on login
+   - and that /api/auth/session returns a session JSON.
+
+If any path/host/cookie issue remains, detect the Preview origin programmatically and set NEXTAUTH_URL accordingly, then restart.
