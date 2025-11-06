@@ -1,21 +1,36 @@
+"use client"
+import { useScroll, useTransform, motion } from "framer-motion"
+import Button from "@/components/ui/Button"
+
 export default function Hero() {
+  const { scrollY } = useScroll()
+  const y = useTransform(scrollY, [0, 300], [-10, 30])
+  
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(34,197,94,0.15),transparent)]" />
-      <div className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-20" />
+      <motion.div 
+        className="absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(52,211,153,0.25),transparent)]"
+        style={{ y }}
+      />
       <div className="relative mx-auto max-w-6xl px-4 py-20 sm:py-28 text-center">
-        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 ring-1 ring-emerald-400/30 px-3 py-1 text-emerald-300 text-xs">
-          Broker-Verified • Role-Based • Stripe Ready
+        <span className="inline-flex items-center gap-2 rounded-full glass border-white/10 px-3 py-1 text-su-emerald text-xs mb-6">
+          Broker-Verified · Role-Based · Stripe Ready
         </span>
-        <h1 className="mt-6 text-5xl sm:text-6xl font-bold tracking-tight text-white">SuVerse</h1>
-        <p className="mt-2 text-2xl text-gray-300">Tax Credit Dashboard</p>
-        <p className="mt-6 text-gray-300 max-w-3xl mx-auto">
+        <h1 className="mt-6 text-5xl sm:text-7xl font-bold tracking-tight bg-gradient-to-r from-emerald-300 via-sky-300 to-emerald-200 bg-clip-text text-transparent">
+          SuVerse
+        </h1>
+        <p className="mt-2 text-3xl text-su-text">Tax Credit Dashboard</p>
+        <p className="mt-6 text-su-muted max-w-3xl mx-auto text-lg">
           Discover, reserve, and purchase transferable tax credits (ITC, PTC, 45Q, 48C, 48E) with transparent pricing and a broker-verified closing flow.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <a href="/register" className="rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-3 font-medium shadow-xl">Sign Up</a>
-          <a href="/login" className="rounded-full ring-1 ring-white/20 hover:ring-white/40 text-white px-6 py-3 font-medium">Enter Dashboard</a>
-          <a href="/marketplace" className="rounded-full hover:bg-white/5 text-gray-200 px-6 py-3 font-medium">See Inventory</a>
+          <Button variant="primary" href="/register">Sign Up</Button>
+          <Button variant="glass" href="/login">Enter Dashboard</Button>
+        </div>
+        <div className="mt-4">
+          <a href="/marketplace" className="text-su-muted hover:text-su-emerald transition text-sm">
+            See Inventory →
+          </a>
         </div>
       </div>
     </section>

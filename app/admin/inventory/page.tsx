@@ -42,13 +42,13 @@ export default function AdminInventoryPage() {
   }
 
   if (status === "loading" || loading) {
-    return <div className="flex items-center justify-center h-screen bg-[#0B1220] text-gray-100">Loading...</div>
+    return <div className="flex items-center justify-center h-screen text-su-text">Loading...</div>
   }
 
   if (!session || session.user.role !== "ADMIN") return null
 
   return (
-    <div className="flex min-h-screen bg-[#0B1220]">
+    <div className="flex min-h-screen">
       <Sidebar role={session.user.role} />
       
       <main className="flex-1 p-8">
@@ -56,7 +56,7 @@ export default function AdminInventoryPage() {
           <h1 className="text-3xl font-bold text-white">Inventory Management</h1>
           <a
             href="/api/admin/export/inventory"
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow transition"
+            className="px-4 py-2 bg-su-emerald hover:bg-su-emerald-700 text-black font-semibold rounded-xl shadow glow-emerald transition"
           >
             Export CSV
           </a>
@@ -64,18 +64,18 @@ export default function AdminInventoryPage() {
 
         <div className="space-y-4">
           {inventory.map((item: any) => (
-            <div key={item.id} className="bg-[#0F172A] border border-white/5 rounded-xl shadow-md hover:shadow-lg transition p-6">
+            <div key={item.id} className="glass halo rounded-2xl border-white/10 transition hover:bg-white/10 p-6">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-xl font-bold text-white">
                     {item.creditType} {item.taxYear}
                   </h3>
-                  <p className="text-sm text-gray-400">ID: {item.id}</p>
+                  <p className="text-sm text-su-muted">ID: {item.id}</p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                   item.status === "ACTIVE"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-600 text-gray-200"
+                    ? "bg-su-emerald text-black glow-emerald"
+                    : "glass text-su-muted"
                 }`}>
                   {item.status}
                 </span>
@@ -83,26 +83,26 @@ export default function AdminInventoryPage() {
 
               <div className="mt-4 grid md:grid-cols-4 gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-200">Face Value</p>
-                  <p className="text-white font-semibold">
+                  <p className="text-sm font-semibold text-white/90">Face Value</p>
+                  <p className="text-white font-mono tabular-nums font-semibold">
                     ${Number(item.faceValueUSD).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-200">Available</p>
-                  <p className="text-white font-semibold">
+                  <p className="text-sm font-semibold text-white/90">Available</p>
+                  <p className="text-white font-mono tabular-nums font-semibold">
                     ${Number(item.availableUSD).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-200">Min Block</p>
-                  <p className="text-white font-semibold">
+                  <p className="text-sm font-semibold text-white/90">Min Block</p>
+                  <p className="text-white font-mono tabular-nums font-semibold">
                     ${Number(item.minBlockUSD).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-200">Price</p>
-                  <p className="text-green-400 font-semibold">${item.pricePerDollar}</p>
+                  <p className="text-sm font-semibold text-white/90">Price</p>
+                  <p className="text-su-emerald font-mono tabular-nums font-semibold">${item.pricePerDollar}</p>
                 </div>
               </div>
             </div>

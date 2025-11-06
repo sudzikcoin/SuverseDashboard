@@ -38,10 +38,10 @@ export default function Sidebar({ role }: SidebarProps) {
       : companyLinks
 
   return (
-    <div className="w-64 bg-[#0E1526] border-r border-white/5 min-h-screen flex flex-col">
-      <div className="p-6 border-b border-white/5">
-        <h1 className="text-2xl font-bold text-gray-100">SuVerse</h1>
-        <p className="text-sm text-gray-400">Tax Credit Dashboard</p>
+    <div className="w-64 bg-[#0E1526] border-r border-white/10 min-h-screen flex flex-col">
+      <div className="p-6 border-b border-white/10">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-300 to-sky-300 bg-clip-text text-transparent">SuVerse</h1>
+        <p className="text-sm text-su-muted">Tax Credit Dashboard</p>
       </div>
 
       <nav className="flex-1 px-4 py-4">
@@ -51,8 +51,8 @@ export default function Sidebar({ role }: SidebarProps) {
             href={link.href}
             className={`block px-4 py-3 rounded-xl mb-1 transition ${
               pathname === link.href
-                ? "bg-[#111B34] text-brand"
-                : "text-gray-300 hover:bg-[#111B34]"
+                ? "glass text-su-emerald font-medium"
+                : "text-su-text/80 hover:glass hover:text-white"
             }`}
           >
             {link.label}
@@ -60,10 +60,10 @@ export default function Sidebar({ role }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-white/5">
+      <div className="p-4 border-t border-white/10">
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="w-full px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition"
+          className="w-full px-4 py-2 glass hover:bg-red-500/20 text-red-400 rounded-xl transition"
         >
           Sign Out
         </button>
