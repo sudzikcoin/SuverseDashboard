@@ -7,6 +7,10 @@ import Link from "next/link"
 import CalculatorCard from "@/components/CalculatorCard"
 import FileUpload from "@/components/FileUpload"
 import DocumentList from "@/components/DocumentList"
+import { WalletConnectBar } from "@/components/wallet/WalletConnectBar"
+import dynamic from "next/dynamic"
+
+const USDCPay = dynamic(() => import("@/components/wallet/USDCPay"), { ssr: false })
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -23,6 +27,11 @@ export default async function DashboardPage() {
         <h1 className="text-3xl font-bold mb-8 text-su-text">
           Welcome, {session.user.companyName || session.user.email}
         </h1>
+
+        <div className="space-y-6 mb-8">
+          <WalletConnectBar />
+          <USDCPay defaultAmount={1000} />
+        </div>
 
         {session.user.role === "COMPANY" && (
           <div className="space-y-8">

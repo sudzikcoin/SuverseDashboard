@@ -1,0 +1,233 @@
+Goal:
+Add crypto wallet connect + USDC payment (Base chain) to the SuverseDashboard (Next.js App Router). Support Coinbase Wallet + WalletConnect, show wallet address, network, USDC balance, and a “Pay with USDC” button that creates an ERC-20 transfer deeplink. Add the button to all authenticated dashboards.
+
+1) Install deps
+
+Run:
+	•	npm i wagmi viem @rainbow-me/rainbowkit @coinbase/wallet-sdk
+
+2) Env vars
+
+Create/update .env (or .env.local) with:
+
+NEXT_PUBLIC_WC_PROJECT_ID=your_walletconnect_project_id
+NEXT_PUBLIC_DEFAULT_CHAIN=base
+NEXT_PUBLIC_USDC_BASE=0x833589fCD6EDb6E08f4c7C36aF6aBf4aC5fE0e52
+NEXT_PUBLIC_ESCROW_ADDRESS=0xYourReceivingAddress   # address to receive USDC
+
+If no WalletConnect project id yet, use a placeholder and leave WalletConnect disabled gracefully.
+
+3) App wrapper (RainbowKit + Wagmi)
+
+Create app/providers.tsx:
+
+'use client';
+import '@rainbow-me/rainbowkit/styles.css';
+import { ReactNode, useMemo } from 'react';
+import {
+  RainbowKitProvider,
+  getDefaultWallets,
+  darkTheme
+} from '@rainbow-me/rainbowkit';
+import { WagmiConfig, configureChains, createConfig } from 'wagmi';
+import { base, mainnet } from 'wagmi/chains';
+import { publicProvider } from 'wagmi/providers/public';
+
+const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || '';
+
+export default function Providers({ children }: { children: ReactNode }) {
+  const { chains, publicClient } = useMemo(() => {
+    return configureChains([base, mainnet], [publicProvider()]);
+  }, []);
+
+  const { connectors } = getDefaultWallets({
+    appName: 'SuVerse',
+    projectId: wcProjectId,
+    chains
+  });
+
+  const wagmiConfig = useMemo(
+    () =>
+      createConfig({
+        autoConnect: true,
+        connectors,
+        publicClient
+      }),
+    [connectors, publicClient]
+  );
+
+  return (
+    <WagmiConfig config={wagmiConfig}>
+      <RainbowKitProvider
+        chains={chains}
+        modalSize="compact"
+        theme={darkTheme({
+          accentColor: '#22c55e',
+          borderRadius: 'large'
+        })}
+      >
+        {children}
+      </RainbowKitProvider>
+    </WagmiConfig>
+  );
+}
+
+Wrap the root layout: edit app/layout.tsx and wrap <body> content:
+
+import Providers from './providers';
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+
+4) Wallet button + USDC balance
+
+Create components/wallet/WalletConnectBar.tsx:
+
+'use client';
+import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useEffect, useState } from 'react';
+import { formatUnits } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
+
+const USDC = process.env.NEXT_PUBLIC_USDC_BASE as `0x${string}`;
+
+const erc20Abi = [
+  { "type":"function","name":"balanceOf","stateMutability":"view","inputs":[{"name":"owner","type":"address"}],"outputs":[{"name":"","type":"uint256"}]}
+] as const;
+
+export function WalletConnectBar() {
+  const { address, chain } = useAccount();
+  const [usdc, setUsdc] = useState<string>('');
+
+  useEffect(() => {
+    if (!address) { setUsdc(''); return; }
+    const client = createPublicClient({ chain: base, transport: http() });
+    (async () => {
+      try {
+        const bal = await client.readContract({
+          address: USDC,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [address as `0x${string}`]
+        });
+        setUsdc(Number(formatUnits(bal as bigint, 6)).toLocaleString());
+      } catch {
+        setUsdc('');
+      }
+    })();
+  }, [address]);
+
+  return (
+    <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 p-3">
+      <ConnectButton chainStatus="icon" showBalance={false} />
+      <div className="text-sm text-white/80">
+        {address ? (
+          <>
+            <div className="truncate">Addr: {address}</div>
+            <div>Chain: {chain?.name ?? '—'}</div>
+            <div>USDC: {usdc || '—'}</div>
+          </>
+        ) : (
+          <div>Connect a wallet to view USDC balance</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+5) “Pay with USDC” (deeplink)
+
+Create components/wallet/USDCPay.tsx:
+
+'use client';
+import { useState, useMemo } from 'react';
+
+const USDC = process.env.NEXT_PUBLIC_USDC_BASE!;
+const TO = process.env.NEXT_PUBLIC_ESCROW_ADDRESS!;
+const CHAIN_ID = 8453; // Base
+
+function toWei6(n: number) {
+  return BigInt(Math.round(n * 1_000_000));
+}
+
+/**
+ * EIP-681 style link for ERC20 transfer:
+ * ethereum:{token}/transfer?address={to}&uint256={amount}&chain_id={id}
+ */
+function buildLink(amount: number) {
+  const wei = toWei6(amount);
+  return `ethereum:${USDC}/transfer?address=${TO}&uint256=${wei}&chain_id=${CHAIN_ID}`;
+}
+
+export default function USDCPay({ defaultAmount = 1000 }: { defaultAmount?: number }) {
+  const [amt, setAmt] = useState(defaultAmount);
+  const link = useMemo(() => buildLink(amt || 0), [amt]);
+
+  return (
+    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+      <h3 className="mb-3 text-lg font-semibold text-white">Pay with USDC (Base)</h3>
+      <div className="mb-3 flex items-center gap-3">
+        <label className="text-white/70">Amount</label>
+        <input
+          type="number" min={1} step="1"
+          value={amt}
+          onChange={(e)=>setAmt(Number(e.target.value))}
+          className="w-32 rounded-lg bg-black/40 p-2 text-white outline-none"
+        />
+        <span className="text-white/70">USDC</span>
+      </div>
+      <div className="flex gap-3">
+        <a
+          href={link}
+          className="rounded-lg bg-emerald-500 px-4 py-2 font-medium text-black hover:opacity-90"
+        >
+          Open in wallet
+        </a>
+        <button
+          onClick={() => navigator.clipboard.writeText(link)}
+          className="rounded-lg border border-white/20 px-4 py-2 text-white hover:bg-white/10"
+        >
+          Copy payment link
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-white/60">
+        This creates an ERC-20 transfer request to the escrow address. After payment, the back-office can verify the on-chain txn hash and mark the order as paid.
+      </p>
+    </div>
+  );
+}
+
+6) Place components in dashboards
+	•	In app/dashboard/page.tsx (and any role dashboards), insert near the top:
+
+import { WalletConnectBar } from '@/components/wallet/WalletConnectBar';
+import dynamic from 'next/dynamic';
+const USDCPay = dynamic(()=>import('@/components/wallet/USDCPay'), { ssr:false });
+
+export default async function DashboardPage() {
+  return (
+    <div className="space-y-6">
+      <WalletConnectBar />
+      <USDCPay defaultAmount={1000} />
+      {/* …existing dashboard sections… */}
+    </div>
+  );
+}
+7) Styling
+
+Use existing Tailwind setup; components already have тёмную стилистику под твои текущие темы.
+
+8) QA checklist
+	•	If WalletConnect project id missing → Coinbase Wallet still works, WalletConnect modal disabled gracefully.
+	•	On iOS/Android with Coinbase Wallet installed, “Open in wallet” открывает приложение с предзаполненным переводом.
+	•	Проверь, что NEXT_PUBLIC_ESCROW_ADDRESS — это твой адрес для приема USDC в сети Base.
+
+Return “Done” once everything compiles and the button appears in dashboards.
