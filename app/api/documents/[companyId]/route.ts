@@ -1,61 +1,73 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { writeFile, mkdir, unlink } from "fs/promises"
-import { join } from "path"
-import { existsSync } from "fs"
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { UPLOADS_ROOT, buildPaths, saveBuffer, removeAbs } from "@/lib/safeUpload";
+import path from "path";
+import { stat } from "fs/promises";
 
-const ALLOWED_MIME_TYPES = [
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/jpg",
-]
-const MAX_FILE_SIZE = 10 * 1024 * 1024
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const ALLOWED = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const MAX_BYTES = 10 * 1024 * 1024;
+
+function bad(msg: string, code = 400) {
+  return NextResponse.json({ error: msg }, { status: code });
+}
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { companyId: string } }
 ) {
+  const { companyId } = params;
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return bad("Unauthorized", 401);
     }
 
     if (session.user.role !== "ACCOUNTANT" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return bad("Forbidden", 403);
     }
 
     if (session.user.role === "ACCOUNTANT") {
       const hasAccess = await prisma.accountantClient.findFirst({
         where: {
           accountantId: session.user.id,
-          companyId: params.companyId,
+          companyId,
         },
-      })
+      });
 
       if (!hasAccess) {
-        return NextResponse.json(
-          { error: "You do not have access to this company" },
-          { status: 403 }
-        )
+        return bad("You do not have access to this company", 403);
       }
     }
 
-    const documents = await prisma.document.findMany({
-      where: { companyId: params.companyId },
+    const docs = await prisma.document.findMany({
+      where: { companyId },
       orderBy: { createdAt: "desc" },
-    })
+    });
 
-    return NextResponse.json({ documents })
-  } catch (error) {
-    console.error("Error fetching documents:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch documents" },
-      { status: 500 }
-    )
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        action: "READ",
+        entity: "Document",
+        entityId: companyId,
+        details: `Viewed ${docs.length} documents for company ${companyId}`,
+      },
+    });
+
+    const withUrls = docs.map((d) => ({
+      ...d,
+      url: `/api/files?path=${encodeURIComponent(d.storagePath)}`,
+    }));
+
+    return NextResponse.json({ items: withUrls });
+  } catch (e) {
+    console.error("GET documents error", e);
+    return bad("Failed to list documents", 500);
   }
 }
 
@@ -63,91 +75,92 @@ export async function POST(
   req: Request,
   { params }: { params: { companyId: string } }
 ) {
+  const { companyId } = params;
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return bad("Unauthorized", 401);
     }
 
     if (session.user.role !== "ACCOUNTANT" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return bad("Forbidden", 403);
     }
 
     if (session.user.role === "ACCOUNTANT") {
       const hasAccess = await prisma.accountantClient.findFirst({
         where: {
           accountantId: session.user.id,
-          companyId: params.companyId,
+          companyId,
         },
-      })
+      });
 
       if (!hasAccess) {
-        return NextResponse.json(
-          { error: "You do not have access to this company" },
-          { status: 403 }
-        )
+        return bad("You do not have access to this company", 403);
       }
     }
 
-    const formData = await req.formData()
-    const files = formData.getAll("file") as File[]
-
-    if (!files || files.length === 0) {
-      return NextResponse.json({ error: "No files provided" }, { status: 400 })
+    const ct = req.headers.get("content-type") || "";
+    if (!ct.includes("multipart/form-data")) {
+      return bad("Content-Type must be multipart/form-data");
     }
 
-    const uploadDir = join(process.cwd(), "uploads", params.companyId)
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
+    const form = await req.formData();
+    const files = form.getAll("file");
+    if (!files.length) return bad("No files provided");
 
-    const uploadedDocuments = []
+    const created: any[] = [];
 
-    for (const file of files) {
-      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-        return NextResponse.json(
-          { error: `Invalid file type: ${file.type}. Only PDF, PNG, and JPG are allowed.` },
-          { status: 400 }
-        )
+    for (const anyFile of files) {
+      const file = anyFile as File;
+      if (typeof file?.arrayBuffer !== "function") continue;
+
+      const mime = file.type || "application/octet-stream";
+      if (!ALLOWED.has(mime)) {
+        return bad("Only PDF/PNG/JPG are allowed");
+      }
+      if (file.size > MAX_BYTES) {
+        return bad("File too large (max 10 MB)");
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json(
-          { error: `File too large: ${file.name}. Max size is 10MB.` },
-          { status: 400 }
-        )
+      const { rel, abs } = buildPaths(companyId, file.name);
+      if (!abs.startsWith(path.join(UPLOADS_ROOT, companyId))) {
+        return bad("Invalid path");
       }
 
-      const timestamp = Date.now()
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-      const filename = `${timestamp}-${safeName}`
-      const filepath = join(uploadDir, filename)
-      const storagePath = `/uploads/${params.companyId}/${filename}`
+      const buf = Buffer.from(await file.arrayBuffer());
+      await saveBuffer(abs, buf);
 
-      const buffer = Buffer.from(await file.arrayBuffer())
-      await writeFile(filepath, buffer)
-
-      const document = await prisma.document.create({
+      const doc = await prisma.document.create({
         data: {
-          companyId: params.companyId,
+          companyId,
           filename: file.name,
-          mimeType: file.type,
+          mimeType: mime,
           sizeBytes: file.size,
-          storagePath,
+          storagePath: path.join(companyId, path.basename(abs)),
           uploadedById: session.user.id,
         },
-      })
+      });
 
-      uploadedDocuments.push(document)
+      await prisma.auditLog.create({
+        data: {
+          actorId: session.user.id,
+          action: "CREATE",
+          entity: "Document",
+          entityId: doc.id,
+          details: `Uploaded ${file.name} (${file.size} bytes) for company ${companyId}`,
+        },
+      });
+
+      created.push({
+        ...doc,
+        url: `/api/files?path=${encodeURIComponent(doc.storagePath)}`,
+      });
     }
 
-    return NextResponse.json({ documents: uploadedDocuments })
-  } catch (error) {
-    console.error("Error uploading documents:", error)
-    return NextResponse.json(
-      { error: "Failed to upload documents" },
-      { status: 500 }
-    )
+    return NextResponse.json({ items: created }, { status: 201 });
+  } catch (e) {
+    console.error("UPLOAD error", e);
+    return bad("Failed to upload document", 500);
   }
 }
 
@@ -155,72 +168,60 @@ export async function DELETE(
   req: Request,
   { params }: { params: { companyId: string } }
 ) {
+  const { companyId } = params;
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return bad("Unauthorized", 401);
     }
 
     if (session.user.role !== "ACCOUNTANT" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return bad("Forbidden", 403);
     }
 
     if (session.user.role === "ACCOUNTANT") {
       const hasAccess = await prisma.accountantClient.findFirst({
         where: {
           accountantId: session.user.id,
-          companyId: params.companyId,
+          companyId,
         },
-      })
+      });
 
       if (!hasAccess) {
-        return NextResponse.json(
-          { error: "You do not have access to this company" },
-          { status: 403 }
-        )
+        return bad("You do not have access to this company", 403);
       }
     }
 
-    const { searchParams } = new URL(req.url)
-    const docId = searchParams.get("id")
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return bad("Missing id");
 
-    if (!docId) {
-      return NextResponse.json(
-        { error: "Document ID required" },
-        { status: 400 }
-      )
+    const doc = await prisma.document.findFirst({ where: { id, companyId } });
+    if (!doc) return bad("Not found", 404);
+
+    const abs = path.join(UPLOADS_ROOT, doc.storagePath);
+    try {
+      await stat(abs);
+      await removeAbs(abs);
+    } catch {
+      // file may already be gone
     }
 
-    const document = await prisma.document.findFirst({
-      where: {
-        id: docId,
-        companyId: params.companyId,
+    await prisma.document.delete({ where: { id } });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        action: "DELETE",
+        entity: "Document",
+        entityId: id,
+        details: `Deleted ${doc.filename} for company ${companyId}`,
       },
-    })
+    });
 
-    if (!document) {
-      return NextResponse.json(
-        { error: "Document not found or does not belong to this company" },
-        { status: 404 }
-      )
-    }
-
-    const filepath = join(process.cwd(), document.storagePath.replace(/^\//, ""))
-    
-    if (existsSync(filepath)) {
-      await unlink(filepath)
-    }
-
-    await prisma.document.delete({
-      where: { id: docId },
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error deleting document:", error)
-    return NextResponse.json(
-      { error: "Failed to delete document" },
-      { status: 500 }
-    )
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE document error", e);
+    return bad("Failed to delete document", 500);
   }
 }

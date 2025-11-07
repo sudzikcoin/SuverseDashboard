@@ -1,0 +1,268 @@
+Goal:
+Fix errors when uploading client documents from /clients. Ensure uploads of PDF/PNG/JPG up to 10 MB work reliably. Use Node runtime, robust multipart handling, safe filenames, directory creation, and clear error messages. Keep current dark UI.
+
+---
+
+## 1) Helper: safe uploads
+
+Create `lib/safeUpload.ts`:
+
+```ts
+import path from "path";
+import { mkdir, stat, writeFile, rm } from "fs/promises";
+
+export const UPLOADS_ROOT = path.join(process.cwd(), "uploads"); // NOT in /public
+
+export async function ensureDir(dir: string) {
+  try { await stat(dir); } catch { await mkdir(dir, { recursive: true }); }
+}
+
+export function sanitizeFilename(name: string) {
+  const base = name.normalize("NFKD").replace(/[^\w.\-]+/g, "_");
+  return base.slice(0, 120);
+}
+
+export function buildPaths(companyId: string, fname: string) {
+  const safe = sanitizeFilename(fname);
+  const rel = path.join(companyId, `${Date.now()}_${safe}`);
+  const abs = path.join(UPLOADS_ROOT, rel);
+  return { rel, abs };
+}
+
+export async function saveBuffer(absPath: string, buf: Buffer) {
+  await ensureDir(path.dirname(absPath));
+  await writeFile(absPath, buf);
+}
+
+export async function removeAbs(absPath: string) {
+  await rm(absPath, { force: true });
+}
+```
+
+Add to `.gitignore` (if not present):
+```
+uploads/
+```
+
+---
+
+## 2) API route (GET/POST/DELETE) using Node runtime
+
+Replace or create `app/api/documents/[companyId]/route.ts`:
+
+```ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma"; // adjust import if needed
+import { UPLOADS_ROOT, buildPaths, saveBuffer, removeAbs } from "@/lib/safeUpload";
+import path from "path";
+import { stat } from "fs/promises";
+
+// Force Node.js runtime (required to use fs)
+export const runtime = "nodejs";
+// Avoid caching
+export const dynamic = "force-dynamic";
+
+const ALLOWED = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+
+function bad(msg: string, code = 400) {
+  return NextResponse.json({ error: msg }, { status: code });
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { companyId: string } }
+) {
+  const { companyId } = params;
+  try {
+    // TODO: auth check (accountant access)
+    const docs = await prisma.document.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // provide a signed/indirect URL via /api/files?path=...
+    const withUrls = docs.map((d) => ({
+      ...d,
+      url: `/api/files?path=${encodeURIComponent(d.storagePath)}`,
+    }));
+
+    return NextResponse.json({ items: withUrls });
+  } catch (e) {
+    console.error("GET documents error", e);
+    return bad("Failed to list documents", 500);
+  }
+}
+
+export async function POST(
+  req: Request,
+  { params }: { params: { companyId: string } }
+) {
+  const { companyId } = params;
+  try {
+    // Must be multipart
+    const ct = req.headers.get("content-type") || "";
+    if (!ct.includes("multipart/form-data")) {
+      return bad("Content-Type must be multipart/form-data");
+    }
+
+    // Parse formData
+    const form = await req.formData();
+    const files = form.getAll("file");
+    if (!files.length) return bad("No files provided");
+
+    const created: any[] = [];
+
+    for (const anyFile of files) {
+      const file = anyFile as File;
+      if (typeof file?.arrayBuffer !== "function") continue;
+
+      const mime = file.type || "application/octet-stream";
+      if (!ALLOWED.has(mime)) {
+        return bad("Only PDF/PNG/JPG are allowed");
+      }
+      if (file.size > MAX_BYTES) {
+        return bad("File too large (max 10 MB)");
+      }
+
+      const { rel, abs } = buildPaths(companyId, file.name);
+      // Guard: ensure path stays inside UPLOADS_ROOT
+      if (!abs.startsWith(path.join(UPLOADS_ROOT, companyId))) {
+        return bad("Invalid path");
+      }
+
+      const buf = Buffer.from(await file.arrayBuffer());
+      await saveBuffer(abs, buf);
+
+      const doc = await prisma.document.create({
+        data: {
+          companyId,
+          filename: file.name,
+          mimeType: mime,
+          sizeBytes: file.size,
+          storagePath: path.join(companyId, path.basename(abs)), // relative inside uploads/
+        },
+      });
+
+      created.push({
+        ...doc,
+        url: `/api/files?path=${encodeURIComponent(doc.storagePath)}`,
+      });
+    }
+
+    return NextResponse.json({ items: created }, { status: 201 });
+  } catch (e) {
+    console.error("UPLOAD error", e);
+    return bad("Failed to upload document", 500);
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { companyId: string } }
+) {
+  const { companyId } = params;
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return bad("Missing id");
+
+    const doc = await prisma.document.findFirst({ where: { id, companyId } });
+    if (!doc) return bad("Not found", 404);
+
+    const abs = path.join(UPLOADS_ROOT, doc.storagePath);
+    try {
+      await stat(abs);
+      await removeAbs(abs);
+    } catch {
+      // file may already be gone
+    }
+
+    await prisma.document.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE document error", e);
+    return bad("Failed to delete document", 500);
+  }
+}
+```
+
+---
+
+## 3) File streaming route
+
+Create/adjust `app/api/files/route.ts`:
+
+```ts
+import { NextResponse } from "next/server";
+import path from "path";
+import { readFile } from "fs/promises";
+import { UPLOADS_ROOT } from "@/lib/safeUpload";
+
+export const runtime = "nodejs";
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const rel = searchParams.get("path");
+    if (!rel) return NextResponse.json({ error: "Missing path" }, { status: 400 });
+
+    // Prevent traversal
+    const abs = path.join(UPLOADS_ROOT, rel);
+    if (!abs.startsWith(UPLOADS_ROOT)) {
+      return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    }
+
+    const buf = await readFile(abs);
+    const ext = path.extname(abs).toLowerCase();
+    const type =
+      ext === ".pdf" ? "application/pdf" :
+      ext === ".png" ? "image/png" :
+      ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
+      "application/octet-stream";
+
+    return new Response(buf, {
+      status: 200,
+      headers: { "Content-Type": type, "Cache-Control": "private, max-age=0" },
+    });
+  } catch (e) {
+    console.error("FILES stream error", e);
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
+}
+```
+
+---
+
+## 4) UI: use `/api/files?path=...`
+
+In `components/docs/DocumentManager.tsx`, ensure that displayed link uses `doc.url` returned by API. Keep upload field name **`file`** and support multiple files. Show friendly error messages from JSON `{ error }`.
+
+---
+
+## 5) Prisma model sanity
+
+Ensure prisma model has fields:
+`filename, mimeType, sizeBytes, storagePath, companyId, createdAt`.
+
+If schema changed, run:
+```
+npx prisma generate
+npx prisma migrate dev --name document_upload_fix
+```
+
+---
+
+## 6) Tests
+
+- Upload small PDF/JPG/PNG (<10 MB) → success (201) and list shows items with working **View/Open**.
+- Try 12 MB → 400 “File too large”.
+- Try `.exe` → 400 “Only PDF/PNG/JPG are allowed”.
+- Delete document → row removed; opening URL returns 404.
+- Refresh /clients → list persists.
+- Verify files saved under `uploads/<companyId>/...`, `.gitignore` excludes `uploads/`.
+
+Commit:
+1) `feat(api): robust client document upload (multipart + limits)`
+2) `feat(api): secure files streaming route`
+3) `chore: add safeUpload helper and ignore uploads/`
