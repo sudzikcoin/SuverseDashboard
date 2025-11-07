@@ -28,6 +28,22 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    if (session.user.role === "ACCOUNTANT") {
+      const hasAccess = await prisma.accountantClient.findFirst({
+        where: {
+          accountantId: session.user.id,
+          companyId: params.companyId,
+        },
+      })
+
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: "You do not have access to this company" },
+          { status: 403 }
+        )
+      }
+    }
+
     const documents = await prisma.document.findMany({
       where: { companyId: params.companyId },
       orderBy: { createdAt: "desc" },
@@ -55,6 +71,22 @@ export async function POST(
 
     if (session.user.role !== "ACCOUNTANT" && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    if (session.user.role === "ACCOUNTANT") {
+      const hasAccess = await prisma.accountantClient.findFirst({
+        where: {
+          accountantId: session.user.id,
+          companyId: params.companyId,
+        },
+      })
+
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: "You do not have access to this company" },
+          { status: 403 }
+        )
+      }
     }
 
     const formData = await req.formData()
@@ -119,7 +151,10 @@ export async function POST(
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(
+  req: Request,
+  { params }: { params: { companyId: string } }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -128,6 +163,22 @@ export async function DELETE(req: Request) {
 
     if (session.user.role !== "ACCOUNTANT" && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    if (session.user.role === "ACCOUNTANT") {
+      const hasAccess = await prisma.accountantClient.findFirst({
+        where: {
+          accountantId: session.user.id,
+          companyId: params.companyId,
+        },
+      })
+
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: "You do not have access to this company" },
+          { status: 403 }
+        )
+      }
     }
 
     const { searchParams } = new URL(req.url)
@@ -140,12 +191,18 @@ export async function DELETE(req: Request) {
       )
     }
 
-    const document = await prisma.document.findUnique({
-      where: { id: docId },
+    const document = await prisma.document.findFirst({
+      where: {
+        id: docId,
+        companyId: params.companyId,
+      },
     })
 
     if (!document) {
-      return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Document not found or does not belong to this company" },
+        { status: 404 }
+      )
     }
 
     const filepath = join(process.cwd(), document.storagePath.replace(/^\//, ""))
