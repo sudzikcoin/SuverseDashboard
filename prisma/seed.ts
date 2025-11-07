@@ -64,10 +64,12 @@ async function main() {
   ]
 
   for (const companyData of demoCompanies) {
-    const company = await prisma.company.create({
-      data: companyData as any,
+    const company = await prisma.company.upsert({
+      where: { ein: companyData.ein! },
+      update: {},
+      create: companyData as any,
     })
-    console.log(`Created company: ${company.legalName}`)
+    console.log(`Ensured company exists: ${company.legalName}`)
   }
 
   const inventory = [
@@ -128,11 +130,16 @@ async function main() {
     },
   ]
 
-  for (const item of inventory) {
-    const created = await prisma.creditInventory.create({
-      data: item as any,
-    })
-    console.log(`Created inventory: ${created.creditType} ${created.taxYear}`)
+  const existingInventoryCount = await prisma.creditInventory.count()
+  if (existingInventoryCount === 0) {
+    for (const item of inventory) {
+      const created = await prisma.creditInventory.create({
+        data: item as any,
+      })
+      console.log(`Created inventory: ${created.creditType} ${created.taxYear}`)
+    }
+  } else {
+    console.log(`Skipped creating inventory (${existingInventoryCount} records already exist)`)
   }
 
   const auditLogs = [
@@ -174,12 +181,17 @@ async function main() {
     },
   ]
 
-  for (const log of auditLogs) {
-    await prisma.auditLog.create({
-      data: log as any,
-    })
+  const existingAuditLogCount = await prisma.auditLog.count()
+  if (existingAuditLogCount === 0) {
+    for (const log of auditLogs) {
+      await prisma.auditLog.create({
+        data: log as any,
+      })
+    }
+    console.log(`Created ${auditLogs.length} audit log entries`)
+  } else {
+    console.log(`Skipped creating audit logs (${existingAuditLogCount} records already exist)`)
   }
-  console.log(`Created ${auditLogs.length} audit log entries`)
 
   console.log('Seeding completed!')
 }
