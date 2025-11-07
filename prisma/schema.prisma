@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -102,11 +102,18 @@ model PurchaseOrder {
 
 model Document {
   id         String   @id @default(cuid())
-  companyId  String
+  userId     String?
+  companyId  String?
   type       String
-  url        String
-  uploadedAt DateTime @default(now())
-  company    Company  @relation(fields: [companyId], references: [id])
+  name       String
+  url        String?
+  storageKey String?
+  size       Int?
+  mime       String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company? @relation(fields: [companyId], references: [id])
 }
 
 model AuditLog {
