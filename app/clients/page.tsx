@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import RequireRole from "@/components/auth/RequireRole"
+import DocumentManager from "@/components/docs/DocumentManager"
 
 interface Client {
   id: string
@@ -18,6 +19,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [formData, setFormData] = useState({
     legalName: "",
     state: "",
@@ -101,6 +103,7 @@ export default function ClientsPage() {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Contact Email</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Purchases</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Total Value</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Docs</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -112,6 +115,14 @@ export default function ClientsPage() {
                         <td className="px-6 py-4 text-gray-100">{client.contactEmail}</td>
                         <td className="px-6 py-4 text-gray-100">{client.totalPurchases}</td>
                         <td className="px-6 py-4 text-gray-100">${client.totalValue.toLocaleString()}</td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedClient(client)}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-black font-semibold px-4 py-2 rounded-lg transition text-sm"
+                          >
+                            Documents
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -120,6 +131,14 @@ export default function ClientsPage() {
             </div>
           )}
         </div>
+
+        {selectedClient && (
+          <DocumentManager
+            companyId={selectedClient.id}
+            companyName={selectedClient.legalName}
+            onClose={() => setSelectedClient(null)}
+          />
+        )}
 
         {showModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
