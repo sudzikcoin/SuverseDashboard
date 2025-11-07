@@ -39,6 +39,7 @@ prisma/migrations/
 # Uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+/uploads/
 
 # Replit
 .replit

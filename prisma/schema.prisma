@@ -101,19 +101,17 @@ model PurchaseOrder {
 }
 
 model Document {
-  id         String   @id @default(cuid())
-  userId     String?
-  companyId  String?
-  type       String
-  name       String
-  url        String?
-  storageKey String?
-  size       Int?
-  mime       String?
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  company    Company? @relation(fields: [companyId], references: [id])
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  
+  @@index([companyId])
 }
 
 model AuditLog {
