@@ -54,7 +54,30 @@ The design adheres to a "Clario-style" modern dark theme with emerald green acce
 -   **tailwindcss-animate**: For Tailwind CSS based animations.
 ## Recent Changes (November 7, 2025)
 
-### Phase 6: Tax Calculator & Document Upload (Latest)
+### Phase 7: Bug Fixes & Production Readiness (Latest)
+- ✅ **Fixed Critical Hydration Error**: Created `lib/format.ts` with custom formatters
+  - Replaced `Intl.NumberFormat` with manual comma insertion to eliminate browser locale differences
+  - Functions: `formatNumber`, `formatUSD`, `formatUSDWithCents`, `formatPercent`
+  - Updated all components to use consistent formatting (CalculatorCard, marketplace, admin pages, DocumentList)
+- ✅ **Fixed PostgreSQL Connection**: Removed SQLite override in `lib/db.ts`
+  - Deleted `process.env.DATABASE_URL = "file:./prisma/dev.db"` line that was preventing PostgreSQL connection
+  - Regenerated Prisma Client for PostgreSQL
+- ✅ **Fixed NextAuth Configuration**: Removed invalid `trustHost` property causing TypeScript errors
+- ✅ **Verified Application Status**:
+  - Database connection: ✅ Working (PostgreSQL/Neon)
+  - Seed data: ✅ 2 users, 3 companies, 5 tax credits
+  - Admin login: ✅ admin@suverse.io / ChangeMe_2025
+  - Registration: ✅ Handles duplicates (409), optional fields
+  - API endpoints: ✅ /api/inventory returns all credits
+  - Hydration: ✅ No errors in browser console
+  - Home page: ✅ Renders correctly with calculator
+
+**Critical Fixes**:
+- Number formatting now consistent across server/client (eliminates hydration warnings)
+- Database properly connects to PostgreSQL (no more SQLite fallback)
+- All API endpoints functional and returning correct data
+
+### Phase 6: Tax Calculator & Document Upload
 - ✅ Extended Prisma Document model with additional fields (userId, name, storageKey, size, mime, notes)
 - ✅ Migrated database from SQLite to PostgreSQL for production readiness
 - ✅ Created `lib/storage.ts` dual-mode file storage adapter:
