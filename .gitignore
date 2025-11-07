@@ -36,6 +36,10 @@ next-env.d.ts
 # Prisma
 prisma/migrations/
 
+# Uploads
+/public/uploads/*
+!/public/uploads/.gitkeep
+
 # Replit
 .replit
 .config

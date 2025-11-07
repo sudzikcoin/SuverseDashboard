@@ -31,6 +31,24 @@ export async function POST(req: NextRequest) {
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  if (parsed.data.companyId) {
+    const isAuthorized = 
+      session.user.role === "ADMIN" ||
+      (session.user.role === "COMPANY" && session.user.companyId === parsed.data.companyId) ||
+      (session.user.role === "ACCOUNTANT" && 
+        await prisma.accountantClient.findFirst({
+          where: {
+            accountantId: session.user.id,
+            companyId: parsed.data.companyId
+          }
+        })
+      );
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Not authorized to upload for this company" }, { status: 403 });
+    }
+  }
+
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 

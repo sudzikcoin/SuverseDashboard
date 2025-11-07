@@ -52,3 +52,37 @@ The design adheres to a "Clario-style" modern dark theme with emerald green acce
 -   **Zod**: For input validation.
 -   **framer-motion**: For animations.
 -   **tailwindcss-animate**: For Tailwind CSS based animations.
+## Recent Changes (November 7, 2025)
+
+### Phase 6: Tax Calculator & Document Upload (Latest)
+- ✅ Extended Prisma Document model with additional fields (userId, name, storageKey, size, mime, notes)
+- ✅ Migrated database from SQLite to PostgreSQL for production readiness
+- ✅ Created `lib/storage.ts` dual-mode file storage adapter:
+  - Local dev: Saves to `public/uploads/` directory
+  - Production: S3-compatible storage with graceful fallback to metadata-only
+- ✅ Implemented file upload API (`app/api/upload/route.ts`) with auth and validation
+- ✅ Created S3 file proxy API (`app/api/files/[...key]/route.ts`) for private file serving
+- ✅ Built Tax Credit Calculator module:
+  - `lib/calc.ts` - Calculation logic with configurable fee structures
+  - `CalculatorCard.tsx` - Interactive UI with real-time calculations
+  - Shows face value, costs, fees, savings, and effective discount percentage
+- ✅ Created FileUpload component with drag-and-drop support
+- ✅ Built DocumentList component with formatted display and download links
+- ✅ Integrated calculator on landing page (below hero section)
+- ✅ Enhanced company dashboard with:
+  - Interactive tax credit calculator
+  - Document upload section
+  - Document list showing all uploaded files
+- ✅ Added calculator to accountant and admin dashboards
+- ✅ Updated all dashboard cards with glass styling
+- ✅ Added S3 environment variables to `.env.local.example`
+- ✅ Created `public/uploads/` directory for local file storage
+- ✅ Updated `.gitignore` to exclude uploaded files
+
+**Dependencies Added**: `@aws-sdk/client-s3` for S3 integration
+
+**Environment Variables** (optional for S3):
+- `S3_REGION`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
+- `PUBLIC_BASE_URL` for generating file URLs
+
+**File Storage**: Local fallback to `public/uploads/` in dev; S3 in production with graceful degradation.
