@@ -4,15 +4,15 @@ import { formatNumber } from "@/lib/format";
 
 export default async function DocumentList({ 
   companyId, 
-  userId 
+  uploadedById 
 }: { 
-  companyId?: string; 
-  userId?: string 
+  companyId: string; 
+  uploadedById?: string 
 }) {
   const docs = await prisma.document.findMany({
     where: { 
-      ...(companyId && { companyId }), 
-      ...(userId && { userId }) 
+      companyId,
+      ...(uploadedById && { uploadedById }) 
     },
     orderBy: { createdAt: "desc" },
   });
@@ -33,32 +33,25 @@ export default async function DocumentList({
           className="glass rounded-xl border border-white/10 px-4 py-3 flex justify-between items-center hover:border-su-emerald/30 transition"
         >
           <div className="flex flex-col gap-1">
-            <span className="font-medium text-su-text">{d.name}</span>
+            <span className="font-medium text-su-text">{d.filename}</span>
             <div className="flex items-center gap-3 text-xs text-su-muted">
               <span className="inline-flex items-center gap-1">
                 <span className="px-2 py-0.5 rounded-full bg-su-emerald/20 text-su-emerald border border-su-emerald/40">
-                  {d.type}
+                  {d.mimeType}
                 </span>
               </span>
-              <span suppressHydrationWarning>{formatNumber(d.size ?? 0)} bytes</span>
+              <span suppressHydrationWarning>{formatNumber(d.sizeBytes)} bytes</span>
               <span>{formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}</span>
             </div>
-            {d.notes && (
-              <p className="text-xs text-su-muted italic">{d.notes}</p>
-            )}
           </div>
-          {d.url ? (
-            <a 
-              href={d.url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-4 py-2 rounded-lg bg-su-emerald/10 text-su-emerald hover:bg-su-emerald/20 transition font-medium text-sm border border-su-emerald/40"
-            >
-              Open
-            </a>
-          ) : (
-            <span className="text-white/40 text-sm">no file</span>
-          )}
+          <a 
+            href={`/api/files?path=${encodeURIComponent(d.storagePath)}`}
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded-lg bg-su-emerald/10 text-su-emerald hover:bg-su-emerald/20 transition font-medium text-sm border border-su-emerald/40"
+          >
+            Open
+          </a>
         </div>
       ))}
     </div>

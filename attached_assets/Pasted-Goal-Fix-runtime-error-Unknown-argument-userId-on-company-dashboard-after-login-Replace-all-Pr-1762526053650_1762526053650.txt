@@ -1,0 +1,119 @@
+Goal:
+Fix runtime error "Unknown argument `userId`" on company dashboard after login. Replace all Prisma queries that filter Document by `userId` with correct fields: **`companyId`** (required) and optional **`uploadedById`**. Ensure the company portal lists only documents for the current user's company. Keep accountant portal working.
+
+---
+
+## 1) Update Prisma usage in DocumentList
+
+Edit `components/DocumentList.tsx`:
+
+- Change props from `{ userId?: string }` to:
+```ts
+type Props = {
+  companyId: string;         // required
+  uploadedById?: string;     // optional filter
+};
+```
+
+- Replace the Prisma query:
+```ts
+const docs = await prisma.document.findMany({
+  where: {
+    companyId,                                        // <- required filter
+    ...(uploadedById ? { uploadedById } : {}),        // <- optional
+  },
+  orderBy: { createdAt: "desc" },
+});
+```
+
+- Remove any spread like `...(userId && { userId })` — **delete every reference to `userId`** in this file.
+
+---
+
+## 2) Pass correct props from pages
+
+### Company portal
+Find the page that renders `DocumentList` in the **company** dashboard
+(e.g. `app/(company)/dashboard/page.tsx` or similar) and pass the **current user's companyId**.
+
+- First, try direct field on user:
+```ts
+const session = await auth(); // or getServerSession
+const companyId = session?.user?.companyId;
+```
+
+- If user has no direct `companyId`, resolve via membership:
+```ts
+const company = await prisma.company.findFirst({
+  where: { members: { some: { userId: session.user.id } } },
+  select: { id: true, name: true },
+});
+const companyId = company?.id;
+```
+
+- Render:
+```tsx
+<DocumentList companyId={companyId!} />
+```
+
+### Accountant portal
+If the accountant’s clients table injects DocumentList per selected company, keep:
+```tsx
+<DocumentList companyId={row.companyId} />
+```
+
+---
+
+## 3) Audit and replace `userId` filters in API routes
+
+Search the codebase for `userId` in `app/api/**/documents*` and replace filters:
+
+- In any `GET`:
+```ts
+where: { companyId, ...(uploadedById ? { uploadedById } : {}) }
+```
+
+- In any `POST` (upload):
+  - When creating a row, set:
+```ts
+data: {
+  companyId,
+  uploadedById: session.user.id, // if available
+  filename, mimeType, sizeBytes, storagePath,
+}
+```
+
+- In any `DELETE`:
+  - Ensure the `companyId` matches as guard:
+```ts
+const doc = await prisma.document.findFirst({ where: { id, companyId } });
+```
+
+> ⚠️ Do **not** add a `userId` column to Prisma. The correct optional column is `uploadedById` (String?).
+
+---
+
+## 4) Type safety & UI
+
+- Update all component usages and types that referenced `userId`.
+- If there’s a filter UI like “My uploads”, wire it to pass `uploadedById=session.user.id`; otherwise omit.
+
+---
+
+## 5) Tests (do now)
+
+1. Login as **company** user → open dashboard section with documents.
+2. No red error. List loads successfully.
+3. Upload a PDF → appears in list; refresh persists.
+4. Accountant view still lists docs per selected company.
+5. Optional: toggle “My uploads” to verify `uploadedById` filter.
+
+---
+
+## 6) Commits
+
+1. `fix(documents): replace userId filter with companyId/ uploadedById`
+2. `chore(types): update DocumentList props and callers`
+3. `test: verify company dashboard document list`
+
+No Prisma migrate needed (schema unchanged). Run `npm run dev` and verify.

@@ -19,6 +19,8 @@ export default async function DashboardPage() {
     redirect("/login")
   }
 
+  const userCompanyId = session.user.companyId
+
   return (
     <div className="flex min-h-screen bg-[#0B1220]">
       <Sidebar role={session.user.role} />
@@ -64,11 +66,13 @@ export default async function DashboardPage() {
 
             <CalculatorCard />
 
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-su-text">Your Documents</h2>
-              <FileUpload title="Upload Compliance Documents" defaultType="KYC" />
-              <DocumentList userId={session.user.id} />
-            </div>
+            {userCompanyId && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-su-text">Your Documents</h2>
+                <FileUpload title="Upload Compliance Documents" defaultType="KYC" />
+                <DocumentList companyId={userCompanyId} />
+              </div>
+            )}
           </div>
         )}
 
