@@ -21,7 +21,7 @@ export default async function DashboardPage() {
       
       <main className="flex-1 p-8">
         <h1 className="text-3xl font-bold mb-8 text-su-text">
-          Welcome, {session.user.email}
+          Welcome, {session.user.companyName || session.user.email}
         </h1>
 
         {session.user.role === "COMPANY" && (

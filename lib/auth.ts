@@ -58,6 +58,17 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string
         session.user.role = token.role as string
         session.user.companyId = token.companyId as string | null
+        
+        // Fetch company name if user has a companyId
+        if (token.companyId) {
+          const company = await prisma.company.findUnique({
+            where: { id: token.companyId as string },
+            select: { legalName: true }
+          })
+          session.user.companyName = company?.legalName ?? null
+        } else {
+          session.user.companyName = null
+        }
       }
       return session
     }
