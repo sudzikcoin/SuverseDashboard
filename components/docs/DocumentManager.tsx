@@ -36,7 +36,7 @@ export default function DocumentManager({
     try {
       const res = await fetch(`/api/documents/${companyId}`)
       const data = await res.json()
-      setDocuments(data.documents || [])
+      setDocuments(data.items || [])
     } catch (error) {
       console.error("Error fetching documents:", error)
       setStatus("Failed to fetch documents")
