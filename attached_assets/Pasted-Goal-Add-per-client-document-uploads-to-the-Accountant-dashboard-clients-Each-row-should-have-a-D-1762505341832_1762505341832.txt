@@ -1,0 +1,102 @@
+Goal: Add per-client document uploads to the Accountant dashboard /clients. Each row should have a Documents button that opens a modal to upload/view/delete files for that client. Store files locally in /uploads (dev) and metadata in Prisma Document linked to Company. Keep styling consistent with current dark theme (rounded cards, green accents).
+
+0) Repo context
+
+Project: Next.js App Router + Prisma + Tailwind. There is a Document table already (if fields differ, update as below).
+
+1) Prisma model (ensure/extend)
+
+Open prisma/schema.prisma and ensure Document equals (or migrate to) this:
+
+model Document {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String   // e.g. /uploads/<companyId>/<file>
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  @@index([companyId])
+}
+
+If edits were needed, run:
+	•	npx prisma generate
+	•	npx prisma migrate dev --name add_document_upload_fields
+
+2) File storage (local, dev-only)
+	•	Create folder /uploads at project root.
+	•	Add to .gitignore:
+
+uploads/
+
+3) API routes (App Router)
+
+Create folder app/api/documents/[companyId]/ with three handlers:
+
+app/api/documents/[companyId]/route.ts
+	•	GET: list docs by companyId from Prisma.
+	•	POST: handle multipart/form-data with fields: file (single or multiple).
+	•	Save to /uploads/<companyId>/filename (ensure dir exists).
+	•	Insert rows into Document.
+	•	Return JSON with created docs.
+	•	DELETE: support ?id=<docId> to delete a document (remove file + DB row).
+
+Use import { NextResponse } from 'next/server' and the built-in Web FormData parsing (no 3rd-party needed). For saving, use fs/promises. Limit: accept pdf, png, jpg, jpeg up to 10 MB each; return 400 if larger or wrong type.
+
+4) UI components
+
+Create components/docs/DocumentManager.tsx:
+	•	Props: { companyId: string; companyName: string; onClose: () => void }
+	•	Render a modal (full-screen overlay) with:
+	•	Title: Documents — {companyName}
+	•	File input accept=".pdf,.png,.jpg,.jpeg" multiple
+	•	Upload button -> POST to /api/documents/{companyId}
+	•	List of existing documents (fetched on mount via GET), each with:
+	•	filename, size (KB), date
+	•	download link (/api/files?path=...) OR direct /uploads/... if static is exposed (see step 5)
+	•	small trash icon to delete (DELETE call with ?id=...)
+	•	Use Tailwind classes consistent with project (rounded-xl, border-white/10, bg-slate-900/70, text-slate-200, primary buttons in green).
+	•	Add toasts (simple inline status text is fine if no toast system).
+
+5) Static file serving
+
+Expose /uploads for dev:
+	•	In next.config.js, add (if not present):
+
+const nextConfig = {
+  experimental: { serverActions: { allowedOrigins: ['*'] } },
+  // Serve /uploads as static in dev:
+  webpack: (config) => { return config; },
+}
+module.exports = nextConfig;
+Create a simple route to stream files (safer than static):
+app/api/files/route.ts that reads ?path= (validated to start with /uploads/) and streams the file with proper Content-Type. (Avoid directory traversal.)
+
+6) Inject “Documents” button into /clients
+
+Edit page app/(accountant)/clients/page.tsx (or wherever that table lives):
+	•	Add a rightmost column Docs.
+	•	For each company row, render a small rounded button “Documents”.
+	•	Clicking opens <DocumentManager companyId=... companyName=... /> in a portal/modal.
+	•	Keep current pagination/filters intact.
+
+7) Access control
+	•	Reuse existing session check for Accountant role.
+	•	In API handlers, verify user is logged in and has access to this company (via existing AccountantClient join if present). If access layer is not ready, at least require session to be non-null.
+
+8) DX and polish
+	•	Reuse your Button component and colors.
+	•	Mobile: modal is full-screen; table stays scrollable horizontally.
+	•	Error/empty states: “No documents yet”.
+
+9) Testing checklist (do now)
+	1.	Login as Accountant → go to /clients.
+	2.	Click Documents on any row → upload 2–3 files (PNG/PDF).
+	3.	See list populate; try delete.
+	4.	Reload page → list persists.
+	5.	Check /uploads/<companyId>/ created and .gitignore excludes it.
+	6.	Confirm dark theme & rounded visuals match the app.
+
+When done, summarize the changed files and paste any Prisma migrate output.
