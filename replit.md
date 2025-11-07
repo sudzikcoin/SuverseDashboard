@@ -54,7 +54,54 @@ The design adheres to a "Clario-style" modern dark theme with emerald green acce
 -   **tailwindcss-animate**: For Tailwind CSS based animations.
 ## Recent Changes (November 7, 2025)
 
-### Phase 8: Dashboard Company Name Enhancement (Latest)
+### Phase 9: Per-Client Document Upload System (Latest)
+- ✅ **Secure Document Management**: Built per-client document upload system for accountants
+  - Multi-file upload support (PDF, PNG, JPG up to 10MB each)
+  - Drag-and-drop UI with real-time status feedback
+  - View and delete document capabilities
+  - Documents button integrated into clients table
+- ✅ **Production-Grade Security**: Comprehensive authorization and path validation
+  - CompanyId validation (`/^[A-Za-z0-9_-]+$/`) prevents path traversal attacks
+  - Role-based access control: Accountants (client-scoped), Company (own documents), Admin (full access)
+  - Explicit denial for unauthorized roles prevents horizontal privilege escalation
+  - Document lookup before file serving enforces access checks
+- ✅ **Node Runtime Implementation**: Robust file handling with native fs operations
+  - `lib/safeUpload.ts` helper with safe filename sanitization and directory management
+  - Multipart form data parsing with proper validation
+  - Files stored in `/uploads/<companyId>/` with timestamped filenames
+- ✅ **Audit Logging**: Comprehensive tracking of document operations
+  - CREATE: Logs filename, size, and company when documents are uploaded
+  - READ: Logs when users view document lists
+  - DELETE: Logs when documents are removed
+- ✅ **API Routes**:
+  - `GET /api/documents/[companyId]`: List documents with authorization checks
+  - `POST /api/documents/[companyId]`: Upload multiple files with validation
+  - `DELETE /api/documents/[companyId]`: Remove documents with ownership verification
+  - `GET /api/files?path=`: Secure file streaming with full authorization
+
+**Files Created/Modified**:
+- `lib/safeUpload.ts` - Safe file operations helper (sanitization, directory management)
+- `app/api/documents/[companyId]/route.ts` - Document management API with Node runtime
+- `app/api/files/route.ts` - Secure file serving with role-based authorization
+- `components/docs/DocumentManager.tsx` - Updated for new API response format
+- `app/clients/page.tsx` - Integrated Documents button
+
+**Security Features**:
+- Path traversal prevention via regex validation
+- File type whitelist (PDF, PNG, JPG only)
+- File size limits (10MB maximum)
+- Role-based access control for all operations
+- Audit trail for compliance
+
+**Testing Checklist**:
+- Upload PDF/PNG/JPG files (<10MB) → Success with 201 status
+- Attempt to upload >10MB file → 400 "File too large"
+- Attempt to upload .exe file → 400 "Only PDF/PNG/JPG are allowed"
+- Delete document → File removed, 404 on subsequent access
+- Accountant access to non-assigned client → 403 Forbidden
+- Company user access to other company's documents → 403 Forbidden
+
+### Phase 8: Dashboard Company Name Enhancement
 - ✅ **Enhanced Dashboard Greeting**: Replaced "Welcome, {email}" with "Welcome, {Company Legal Name}"
   - Added `companyName` field to NextAuth Session, User, and JWT interfaces
   - Updated `authorize` function to fetch company legal name during login (one-time cost)
