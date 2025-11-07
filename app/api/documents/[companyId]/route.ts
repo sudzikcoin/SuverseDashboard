@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db";
 import { UPLOADS_ROOT, buildPaths, saveBuffer, removeAbs } from "@/lib/safeUpload";
 import path from "path";
 import { stat } from "fs/promises";
@@ -21,6 +21,11 @@ export async function GET(
   { params }: { params: { companyId: string } }
 ) {
   const { companyId } = params;
+  
+  if (!/^[A-Za-z0-9_-]+$/.test(companyId)) {
+    return bad("Invalid company ID", 400);
+  }
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -76,6 +81,11 @@ export async function POST(
   { params }: { params: { companyId: string } }
 ) {
   const { companyId } = params;
+  
+  if (!/^[A-Za-z0-9_-]+$/.test(companyId)) {
+    return bad("Invalid company ID", 400);
+  }
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -169,6 +179,11 @@ export async function DELETE(
   { params }: { params: { companyId: string } }
 ) {
   const { companyId } = params;
+  
+  if (!/^[A-Za-z0-9_-]+$/.test(companyId)) {
+    return bad("Invalid company ID", 400);
+  }
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

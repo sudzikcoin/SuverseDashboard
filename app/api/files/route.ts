@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import path from "path";
 import { readFile } from "fs/promises";
 import { UPLOADS_ROOT } from "@/lib/safeUpload";
@@ -17,6 +18,52 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const rel = searchParams.get("path");
     if (!rel) return NextResponse.json({ error: "Missing path" }, { status: 400 });
+
+    const document = await prisma.document.findFirst({
+      where: { storagePath: rel },
+    });
+
+    if (!document) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    if (session.user.role === "ACCOUNTANT") {
+      const hasAccess = await prisma.accountantClient.findFirst({
+        where: {
+          accountantId: session.user.id,
+          companyId: document.companyId,
+        },
+      });
+
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: "You do not have access to this document" },
+          { status: 403 }
+        );
+      }
+    } else if (session.user.role === "COMPANY") {
+      const userCompany = await prisma.company.findFirst({
+        where: {
+          users: {
+            some: {
+              id: session.user.id,
+            },
+          },
+        },
+      });
+
+      if (!userCompany || userCompany.id !== document.companyId) {
+        return NextResponse.json(
+          { error: "You do not have access to this document" },
+          { status: 403 }
+        );
+      }
+    } else if (session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
 
     const abs = path.join(UPLOADS_ROOT, rel);
     if (!abs.startsWith(UPLOADS_ROOT)) {
