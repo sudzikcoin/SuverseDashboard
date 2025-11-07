@@ -54,7 +54,31 @@ The design adheres to a "Clario-style" modern dark theme with emerald green acce
 -   **tailwindcss-animate**: For Tailwind CSS based animations.
 ## Recent Changes (November 7, 2025)
 
-### Phase 7: Bug Fixes & Production Readiness (Latest)
+### Phase 8: Dashboard Company Name Enhancement (Latest)
+- ✅ **Enhanced Dashboard Greeting**: Replaced "Welcome, {email}" with "Welcome, {Company Legal Name}"
+  - Added `companyName` field to NextAuth Session, User, and JWT interfaces
+  - Updated `authorize` function to fetch company legal name during login (one-time cost)
+  - Modified `jwt` callback to persist companyName to the JWT token
+  - Optimized `session` callback to read from token (eliminates database query on every session read)
+  - Dashboard greeting shows company name with automatic fallback to email if no company exists
+- ✅ **Performance Optimization**: Eliminated unnecessary database queries on session access
+  - Previous implementation queried database on every session read
+  - New implementation caches company name in JWT token
+  - Significantly reduced latency for session-based requests
+- ✅ **Type Safety**: Complete TypeScript type definitions for all NextAuth interfaces
+- ✅ **Edge Case Handling**: Properly handles users without companies using null coalescing
+
+**Files Modified**:
+- `types/next-auth.d.ts` - Extended Session/User/JWT types with companyName
+- `lib/auth.ts` - Optimized callbacks to cache company name in JWT
+- `app/dashboard/page.tsx` - Updated greeting to show company name
+
+**Testing Recommendations**:
+- Verify login across all roles (COMPANY, ACCOUNTANT, ADMIN)
+- Confirm company name displays correctly for users with companies
+- Ensure email fallback works for users without companies
+
+### Phase 7: Bug Fixes & Production Readiness
 - ✅ **Fixed Critical Hydration Error**: Created `lib/format.ts` with custom formatters
   - Replaced `Intl.NumberFormat` with manual comma insertion to eliminate browser locale differences
   - Functions: `formatNumber`, `formatUSD`, `formatUSDWithCents`, `formatPercent`
