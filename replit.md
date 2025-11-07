@@ -54,7 +54,30 @@ The design adheres to a "Clario-style" modern dark theme with emerald green acce
 -   **tailwindcss-animate**: For Tailwind CSS based animations.
 ## Recent Changes (November 7, 2025)
 
-### Phase 9: Per-Client Document Upload System (Latest)
+### Phase 10: DocumentList userId Bug Fix (Latest)
+- ✅ **Fixed Runtime Error**: Resolved "Unknown argument `userId`" error on company dashboard
+  - Changed DocumentList props from `userId` to `companyId` (required) and `uploadedById` (optional)
+  - Updated Prisma query to use correct schema fields: `companyId` and `uploadedById`
+  - Fixed field mappings to match schema: `filename`, `mimeType`, `sizeBytes`, `storagePath`
+- ✅ **Dashboard Updates**: Company dashboard now properly passes `companyId` from session
+  - Retrieves `userCompanyId` from `session.user.companyId`
+  - Conditional rendering for document section (only shows if user has company)
+  - Graceful handling for users without assigned companies
+- ✅ **File URL Generation**: Updated document links to use `/api/files?path=` endpoint
+  - Replaces old `d.url` with dynamic URL generation from `storagePath`
+  - Works with the secure Node runtime file serving implementation
+
+**Files Modified**:
+- `components/DocumentList.tsx` - Changed props and Prisma query, fixed field mappings
+- `app/dashboard/page.tsx` - Updated to pass companyId instead of userId with conditional rendering
+
+**Architect Approval**: PASS - Schema-aligned fields eliminate Prisma validation errors
+
+**Next Recommendations**:
+- Consider UX notice for company users without assigned companyId
+- Run regression tests on document uploads/downloads end-to-end
+
+### Phase 9: Per-Client Document Upload System
 - ✅ **Secure Document Management**: Built per-client document upload system for accountants
   - Multi-file upload support (PDF, PNG, JPG up to 10MB each)
   - Drag-and-drop UI with real-time status feedback
