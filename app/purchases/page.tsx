@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
+import { formatNumber } from "@/lib/format"
 
 interface Purchase {
   id: string
@@ -83,8 +84,8 @@ export default function PurchasesPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">
-                      ${Number(purchase.totalUSD).toLocaleString()}
+                    <p className="text-2xl font-bold" suppressHydrationWarning>
+                      ${formatNumber(Number(purchase.totalUSD))}
                     </p>
                   </div>
                 </div>
@@ -92,8 +93,8 @@ export default function PurchasesPage() {
                 <div className="mt-4 grid md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Face Value</p>
-                    <p className="font-semibold">
-                      ${Number(purchase.amountUSD).toLocaleString()}
+                    <p className="font-semibold" suppressHydrationWarning>
+                      ${formatNumber(Number(purchase.amountUSD))}
                     </p>
                   </div>
                   <div>
@@ -118,8 +119,8 @@ export default function PurchasesPage() {
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-600 mt-4">
-                  Created: {new Date(purchase.createdAt).toLocaleString()}
+                <p className="text-sm text-gray-600 mt-4" suppressHydrationWarning>
+                  Created: {new Date(purchase.createdAt).toLocaleString('en-US')}
                 </p>
               </Card>
             ))}

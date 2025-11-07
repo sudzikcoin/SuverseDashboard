@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
+import { formatNumber } from "@/lib/format"
 
 interface CreditInventory {
   id: string
@@ -155,11 +156,11 @@ export default function MarketplacePage() {
                   <div className="space-y-2 mb-4">
                     <p className="text-sm text-gray-100">
                       <span className="font-semibold text-gray-200">Available:</span>{" "}
-                      ${Number(item.availableUSD).toLocaleString()}
+                      <span suppressHydrationWarning>${formatNumber(Number(item.availableUSD))}</span>
                     </p>
                     <p className="text-sm text-gray-100">
                       <span className="font-semibold text-gray-200">Min Block:</span>{" "}
-                      ${Number(item.minBlockUSD).toLocaleString()}
+                      <span suppressHydrationWarning>${formatNumber(Number(item.minBlockUSD))}</span>
                     </p>
                     <p className="text-sm text-gray-100">
                       <span className="font-semibold text-gray-200">Price:</span>{" "}
@@ -208,11 +209,11 @@ export default function MarketplacePage() {
               <div className="space-y-3 mb-6">
                 <p className="text-gray-100">
                   <span className="font-semibold text-gray-200">Face Value Available:</span>{" "}
-                  ${Number(selectedCredit.availableUSD).toLocaleString()}
+                  <span suppressHydrationWarning>${formatNumber(Number(selectedCredit.availableUSD))}</span>
                 </p>
                 <p className="text-gray-100">
                   <span className="font-semibold text-gray-200">Minimum Block:</span>{" "}
-                  ${Number(selectedCredit.minBlockUSD).toLocaleString()}
+                  <span suppressHydrationWarning>${formatNumber(Number(selectedCredit.minBlockUSD))}</span>
                 </p>
                 <p className="text-gray-100">
                   <span className="font-semibold text-gray-200">Price per Dollar:</span>{" "}
@@ -249,11 +250,10 @@ export default function MarketplacePage() {
                 />
                 {purchaseAmount && (
                   <p className="text-sm text-gray-400 mt-2">
-                    Subtotal: $
-                    {(
+                    Subtotal: <span suppressHydrationWarning>${formatNumber(
                       parseFloat(purchaseAmount) *
                       Number(selectedCredit.pricePerDollar)
-                    ).toLocaleString()}
+                    )}</span>
                   </p>
                 )}
               </div>

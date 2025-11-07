@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
+import { formatNumber } from "@/lib/format"
 
 export default function AdminInventoryPage() {
   const router = useRouter()
@@ -84,20 +85,20 @@ export default function AdminInventoryPage() {
               <div className="mt-4 grid md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm font-semibold text-white/90">Face Value</p>
-                  <p className="text-white font-mono tabular-nums font-semibold">
-                    ${Number(item.faceValueUSD).toLocaleString()}
+                  <p className="text-white font-mono tabular-nums font-semibold" suppressHydrationWarning>
+                    ${formatNumber(Number(item.faceValueUSD))}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white/90">Available</p>
-                  <p className="text-white font-mono tabular-nums font-semibold">
-                    ${Number(item.availableUSD).toLocaleString()}
+                  <p className="text-white font-mono tabular-nums font-semibold" suppressHydrationWarning>
+                    ${formatNumber(Number(item.availableUSD))}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white/90">Min Block</p>
-                  <p className="text-white font-mono tabular-nums font-semibold">
-                    ${Number(item.minBlockUSD).toLocaleString()}
+                  <p className="text-white font-mono tabular-nums font-semibold" suppressHydrationWarning>
+                    ${formatNumber(Number(item.minBlockUSD))}
                   </p>
                 </div>
                 <div>

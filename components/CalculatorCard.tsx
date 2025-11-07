@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { compute } from "@/lib/calc";
+import { formatNumber, formatUSDWithCents } from "@/lib/format";
 
 export default function CalculatorCard({ compact = false }: { compact?: boolean }) {
   const [taxLiability, setTaxLiability] = useState(25000);
@@ -76,33 +77,33 @@ export default function CalculatorCard({ compact = false }: { compact?: boolean 
           <div className="rounded-xl bg-black/30 border border-white/10 p-4 space-y-2">
             <div className="flex justify-between text-su-text">
               <span>Face Value</span>
-              <span className="font-mono">${r.face.toLocaleString()}</span>
+              <span className="font-mono" suppressHydrationWarning>${formatNumber(r.face)}</span>
             </div>
             <div className="flex justify-between text-su-muted">
               <span>Cost Before Fees</span>
-              <span className="font-mono">${r.costBeforeFees.toLocaleString()}</span>
+              <span className="font-mono" suppressHydrationWarning>${formatNumber(r.costBeforeFees)}</span>
             </div>
             <div className="flex justify-between text-su-muted">
               <span>Platform Fee</span>
-              <span className="font-mono">${r.platformFee.toFixed(2)}</span>
+              <span className="font-mono" suppressHydrationWarning>{formatUSDWithCents(r.platformFee)}</span>
             </div>
             <div className="flex justify-between text-su-muted">
               <span>Broker Fee</span>
-              <span className="font-mono">${r.brokerFee.toFixed(2)}</span>
+              <span className="font-mono" suppressHydrationWarning>{formatUSDWithCents(r.brokerFee)}</span>
             </div>
             <div className="border-t border-white/10 pt-2 mt-2 flex justify-between font-semibold text-su-text">
               <span>Total Cost</span>
-              <span className="font-mono">${r.totalCost.toLocaleString()}</span>
+              <span className="font-mono" suppressHydrationWarning>${formatNumber(r.totalCost)}</span>
             </div>
           </div>
           <div className="rounded-xl bg-su-emerald/10 border border-su-emerald/40 p-4 space-y-2 glow-emerald">
             <div className="flex justify-between text-su-text">
               <span>Savings</span>
-              <span className="font-mono font-semibold text-su-emerald">${r.savings.toLocaleString()}</span>
+              <span className="font-mono font-semibold text-su-emerald" suppressHydrationWarning>${formatNumber(r.savings)}</span>
             </div>
             <div className="flex justify-between text-su-text">
               <span>Effective Discount</span>
-              <span className="font-mono font-semibold text-su-emerald">{r.effectiveDiscountPct.toFixed(1)}%</span>
+              <span className="font-mono font-semibold text-su-emerald" suppressHydrationWarning>{formatNumber(r.effectiveDiscountPct)}%</span>
             </div>
           </div>
         </div>

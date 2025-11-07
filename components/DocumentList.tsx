@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { formatDistanceToNow } from "date-fns";
+import { formatNumber } from "@/lib/format";
 
 export default async function DocumentList({ 
   companyId, 
@@ -39,7 +40,7 @@ export default async function DocumentList({
                   {d.type}
                 </span>
               </span>
-              <span>{(d.size ?? 0).toLocaleString()} bytes</span>
+              <span suppressHydrationWarning>{formatNumber(d.size ?? 0)} bytes</span>
               <span>{formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}</span>
             </div>
             {d.notes && (

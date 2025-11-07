@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
+import { formatNumber } from "@/lib/format"
 
 export default function AdminPurchasesPage() {
   const router = useRouter()
@@ -115,14 +116,14 @@ export default function AdminPurchasesPage() {
                 <div className="grid md:grid-cols-4 gap-4 mb-4">
                   <div>
                     <p className="text-sm font-semibold text-gray-200">Face Value</p>
-                    <p className="text-white font-semibold">
-                      ${Number(po.amountUSD).toLocaleString()}
+                    <p className="text-white font-semibold" suppressHydrationWarning>
+                      ${formatNumber(Number(po.amountUSD))}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-200">Total Paid</p>
-                    <p className="text-white font-semibold">
-                      ${Number(po.totalUSD).toLocaleString()}
+                    <p className="text-white font-semibold" suppressHydrationWarning>
+                      ${formatNumber(Number(po.totalUSD))}
                     </p>
                   </div>
                   <div>
