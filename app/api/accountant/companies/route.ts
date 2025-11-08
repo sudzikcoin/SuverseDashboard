@@ -10,17 +10,22 @@ export async function GET() {
   const role = session.user.role
   
   if (role === "ADMIN") {
-    const companies = await prisma.company.findMany({ orderBy: { name: "asc" } })
+    const companies = await prisma.company.findMany({
+      orderBy: { id: "asc" }
+    })
     return NextResponse.json({ companies })
   }
 
   if (role === "ACCOUNTANT") {
     const links = await prisma.accountantClient.findMany({
-      where: { accountantId: session.user.id },
-      include: { company: true },
-      orderBy: { company: { name: "asc" } }
+      where: { accountantId: session.user.id }
     })
-    return NextResponse.json({ companies: links.map(l => l.company) })
+    const companyIds = links.map(l => l.companyId)
+    const companies = await prisma.company.findMany({
+      where: { id: { in: companyIds } },
+      orderBy: { id: "asc" }
+    })
+    return NextResponse.json({ companies })
   }
 
   if (role === "COMPANY" && session.user.companyId) {
