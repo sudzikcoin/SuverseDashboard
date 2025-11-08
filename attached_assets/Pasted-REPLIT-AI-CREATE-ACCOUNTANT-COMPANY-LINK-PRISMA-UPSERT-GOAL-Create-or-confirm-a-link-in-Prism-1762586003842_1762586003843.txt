@@ -1,0 +1,50 @@
+REPLIT AI — CREATE ACCOUNTANT↔COMPANY LINK (PRISMA UPSERT)
+
+GOAL
+Create (or confirm) a link in Prisma table `AccountantClient` between:
+- an existing accountant user (found by email), and
+- an existing company (found by legal name or by id).
+This enables the accountant to upload/manage that company’s documents.
+
+INPUTS (edit these constants inside the script)
+- ACCOUNTANT_EMAIL: the accountant’s login email (e.g., "felix@example.com")
+- COMPANY_LEGAL_NAME: the company legal name shown in UI (e.g., "Felix LLC")
+- (Optional) COMPANY_ID: if you prefer, allow using a known companyId instead of name
+
+SCOPE — ADD/EDIT ONLY
+1) Add a small script at `scripts/linkAccountantToCompany.ts` that:
+   - Loads NextAuth/Prisma environment (DATABASE_URL).
+   - Looks up `User` by email and verifies role === "ACCOUNTANT".
+   - Looks up `Company` by legalName (or uses COMPANY_ID if provided).
+   - Performs Prisma `upsert` on `AccountantClient` using a unique composite (accountantId_companyId).
+   - Prints a concise summary: accountantId, companyId, status: "created" | "already-exists".
+   - Exits with non-zero code and a readable message if anything is missing.
+
+2) Update `package.json` scripts:
+   - "link:accountant": "tsx scripts/linkAccountantToCompany.ts"
+   (Reuse existing tsx/dev tooling; do NOT add new deps.)
+
+3) Do NOT change schema, auth providers, roles, Stripe, or UI.
+
+EXECUTION
+- Run: `npm run link:accountant`
+- On success, the console must show something like:
+  ✔ Linked accountant {userId} to company {companyId} (status: created|already-exists)
+
+ACCEPTANCE CHECKS
+1) Running the script with a valid accountant email AND existing company succeeds.
+2) Re-running the script is idempotent (reports "already-exists", no duplicates).
+3) After linking, the accountant can open Clients → Documents modal for that company and:
+   - upload a file successfully,
+   - see it immediately in the list,
+   - use Open/Delete actions without 403 errors.
+
+GUARDRAILS
+- If the user is not found, or not role "ACCOUNTANT" → abort with a clear error.
+- If the company is not found → abort with a clear error.
+- Do not modify any other data or roles.
+
+OUTPUT
+- Print the path of the created script and the updated package.json entry.
+- Single commit message:
+  chore(dev): link accountant to company via Prisma upsert (no schema/auth changes)

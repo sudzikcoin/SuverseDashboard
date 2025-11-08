@@ -12,7 +12,8 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "link:accountant": "tsx scripts/linkAccountantToCompany.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.926.0",
