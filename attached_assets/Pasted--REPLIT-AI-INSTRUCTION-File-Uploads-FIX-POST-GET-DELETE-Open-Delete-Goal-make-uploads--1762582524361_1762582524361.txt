@@ -1,0 +1,99 @@
+# ✅ REPLIT-AI INSTRUCTION — File Uploads FIX (POST/GET/DELETE) + Open + Delete
+# Goal: make uploads work, allow viewing files in a new tab, and add Delete next to Open.
+# Safe changes only; integrate with existing code. 
+
+CONSTRAINTS (do NOT violate):
+- Keep NextAuth, Prisma schema/migrations, RBAC, Stripe, all server logic intact.
+- Modify only the existing file upload flow: components that render the Documents/Uploads list
+  and API routes under app/api/files/** (or pages/api/files/** if legacy).
+- Reuse existing Prisma model for user files/documents if present; otherwise keep the same storage/DB layer already used on the dashboard.
+- Do NOT change environment variables, providers or global configs.
+
+------------------------------------------------------------
+1) FRONTEND: Uploader + List
+------------------------------------------------------------
+Locate the uploader/list component used on /dashboard (e.g., components/files/DocumentsUploader.tsx or similar).
+
+A) Fix Upload request:
+- Ensure we send multipart FormData to POST /api/files with **no manual Content-Type header**.
+  Example logic:
+    const fd = new FormData();
+    fd.append('file', file);               // actual File object
+    fd.append('label', label || file.name);
+    // append owner/reference fields already used in project (companyId/userId/etc.)
+    await fetch('/api/files', { method: 'POST', body: fd, credentials: 'include' });
+
+- If previous code set headers { 'Content-Type': 'application/json' } or JSON.stringify(fd), remove it.
+  This prevents “The string did not match the expected pattern.”
+
+B) Fix “Open” link:
+- For each item, href must be EXACTLY `/api/files/${file.id}` (path param), target="_blank", rel="noopener".
+- Do NOT use new URL(file.url) without a base; use plain string href or Next <Link href>.
+- If list currently stores only a relative path, keep it; do not build absolute URLs on server-side.
+
+C) Add a “Delete” button next to “Open”:
+- Render two actions per item:
+    [ Open ] [ Delete ]
+- Delete flow:
+    onClick → confirm('Delete this file?') → fetch(`/api/files/${file.id}`, { method: 'DELETE' })
+    On 204: remove item from local state without page reload.
+
+D) Handle the red “SyntaxError...” at /dashboard:
+- Search for `new URL(` usage in the files module (client-side). Replace any `new URL(relative)`
+  with a safe string (e.g., `href=\`/api/files/${id}\``). This error happens when URL() receives a relative path without base.
+
+------------------------------------------------------------
+2) API ROUTES (Next.js 14 app router assumed). If repo uses pages/api, do the equivalent there.
+------------------------------------------------------------
+Create/update under app/api/files:
+
+A) POST /api/files  (app/api/files/route.ts)
+- Parse `await request.formData()`. Expect field 'file' (type File).
+- Validate max size as current project allows.
+- Persist binary to the project’s existing storage:
+  • If local storage is used: save under /uploads/<uuid> (create folder if missing).
+  • If S3/bucket is used in this project: use the existing helper; DO NOT introduce new providers.
+- Create/Update DB record with fields already used in the dashboard (id, filename, mime, size, owner/company ref, createdAt).
+- Return JSON: { id, name, mime, size } with 201.
+
+B) GET /api/files/:id  (app/api/files/[id]/route.ts)
+- Look up the file by id from DB.
+- If not found → 404 JSON { error: 'File not found' }.
+- Stream the file with headers:
+    Content-Type: <stored mime or application/octet-stream>
+    Content-Disposition: inline; filename="<safeName>"
+- Do NOT force download; “inline” is required so “Open” shows the file in a new tab (PDF, image).
+
+C) DELETE /api/files/:id  (app/api/files/[id]/route.ts — handle DELETE)
+- AuthZ: allow only the owner/admin/accountant roles already used in the app (re-use existing guard).
+- Remove the blob from storage and delete the DB record.
+- Return 204 (no body). If not found/forbidden → 404/403.
+
+Notes:
+- If the project already has lib/files.ts helpers (saveFile, getFileStream, deleteFile), **use them**.
+- If storage is local, ensure /uploads is in .gitignore and accessible by the server process.
+
+------------------------------------------------------------
+3) UI TEXT + DARK THEME (preserve)
+------------------------------------------------------------
+- Keep all current dark theme classes; do not add a global reset.
+- In the documents card, make the two buttons horizontally aligned:
+    “Open” (primary) + “Delete” (secondary/destructive variant already in design system).
+- All labels in English only.
+
+------------------------------------------------------------
+4) TESTS / VERIFICATION
+------------------------------------------------------------
+- Upload any PDF: should finish without error, card should appear in the list.
+- Click “Open”: new tab shows the PDF inline (no black screen, no JSON error).
+- Click “Delete”: confirmation → item disappears; refresh page and confirm it’s gone.
+- Terminal checks:
+    grep -RIn "[А-Яа-яЁё]" components app pages || true   # must show 0 matches
+- No console/runtime errors on /dashboard and /payments/usdc.
+
+------------------------------------------------------------
+5) OUTPUT (required)
+------------------------------------------------------------
+- List the exact files changed with one-line summaries (frontend, POST route, GET+DELETE route).
+- Single commit message:
+  "Files: fix multipart upload, inline viewer, and delete endpoint; update Open/Delete UI; keep auth/DB intact"

@@ -1,21 +1,80 @@
-import { prisma } from "@/lib/db";
+"use client";
+
+import { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { formatNumber } from "@/lib/format";
 
-export default async function DocumentList({ 
+type Document = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: Date | string;
+};
+
+export default function DocumentList({ 
   companyId, 
   uploadedById 
 }: { 
   companyId: string; 
   uploadedById?: string 
 }) {
-  const docs = await prisma.document.findMany({
-    where: { 
-      companyId,
-      ...(uploadedById && { uploadedById }) 
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [docs, setDocs] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [companyId, uploadedById]);
+
+  async function fetchDocuments() {
+    try {
+      const params = new URLSearchParams();
+      if (uploadedById) params.set("uploadedById", uploadedById);
+      
+      const url = uploadedById 
+        ? `/api/documents/${companyId}?${params.toString()}`
+        : `/api/documents/${companyId}`;
+        
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setDocs(data.items || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch documents:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(id: string, filename: string) {
+    if (!confirm(`Delete "${filename}"?`)) return;
+
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/files/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setDocs(docs.filter(d => d.id !== id));
+      } else {
+        const err = await res.json();
+        alert(`Delete failed: ${err.error || "Unknown error"}`);
+      }
+    } catch (e) {
+      console.error("Delete error:", e);
+      alert("Delete failed");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="glass rounded-2xl border border-white/10 p-6 text-center">
+        <p className="text-su-muted">Loading documents...</p>
+      </div>
+    );
+  }
 
   if (!docs.length) {
     return (
@@ -41,17 +100,30 @@ export default async function DocumentList({
                 </span>
               </span>
               <span suppressHydrationWarning>{formatNumber(d.sizeBytes)} bytes</span>
-              <span>{formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}</span>
+              <span suppressHydrationWarning>
+                {formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}
+              </span>
             </div>
           </div>
-          <a 
-            href={`/api/files?path=${encodeURIComponent(d.storagePath)}`}
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="px-4 py-2 rounded-lg bg-su-emerald/10 text-su-emerald hover:bg-su-emerald/20 transition font-medium text-sm border border-su-emerald/40"
-          >
-            Open
-          </a>
+
+          <div className="flex items-center gap-2">
+            <a 
+              href={`/api/files/${d.id}`}
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-lg bg-su-emerald/10 text-su-emerald hover:bg-su-emerald/20 transition font-medium text-sm border border-su-emerald/40"
+            >
+              Open
+            </a>
+
+            <button
+              onClick={() => handleDelete(d.id, d.filename)}
+              disabled={deleting === d.id}
+              className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition font-medium text-sm border border-red-400/40 disabled:opacity-50"
+            >
+              {deleting === d.id ? "Deleting..." : "Delete"}
+            </button>
+          </div>
         </div>
       ))}
     </div>
