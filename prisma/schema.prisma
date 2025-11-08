@@ -31,6 +31,7 @@ model Company {
   ownerId       String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
   users         User[]
   purchases     PurchaseOrder[]
   documents     Document[]

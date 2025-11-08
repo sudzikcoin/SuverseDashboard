@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import RequireRole from "@/components/auth/RequireRole"
 import DocumentManager from "@/components/docs/DocumentManager"
 
@@ -16,6 +17,7 @@ interface Client {
 }
 
 export default function ClientsPage() {
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -108,7 +110,11 @@ export default function ClientsPage() {
                   </thead>
                   <tbody>
                     {clients.map((client, idx) => (
-                      <tr key={client.id} className={idx % 2 === 0 ? "bg-white/5" : ""}>
+                      <tr 
+                        key={client.id} 
+                        onClick={() => router.push(`/clients/${client.id}`)}
+                        className={`cursor-pointer transition hover:bg-white/10 ${idx % 2 === 0 ? "bg-white/5" : ""}`}
+                      >
                         <td className="px-6 py-4 text-gray-100">{client.legalName}</td>
                         <td className="px-6 py-4 text-gray-100">{client.state || "-"}</td>
                         <td className="px-6 py-4 text-gray-100 font-mono text-sm">{client.ein || "-"}</td>
@@ -117,7 +123,10 @@ export default function ClientsPage() {
                         <td className="px-6 py-4 text-gray-100">${client.totalValue.toLocaleString()}</td>
                         <td className="px-6 py-4">
                           <button
-                            onClick={() => setSelectedClient(client)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedClient(client)
+                            }}
                             className="bg-emerald-500 hover:bg-emerald-600 text-black font-semibold px-4 py-2 rounded-lg transition text-sm"
                           >
                             Documents

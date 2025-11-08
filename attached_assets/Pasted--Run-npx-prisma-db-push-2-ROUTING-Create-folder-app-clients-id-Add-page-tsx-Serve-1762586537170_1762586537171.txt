@@ -1,0 +1,77 @@
+- Run: `npx prisma db push`
+
+2) ROUTING
+- Create folder: `app/clients/[id]/`
+- Add `page.tsx` (Server Component):
+- Get `params.id`, get session (NextAuth).
+- Check role: ADMIN or ACCOUNTANT.
+- If ACCOUNTANT, verify linkage via `AccountantClient` to the company.
+- Fetch:
+  - company (where { id, deletedAt: null })
+  - documents for this company (orderBy: createdAt desc)
+  - purchases/orders summary (existing PurchaseOrder table filtered by companyId)
+- Render a header with Back link to `/clients` and company legalName.
+- Tabs: Overview | Documents | Purchases | Settings (client state).
+
+3) API — UPDATE COMPANY & ARCHIVE
+- Create `app/api/companies/[id]/route.ts` if missing.
+- `PUT`: JSON body `{ legalName?, state?, ein?, contactEmail? }` — validate and `prisma.company.update`.
+- `DELETE`: soft delete => `prisma.company.update({ data: { deletedAt: new Date() } })`.
+- `PATCH` (optional): unarchive => if body `{ action: "unarchive" }` set `deletedAt: null`.
+- Guard with session + RBAC checks; return 403/404 accordingly.
+
+4) UI — OVERVIEW TAB (Edit Inline)
+- In `app/clients/[id]/CompanyOverview.tsx` (Client Component):
+- Form with inputs: Company Name, State (2 letters), EIN, Contact Email.
+- “Save changes” button -> `fetch('/api/companies/'+id, { method:'PUT', body: JSON.stringify(values) })`.
+- On success, toast “Saved”, refresh router.
+
+5) UI — DOCUMENTS TAB
+- Reuse existing upload logic but scoped by companyId.
+- Create `app/clients/[id]/DocumentsPanel.tsx` (Client Component):
+- Show list from server props: { fileName, size, createdAt, uploadedBy?.email } with buttons:
+  - Open (GET `/api/files?id=<docId>` or existing path)
+  - Delete (DELETE `/api/documents/<docId>`)
+- Upload area:
+  - Accept PDF, PNG, JPG up to 10MB.
+  - POST to `/api/documents?companyId=<id>` with FormData.
+  - On success, append to list; toast “Uploaded”.
+- Server routes:
+- `app/api/documents/route.ts` (POST): parse FormData, persist `Document` with companyId, return JSON document object.
+- `app/api/documents/[docId]/route.ts` (DELETE): RBAC check; `prisma.document.delete` or soft delete if you prefer (optional field `deletedAt`).
+
+6) UI — PURCHASES TAB
+- `app/clients/[id]/PurchasesPanel.tsx` (Server or Client):
+- List `PurchaseOrder` for this company (date, credit type, face value, status, total).
+- Optional link to each order if such page exists.
+
+7) UI — SETTINGS TAB
+- `app/clients/[id]/SettingsPanel.tsx` (Client):
+- Danger zone with “Archive company” (soft delete) + confirm dialog:
+  - On confirm: `fetch('/api/companies/'+id, { method:'DELETE' })`
+  - Navigate to `/clients` and toast “Company archived”.
+- If company is archived (deletedAt not null), show “Unarchive” button (PATCH with `{ action: "unarchive" }`).
+
+8) MAKE ROWS CLICKABLE & NAVIGATE
+File: `app/clients/page.tsx`
+- Add `onClick` on each company row to `router.push('/clients/'+company.id)`.
+- Keep “Documents” quick button; call `e.stopPropagation()` so it doesn’t navigate when you click the button.
+- Filter companies with `{ deletedAt: null }`.
+
+9) FILE OPEN ENDPOINT (fix black screen case)
+- Ensure `/api/files` (GET) returns the file stream with correct headers:
+- `Content-Type` = stored `mime`
+- `Content-Disposition: inline; filename="<fileName>"`
+- Return 404 JSON only when id missing; otherwise never return JSON for a file.
+- On client, opening uses `window.open('/api/files?id='+doc.id, '_blank')`.
+
+10) ACCEPTANCE
+- Click company row -> lands on `/clients/[id]` with tabs.
+- Edit fields and save -> persists and re-renders.
+- Upload PDF in Documents -> appears in list; “Open” shows inline; “Delete” removes it.
+- Purchases tab shows records for that company only.
+- Archive in Settings -> returns to `/clients` and the row disappears.
+- Unauthorized accountant cannot open `/clients/[otherId]` (403).
+
+11) COMMIT MESSAGE
+feat(company-details): add /clients/[id] with Overview/Documents/Purchases/Settings, edit + archive, scoped docs upload and RBAC

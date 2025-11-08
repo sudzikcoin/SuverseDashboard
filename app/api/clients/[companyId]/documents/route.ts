@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import { writeFile, mkdir, readdir, stat } from "fs/promises"
+import { writeFile, mkdir } from "fs/promises"
 import { join, normalize, basename } from "path"
 import { existsSync } from "fs"
 
@@ -53,31 +53,22 @@ export async function GET(
   }
 
   try {
-    const dirPath = join(process.cwd(), "uploads", params.companyId)
-    
-    if (!existsSync(dirPath)) {
-      return NextResponse.json({ files: [] })
-    }
+    const documents = await prisma.document.findMany({
+      where: { companyId: params.companyId },
+      orderBy: { createdAt: "desc" },
+    })
 
-    const files = await readdir(dirPath)
-    const fileStats = await Promise.all(
-      files.map(async (name) => {
-        const filePath = join(dirPath, name)
-        const stats = await stat(filePath)
-        return {
-          name,
-          url: `/api/clients/${params.companyId}/documents/${encodeURIComponent(name)}`,
-          size: stats.size,
-          updatedAt: stats.mtime.toISOString(),
-        }
-      })
-    )
+    const files = documents.map((doc) => ({
+      id: doc.id,
+      name: doc.filename,
+      url: `/api/clients/${params.companyId}/documents/${encodeURIComponent(doc.filename)}`,
+      size: doc.sizeBytes,
+      mime: doc.mimeType,
+      createdAt: doc.createdAt.toISOString(),
+      uploadedById: doc.uploadedById,
+    }))
 
-    const sortedFiles = fileStats.sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    )
-
-    return NextResponse.json({ files: sortedFiles })
+    return NextResponse.json({ files })
   } catch (error) {
     console.error("Error listing documents:", error)
     return NextResponse.json(
@@ -173,15 +164,25 @@ export async function POST(
     const bytes = await file.arrayBuffer()
     await writeFile(filePath, Buffer.from(bytes))
 
-    const fileStats = await stat(filePath)
+    const document = await prisma.document.create({
+      data: {
+        companyId: params.companyId,
+        filename: filename,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        storagePath: `uploads/${params.companyId}/${filename}`,
+        uploadedById: session.user.id,
+      },
+    })
 
     return NextResponse.json({
       success: true,
+      id: document.id,
       name: filename,
       url: `/api/clients/${params.companyId}/documents/${encodeURIComponent(filename)}`,
-      size: fileStats.size,
+      size: file.size,
       mime: file.type,
-      updatedAt: fileStats.mtime.toISOString(),
+      createdAt: document.createdAt.toISOString(),
     })
   } catch (error) {
     console.error("Error uploading document:", error)

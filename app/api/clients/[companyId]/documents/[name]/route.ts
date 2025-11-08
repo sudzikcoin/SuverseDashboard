@@ -151,11 +151,23 @@ export async function DELETE(
     
     const filePath = join(process.cwd(), "uploads", params.companyId, baseFilename)
 
-    if (!existsSync(filePath)) {
-      return NextResponse.json({ error: "File not found" }, { status: 404 })
+    const document = await prisma.document.findFirst({
+      where: {
+        companyId: params.companyId,
+        filename: baseFilename,
+      },
+    })
+
+    if (document) {
+      await prisma.document.delete({
+        where: { id: document.id },
+      })
     }
 
-    await unlink(filePath)
+    if (existsSync(filePath)) {
+      await unlink(filePath)
+    }
+
     return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error("Error deleting file:", error)

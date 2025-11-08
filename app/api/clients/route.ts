@@ -12,6 +12,9 @@ export async function GET() {
 
   try {
     const companies = await prisma.company.findMany({
+      where: {
+        deletedAt: null,
+      },
       include: {
         users: {
           select: {
