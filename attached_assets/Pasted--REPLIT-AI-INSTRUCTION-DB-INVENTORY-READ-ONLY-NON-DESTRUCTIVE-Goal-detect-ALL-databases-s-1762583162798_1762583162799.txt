@@ -1,0 +1,62 @@
+# ✅ REPLIT-AI INSTRUCTION — DB INVENTORY (READ-ONLY, NON-DESTRUCTIVE)
+# Goal: detect ALL databases/services used by this repo and produce a clear Markdown report.
+# DO NOT modify any files; only read and print findings.
+
+CONSTRAINTS:
+- No code edits, no dependency changes, no env mutation. Read-only scan.
+- Search only inside repo (exclude node_modules/.git/.next/.cache).
+
+SCOPE TO SCAN:
+- package.json (dependencies/devDependencies)
+- .env, .env.* (mask secrets in output; show only scheme/host)
+- prisma/schema.prisma (if exists)
+- app/**, pages/**, components/**, lib/**, server/**, src/** for DB init code
+- Look for *.db files (SQLite) under repo
+
+TECHS TO DETECT (by name/usage):
+- Prisma (@prisma/client, prisma)
+- PostgreSQL (pg, pg-promise, Prisma provider postgresql)
+- SQLite (sqlite3, better-sqlite3, Prisma provider sqlite, *.db files)
+- MySQL (mysql2, Prisma provider mysql)
+- MongoDB (mongoose, mongodb)
+- Redis (redis, ioredis)
+- Supabase (@supabase/*, SUPABASE_URL/KEY)
+- Firebase/Firestore (firebase, @google-cloud/firestore)
+- Planetscale, Neon, Railway connection strings (by URL patterns)
+
+TASKS (run and summarize):
+1) Parse package.json → list versions of DB-related libs.
+2) Grep env files for keys/URLs:
+   - DATABASE_URL, DIRECT_URL, SUPABASE_URL, SUPABASE_ANON_KEY, MONGO_URI, REDIS_URL, POSTGRES_*, MYSQL_*, FIREBASE_*
+   - In output, mask credentials: keep scheme+host (e.g., postgresql://***@db.host:5432/db).
+3) If prisma/schema.prisma exists:
+   - Report datasource.provider, datasource.url, previewFeatures
+4) Code search: list files+line snippets where DB is initialized:
+   - new PrismaClient(), prisma.$connect()
+   - new Pool()/Client from 'pg'
+   - mongoose.connect(…)
+   - createClient from 'redis'/'ioredis'
+   - createClient from '@supabase/supabase-js'
+   - any sqlite adapters (new Database/better-sqlite3)
+5) Filesystem scan: list *.db files with sizes (likely SQLite dev DBs).
+6) NextAuth adapter check: search for "PrismaAdapter", "TypeORMAdapter", "MongoDBAdapter" etc., and include in report (hints active DB).
+7) OUTPUT: Print a Markdown report with sections:
+   - Summary table: Technology | Detected | Evidence (file:line) | Config source (.env/prisma) | Notes
+   - Active Prisma datasource (if any)
+   - Env URLs (masked)
+   - SQLite files (if any)
+   - Potential conflicts (e.g., both SQLite & Postgres present)
+   - Recommendations (which DB appears primary; what to clean up)
+
+IMPLEMENTATION NOTES:
+- You may run shell greps to aid the scan, but DO NOT alter files.
+- Keep the final output concise and skimmable.
+
+OPTIONAL SHELL AIDS (read-only):
+- grep -RIn "PrismaClient|new Pool|mongoose.connect|createClient\\(|better-sqlite3|sqlite3|supabase" app pages components lib src server || true
+- grep -RIn "DATABASE_URL|SUPABASE_URL|MONGO_URI|REDIS_URL" .env* || true
+- test -f prisma/schema.prisma && sed -n '1,120p' prisma/schema.prisma
+- find . -type f -name "*.db" -printf "%p (%k KB)\n" 2>/dev/null
+
+FINAL DELIVERABLE:
+- Print the Markdown report only. No code diffs, no commits.
