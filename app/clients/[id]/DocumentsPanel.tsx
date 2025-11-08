@@ -7,11 +7,20 @@ interface DocumentsPanelProps {
   company: any
 }
 
+interface ShareData {
+  url: string
+  expiresAt: string
+  ttlSeconds: number
+}
+
 export default function DocumentsPanel({ company }: DocumentsPanelProps) {
   const router = useRouter()
   const [documents, setDocuments] = useState(company.documents || [])
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<any>(null)
+  const [shareData, setShareData] = useState<ShareData | null>(null)
+  const [isSharing, setIsSharing] = useState(false)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -64,16 +73,17 @@ export default function DocumentsPanel({ company }: DocumentsPanelProps) {
     }
   }
 
-  const handleDelete = async (docFilename: string) => {
+  const handleDelete = async (docId: string) => {
     if (!confirm("Are you sure you want to delete this document?")) return
 
     try {
-      const res = await fetch(`/api/clients/${company.id}/documents/${encodeURIComponent(docFilename)}`, {
+      const res = await fetch(`/api/documents/${docId}`, {
         method: "DELETE",
       })
 
-      if (res.ok || res.status === 204) {
-        setDocuments(documents.filter((doc: any) => doc.filename !== docFilename))
+      if (res.ok) {
+        setDocuments(documents.filter((doc: any) => doc.id !== docId))
+        setPreviewDoc(null)
         router.refresh()
       } else {
         const data = await res.json()
@@ -85,8 +95,40 @@ export default function DocumentsPanel({ company }: DocumentsPanelProps) {
     }
   }
 
-  const handleOpen = (docFilename: string) => {
-    window.open(`/api/clients/${company.id}/documents/${encodeURIComponent(docFilename)}`, "_blank")
+  const handleOpen = (doc: any) => {
+    setPreviewDoc(doc)
+    setShareData(null)
+  }
+
+  const handleShare = async (docId: string, ttlSeconds: number = 3600) => {
+    setIsSharing(true)
+    try {
+      const res = await fetch(`/api/documents/${docId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ttlSeconds }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setShareData(data)
+      } else {
+        const data = await res.json()
+        alert(data.error || "Failed to generate share link")
+      }
+    } catch (error) {
+      console.error("Error generating share link:", error)
+      alert("Failed to generate share link")
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const copyShareLink = () => {
+    if (shareData?.url) {
+      navigator.clipboard.writeText(shareData.url)
+      alert("Link copied to clipboard!")
+    }
   }
 
   const formatFileSize = (bytes: number) => {
@@ -155,13 +197,19 @@ export default function DocumentsPanel({ company }: DocumentsPanelProps) {
               </div>
               <div className="flex gap-2 ml-4">
                 <button
-                  onClick={() => handleOpen(doc.filename)}
+                  onClick={() => handleOpen(doc)}
                   className="bg-emerald-500 hover:bg-emerald-600 text-black font-semibold px-4 py-2 rounded-lg transition text-sm"
                 >
                   Open
                 </button>
                 <button
-                  onClick={() => handleDelete(doc.filename)}
+                  onClick={() => handleShare(doc.id)}
+                  className="bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 font-semibold px-4 py-2 rounded-lg transition text-sm"
+                >
+                  Share
+                </button>
+                <button
+                  onClick={() => handleDelete(doc.id)}
                   className="bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold px-4 py-2 rounded-lg transition text-sm"
                 >
                   Delete
@@ -169,6 +217,69 @@ export default function DocumentsPanel({ company }: DocumentsPanelProps) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {previewDoc && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-white/10">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-100">{previewDoc.filename}</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  {formatFileSize(previewDoc.sizeBytes)} • {previewDoc.mimeType}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setPreviewDoc(null)
+                  setShareData(null)
+                }}
+                className="text-gray-400 hover:text-gray-200 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-hidden p-6">
+              <iframe
+                src={`/api/files?id=${previewDoc.id}`}
+                className="w-full h-full rounded-lg border border-white/10"
+                title={previewDoc.filename}
+              />
+            </div>
+
+            <div className="p-6 border-t border-white/10 space-y-4">
+              {shareData ? (
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-400">
+                      Share link (expires {new Date(shareData.expiresAt).toLocaleString()})
+                    </p>
+                    <button
+                      onClick={copyShareLink}
+                      className="text-emerald-400 hover:text-emerald-300 text-sm font-semibold"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                  <div className="bg-black/30 rounded px-3 py-2 font-mono text-sm text-gray-300 overflow-x-auto">
+                    {shareData.url}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleShare(previewDoc.id)}
+                  disabled={isSharing}
+                  className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-sky-500/50 text-black font-semibold px-6 py-3 rounded-lg transition"
+                >
+                  {isSharing ? "Generating..." : "Generate Share Link (1 hour)"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

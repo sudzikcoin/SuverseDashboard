@@ -108,8 +108,9 @@ export async function GET(request: NextRequest) {
 
     const readable = new ReadableStream({
       async start(controller) {
-        stream.on('data', (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk))
+        stream.on('data', (chunk) => {
+          const buffer = chunk instanceof Buffer ? chunk : Buffer.from(chunk)
+          controller.enqueue(new Uint8Array(buffer))
         })
         stream.on('end', () => {
           controller.close()
