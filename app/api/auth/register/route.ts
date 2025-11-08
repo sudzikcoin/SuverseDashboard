@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       data: {
         email: validated.email,
         hashedPassword,
+        name: validated.name,
         role: validated.role,
         companyId: company?.id,
       },

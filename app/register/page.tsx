@@ -9,6 +9,7 @@ import Button from "@/components/Button"
 export default function RegisterPage() {
   const router = useRouter()
   const [formData, setFormData] = useState({
+    name: "",
     email: "",
     password: "",
     role: "COMPANY",
@@ -28,6 +29,7 @@ export default function RegisterPage() {
 
     try {
       const payload: any = {
+        name: formData.name,
         email: formData.email,
         password: formData.password,
         role: formData.role,
@@ -89,6 +91,20 @@ export default function RegisterPage() {
               <option value="COMPANY">Company (Buyer)</option>
               <option value="ACCOUNTANT">Accountant</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-200 mb-2">Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+              placeholder="Your full name"
+              required
+            />
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
