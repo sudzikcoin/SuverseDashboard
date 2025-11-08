@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
 import { formatNumber } from "@/lib/format"
+import { formatDate } from "@/lib/date"
 
 export default function AdminPurchasesPage() {
   const router = useRouter()
@@ -137,7 +138,7 @@ export default function AdminPurchasesPage() {
                   <div>
                     <p className="text-sm font-semibold text-gray-200">Created</p>
                     <p className="text-sm text-gray-100">
-                      {new Date(po.createdAt).toLocaleDateString()}
+                      {formatDate(po.createdAt)}
                     </p>
                   </div>
                 </div>

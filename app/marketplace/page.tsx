@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
 import { formatNumber } from "@/lib/format"
+import { formatDate } from "@/lib/date"
 
 interface CreditInventory {
   id: string
@@ -232,7 +233,7 @@ export default function MarketplacePage() {
                 {selectedCredit.closeBy && (
                   <p className="text-gray-100">
                     <span className="font-semibold text-gray-200">Transfer Window:</span>{" "}
-                    {new Date(selectedCredit.closeBy).toLocaleDateString()}
+                    {formatDate(selectedCredit.closeBy)}
                   </p>
                 )}
               </div>
