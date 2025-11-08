@@ -63,68 +63,95 @@ body {
   }
 }
 
-/* Splash animation */
-.suv-group .shape {
-  fill: #0bd68f;
-  opacity: 0.8;
-  filter: drop-shadow(0 0 18px rgba(34,229,139,0.35));
-}
-
-.letter {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+/* SuVerse Splash Animation */
+.suverse-word {
+  font-size: 96px;
   font-weight: 800;
-  font-size: 120px;
-  fill: transparent;
-  stroke: #22E58B;
-  stroke-width: 2;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+@media (min-width: 768px) {
+  .suverse-word {
+    font-size: 140px;
+  }
+}
+
+.suverse-letter {
+  display: inline-block;
+  color: #22E58B;
+  text-shadow: 
+    0 0 20px rgba(34, 229, 139, 0.5),
+    0 0 40px rgba(34, 229, 139, 0.3),
+    0 0 60px rgba(34, 229, 139, 0.2);
   opacity: 0;
-  letter-spacing: 2px;
+  transform: scale(0.3);
 }
 
-/* Slide-in from sides */
-.left { animation: slideInLeft 900ms cubic-bezier(.2,.8,.2,1) forwards; }
-.right { animation: slideInRight 900ms cubic-bezier(.2,.8,.2,1) forwards; }
-
-/* Stagger */
-.d0 { animation-delay: 40ms; }
-.d1 { animation-delay: 120ms; }
-.d2 { animation-delay: 200ms; }
-
-/* Morph into letters: fade shapes out while letters fade in */
-.suv-group { animation: shapesOut 700ms ease-out 900ms forwards; }
-.letters   { animation: lettersIn 700ms ease-out 900ms forwards; }
-
-@keyframes slideInLeft {
-  0%   { transform: translateX(0);   opacity: .0; }
-  100% { transform: translateX(220px); opacity: .95; }
-}
-@keyframes slideInRight {
-  0%   { transform: translateX(0);   opacity: .0; }
-  100% { transform: translateX(-520px); opacity: .95; }
-}
-@keyframes shapesOut {
-  0%   { opacity: .9; }
-  100% { opacity: 0; }
-}
-@keyframes lettersIn {
-  0%   { opacity: 0; transform: translateY(8px) scale(0.98); }
-  100% { opacity: 1; transform: translateY(0)  scale(1); }
+.suverse-left {
+  animation: slideFromLeft 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Flash after letters appear */
-.flash {
-  position: absolute; inset: 0; background: white;
-  opacity: 0; pointer-events: none;
-  animation: flash 200ms ease-out 1600ms forwards;
-}
-@keyframes flash {
-  0% { opacity: 0; }
-  10% { opacity: 1; }
-  100% { opacity: 0; }
+.suverse-right {
+  animation: slideFromRight 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Reduced motion: no animation */
+@keyframes slideFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-100vw) scale(0.3) rotate(-15deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes slideFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(100vw) scale(0.3) rotate(15deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+}
+
+.splash-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+  animation: flashWhite 200ms ease-out 1400ms forwards;
+}
+
+@keyframes flashWhite {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .left, .right, .suv-group, .letters, .flash { animation: none !important; }
-  .letters { opacity: 1; }
+  .suverse-letter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .splash-flash {
+    animation: none !important;
+  }
 }
