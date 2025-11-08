@@ -11,7 +11,7 @@ export async function GET() {
   
   if (role === "ADMIN") {
     const companies = await prisma.company.findMany({
-      orderBy: { id: "asc" }
+      orderBy: { legalName: "asc" }
     })
     return NextResponse.json({ companies })
   }
@@ -23,7 +23,7 @@ export async function GET() {
     const companyIds = links.map(l => l.companyId)
     const companies = await prisma.company.findMany({
       where: { id: { in: companyIds } },
-      orderBy: { id: "asc" }
+      orderBy: { legalName: "asc" }
     })
     return NextResponse.json({ companies })
   }
