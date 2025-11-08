@@ -1,0 +1,69 @@
+REPLIT AI — FIX ACCOUNTANT UPLOAD ACCESS (“You do not have access to this company”)
+
+GOAL
+Allow an authenticated ACCOUNTANT to upload, list, open, and delete documents for client companies they are assigned to; allow ADMIN to access all companies; allow COMPANY to access only its own company. Store files in /public/uploads/{companyId}/. Keep existing auth/roles/Prisma/theme intact.
+
+SCOPE — MODIFY ONLY
+1) Server routes used by the accountant documents modal:
+   - app/api/clients/[companyId]/documents/route.ts   (GET, POST)
+   - app/api/clients/[companyId]/documents/[name]/route.ts (GET stream, DELETE)
+   (If your project currently uses /api/upload or /api/files, adapt those files to this per-company path or create these new routes and update the modal to use them.)
+2) The React component for the “Documents” modal under /clients (ensures correct companyId is passed and UI messages are clear).
+
+AUTHORIZATION LOGIC (apply in all routes above)
+- Read session via NextAuth getServerSession.
+- Resolve `userId` and `role` from session.
+- Access is authorized if:
+  A) role === 'ADMIN'  → full access, OR
+  B) role === 'ACCOUNTANT' AND EXISTS AccountantClient where accountantId = userId AND companyId = params.companyId, OR
+  C) role === 'COMPANY' AND user.companyId === params.companyId.
+- If unauthorized: return 403 JSON { error: "ACCESS_DENIED", message: "You do not have access to this company." }.
+
+SERVER IMPLEMENTATION
+A) POST /api/clients/[companyId]/documents
+   - Accept multipart/form-data field "file" (use request.formData()).
+   - Create folder `/public/uploads/{companyId}` if missing.
+   - Sanitize filename; avoid collisions by appending -1, -2, etc. if needed.
+   - Save file; return JSON { success:true, name, url:"/api/clients/{companyId}/documents/{name}", size, mime, updatedAt }.
+
+B) GET /api/clients/[companyId]/documents
+   - Read directory `/public/uploads/{companyId}`.
+   - Return { files:[{ name, url:"/api/clients/{companyId}/documents/{name}", size, updatedAt }] } sorted by updatedAt desc.
+   - If directory missing → return { files:[] }.
+
+C) GET /api/clients/[companyId]/documents/[name]
+   - Stream the file with headers:
+     Content-Type by extension; Content-Disposition: inline; filename="original.ext".
+   - 404 JSON if file missing.
+
+D) DELETE /api/clients/[companyId]/documents/[name]
+   - Delete the file; return 204 No Content if removed; 404 if missing.
+
+CLIENT (Documents modal under /clients)
+- Ensure the modal receives a valid companyId from the selected row (no undefined).
+- On mount: fetch(`/api/clients/${companyId}/documents`) and render list or “No documents yet”.
+- Upload:
+  - Build FormData() with key "file"; POST to `/api/clients/${companyId}/documents` (no Content-Type header).
+  - On success, prepend the new file to local state.
+- Actions per row:
+  - Open → `<a href="/api/clients/${companyId}/documents/${name}" target="_blank" rel="noopener">Open</a>`
+  - Delete → confirm → `fetch(..., { method:"DELETE" })` → on 204 remove from state.
+- If server returns 403, show toast/message:
+  “You do not have access to this company. Ask an admin to assign it to you.”
+
+DO NOT
+- Do not change NextAuth provider setup, Prisma schema, roles, Stripe, .env, or theme tokens.
+- Do not refactor unrelated components.
+
+ACCEPTANCE CHECKS
+1) Logged-in ACCOUNTANT assigned to a company can upload → file appears instantly in the company’s list; Open and Delete work.
+2) Logged-in ACCOUNTANT not assigned to a different company gets 403 and the red banner message (no upload attempt).
+3) ADMIN can access any company’s documents with full actions.
+4) COMPANY role can only see/manage its own documents.
+5) No blank/black tab on Open; no “expected pattern” error in console.
+
+OPTIONAL (TEST SEED)
+- If the dev database lacks a link, create one test link (AccountantClient) for the current accountant ↔ a sample company, so the modal demonstrates success.
+
+COMMIT MESSAGE
+clients/docs: enforce per-company access (ADMIN full, ACCOUNTANT via link, COMPANY self); per-company file storage; fix modal to pass companyId and handle 403
