@@ -1,0 +1,77 @@
+# ✅ REPLIT-AI INSTRUCTION (SAFE, NON-DESTRUCTIVE)
+# Goal: UI polish only. Keep ALL business logic intact.
+
+CONSTRAINTS (do NOT violate):
+- Do NOT remove or overwrite: NextAuth auth flows, Prisma schema & migrations, DB code, RBAC, Stripe, file uploads, API routes, or existing pages.
+- Do NOT create a new app skeleton, do NOT add inline resets that override the design system, do NOT touch node_modules.
+- Only modify UI strings, small layout placements, and sidebar navigation where indicated.
+
+SCOPE:
+- Allowed paths: app/**, pages/**, components/**, (styles/** if present).
+- Forbidden: prisma/**, lib/db/**, pages/api/** (unless only returning UI strings), next.config.*, package.json, tsconfig.*, middleware.*, scripts/*.
+
+TASKS:
+
+1) ENGLISH-ONLY UI
+- Search in app/**, pages/**, components/** for ANY Cyrillic text and replace with concise English.
+- MUST change these exact remnants:
+  - "Подключить кошелек" -> "Connect Wallet"
+  - "Баланс" -> "Balance"
+  - "Сумма" -> "Amount"
+  - "Копировать ссылку оплаты" -> "Copy payment link"
+  - "Открыть в кошельке" -> "Open in wallet"
+- If wallet UI is rendered via a custom bar/component (e.g., components/wallet/*), ensure all its labels are in English.
+- Do NOT alter variable names or logic — only visible labels/placeholders/aria-labels.
+
+2) CONNECT WALLET POSITION (Header)
+- Identify the shared top header (TopBar/AppBar/Navigation component). Common names: TopBar.tsx, Header.tsx, AppHeader.tsx.
+- Layout requirement:
+  Left: product title/logo (+ optional page title)
+  Right: `Welcome, {Company Legal Name | Organization Legal Name | Display Name | Guest}` + **Connect Wallet** button.
+- If the button comes from RainbowKit (`<ConnectButton/>`), keep provider configuration AS IS.
+  - If the button text is not "Connect Wallet", use RainbowKit’s custom render (`ConnectButton.Custom`) or prop to force label = "Connect Wallet". No locale switching globally.
+- Do NOT relocate this logic into _app or providers; change only the header component where it already lives.
+
+3) SIDEBAR NAV
+- Ensure link **“Pay with USDC”** exists exactly **under “My Purchases”** for ALL roles (admin/accountant/company) using the shared Sidebar.
+- If the header previously had an extra “Pay with USDC” button, remove that header button (to avoid duplication). Leave the page itself.
+- Keep route target to the existing page (typically /payments/usdc). Do NOT rename routes.
+
+4) PAYMENTS PAGE COPY ( /payments/usdc )
+- Normalize visible strings to English:
+  - Page title: "Pay with USDC"
+  - Section title: "Pay with USDC (Base)"
+  - Hint: "Connect a wallet to view USDC balance"
+  - Field label: "Amount:"
+  - Button labels: "Open in wallet", "Copy payment link"
+- Do NOT change any on-chain logic, chain IDs, or providers. UI copy only.
+
+5) DARK THEME (retain current design system)
+- Keep current dark theme tokens/colors from the existing design (Tailwind/Clario tokens).
+- If any cards/inputs still render on light background on purchases/payments, adjust their classes to use the existing dark variants (e.g., bg-slate-800/text-slate-100 or equivalent in the project).
+- Do NOT add global CSS resets or override tokens project-wide.
+
+6) FALLBACK NAME IN "Welcome,"
+- The name resolution must be (first available):
+  companyLegalName -> organization.legalName -> displayName -> "Guest".
+- Use existing /api/me (or current user context). Do NOT change API shape; only adjust the mapping in the header if it currently shows email.
+
+7) VERIFY (automate simple checks)
+- Run a search limited to source (NOT node_modules) to confirm no Cyrillic remains:
+  grep -RIn "[А-Яа-яЁё]" app components pages || true
+  Expected: no matches.
+- Open these routes and visually confirm:
+  /dashboard  — “Welcome, <Company>” on the left; **Connect Wallet** button on the right.
+  /purchases  — cards readable on dark theme.
+  /payments/usdc — all text in English; button labels correct.
+- Ensure the sidebar for ALL roles shows: Dashboard, Marketplace, My Purchases, **Pay with USDC**.
+
+NON-GOALS (do not do):
+- No refactors to providers, no change to RainbowKit/Wagmi config, no DB changes, no auth flow changes, no route restructuring.
+
+OUTPUT:
+- List of modified files with brief one-line summaries (e.g., “TopBar.tsx: move Connect Wallet to right, English labels”).
+- One commit with message:
+  "UI: enforce English labels, header wallet placement, sidebar USDC link; preserve auth/DB/logic"
+
+If any file/path names differ from the guesses above, locate the equivalent components and apply the SAME changes there, honoring all constraints.

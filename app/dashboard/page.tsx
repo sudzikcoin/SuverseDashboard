@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       <main className="flex-1 p-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-gray-100">
-            Welcome, {session.user.companyName || session.user.email}
+            Welcome, {session.user.companyName || session.user.name || "Guest"}
           </h1>
           <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition" />
         </div>
