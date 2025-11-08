@@ -62,13 +62,10 @@ export default async function DashboardPage() {
 
             <CalculatorCard />
 
-            {userCompanyId && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-gray-100">Your Documents</h2>
-                <FileUpload title="Upload Compliance Documents" companyId={userCompanyId} />
-                <DocumentList companyId={userCompanyId} />
-              </div>
-            )}
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-gray-100">Your Documents</h2>
+              <FileUpload title="Upload Compliance Documents" />
+            </div>
           </div>
         )}
 
