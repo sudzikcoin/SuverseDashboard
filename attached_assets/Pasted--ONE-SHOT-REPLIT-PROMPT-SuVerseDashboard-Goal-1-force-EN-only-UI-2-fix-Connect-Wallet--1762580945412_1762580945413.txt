@@ -1,0 +1,397 @@
+# ✅ ONE-SHOT REPLIT PROMPT — SuVerseDashboard
+# Goal: (1) force EN-only UI, (2) fix "Connect Wallet" label showing in Russian,
+# (3) keep "Connect Wallet" at top-right near Welcome, (4) dark theme kept,
+# (5) ensure “Pay with USDC” lives in sidebar under My Purchases.
+# Do ALL edits below EXACTLY and OVERWRITE files with the provided code.
+
+################################################################################
+# 0) GLOBAL CHECKS — enforce English only
+################################################################################
+# - Set html lang and remove any i18n/RU fallback.
+# - After changes, run Cyrillic detector to ensure zero RU text remains.
+
+# If there is a next.config.js with i18n, set only 'en':
+# (Create or overwrite if file exists with i18n block using only 'en')
+
+<<write_file:next.config.js>>
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  experimental: { appDir: true }
+};
+module.exports = nextConfig;
+<<end_file>>
+
+# If you have a Document file, enforce <html lang="en">:
+# App Router version:
+<<mkdir:app>>
+<<write_file:app/layout.tsx>>
+import './globals.css';
+import React from 'react';
+
+export const metadata = {
+  title: 'SuVerse Dashboard',
+  description: 'Tax Credit Dashboard',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+<<end_file>>
+
+################################################################################
+# 1) RAINBOWKIT/WALLET — force English + custom label "Connect Wallet"
+################################################################################
+# Create a strict custom Connect Wallet button that ALWAYS renders
+# the English label and cannot be auto-localized by any provider.
+
+<<mkdir:components/wallet>>
+<<write_file:components/wallet/ConnectWalletButton.tsx>>
+'use client';
+
+import React from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+
+export default function ConnectWalletButton() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, openConnectModal, mounted }) => {
+        const ready = mounted;
+        const connected = ready && account && chain;
+        if (!connected) {
+          return (
+            <button
+              type="button"
+              onClick={openConnectModal}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.16)',
+                background: '#3B82F6',
+                color: '#fff',
+                cursor: 'pointer'
+              }}
+            >
+              Connect Wallet
+            </button>
+          );
+        }
+        // When connected show short address (English only UI elsewhere)
+        return (
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{opacity:0.8}}>Connected:</span>
+            <code>{account?.displayName}</code>
+          </div>
+        );
+      }}
+    </ConnectButton.Custom>
+  );
+}
+<<end_file>>
+
+# RainbowKit provider with EN locale.
+<<mkdir:app/providers>>
+<<write_file:app/providers/WalletProviders.tsx>>
+'use client';
+
+import React from 'react';
+import { WagmiConfig, configureChains, createConfig } from 'wagmi';
+import { mainnet } from 'wagmi/chains';
+import { publicProvider } from 'wagmi/providers/public';
+import {
+  RainbowKitProvider,
+  darkTheme,
+  Locale, // type only
+} from '@rainbow-me/rainbowkit';
+import '@rainbow-me/rainbowkit/styles.css';
+
+const { chains, publicClient } = configureChains([mainnet], [publicProvider()]);
+const config = createConfig({ autoConnect: true, publicClient });
+
+export default function WalletProviders({ children }: { children: React.ReactNode }) {
+  // RainbowKit will default to English; we keep it explicit and use dark theme.
+  return (
+    <WagmiConfig config={config}>
+      <RainbowKitProvider chains={chains} theme={darkTheme()}>
+        {children}
+      </RainbowKitProvider>
+    </WagmiConfig>
+  );
+}
+<<end_file>>
+
+# Wrap the entire app with WalletProviders in app/layout.tsx (update file)
+<<write_file:app/layout.tsx>>
+import './globals.css';
+import React from 'react';
+import WalletProviders from './providers/WalletProviders';
+
+export const metadata = {
+  title: 'SuVerse Dashboard',
+  description: 'Tax Credit Dashboard',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <WalletProviders>{children}</WalletProviders>
+      </body>
+    </html>
+  );
+}
+<<end_file>>
+
+################################################################################
+# 2) LAYOUT — Top bar (Welcome, Company) + Connect Wallet on the RIGHT
+################################################################################
+<<mkdir:components/layout>>
+<<write_file:components/layout/TopBar.tsx>>
+'use client';
+
+import React from 'react';
+import ConnectWalletButton from '../wallet/ConnectWalletButton';
+
+export default function TopBar({ title, companyName }:{
+  title?: string;
+  companyName?: string | null;
+}) {
+  const resolvedName = companyName || 'Guest';
+  return (
+    <header
+      style={{
+        display:'flex',
+        alignItems:'center',
+        gap:16,
+        padding:'12px 16px',
+        background:'#0F172A',
+        color:'#E2E8F0',
+        borderBottom:'1px solid rgba(255,255,255,0.1)'
+      }}
+    >
+      <div style={{fontWeight:600}}>SuVerse Dashboard</div>
+      {title && <div style={{opacity:0.75}}>{title}</div>}
+      <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:12}}>
+        <span>{`Welcome, ${resolvedName}`}</span>
+        <ConnectWalletButton />
+      </div>
+    </header>
+  );
+}
+<<end_file>>
+
+<<write_file:components/layout/Sidebar.tsx>>
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+
+export default function Sidebar() {
+  const li = { listStyle:'none', margin:'8px 0' };
+  const a = { textDecoration:'none', color:'#E2E8F0', opacity:0.9 };
+  return (
+    <aside style={{
+      width:260,
+      background:'#111827',
+      color:'#E2E8F0',
+      borderRight:'1px solid rgba(255,255,255,0.1)',
+      padding:16,
+      minHeight:'100vh'
+    }}>
+      <nav>
+        <ul style={{listStyle:'none', padding:0, margin:0}}>
+          <li style={li}><Link style={a} href="/dashboard">Dashboard</Link></li>
+          <li style={li}><Link style={a} href="/marketplace">Marketplace</Link></li>
+          <li style={li}><Link style={a} href="/purchases">My Purchases</Link></li>
+          <li style={{...li, marginLeft:12}}>
+            <Link style={a} href="/payments/usdc">Pay with USDC</Link>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+  );
+}
+<<end_file>>
+
+<<write_file:components/layout/DashboardShell.tsx>>
+'use client';
+
+import React from 'react';
+import TopBar from './TopBar';
+import Sidebar from './Sidebar';
+
+export default function DashboardShell({
+  title,
+  companyName,
+  children
+}:{
+  title?: string;
+  companyName?: string | null;
+  children: React.ReactNode
+}) {
+  return (
+    <div style={{display:'grid', gridTemplateRows:'auto 1fr', height:'100vh', background:'#0D1117'}}>
+      <TopBar title={title} companyName={companyName}/>
+      <div style={{display:'grid', gridTemplateColumns:'260px 1fr'}}>
+        <Sidebar/>
+        <main style={{padding:16, overflow:'auto'}}>{children}</main>
+      </div>
+    </div>
+  );
+}
+<<end_file>>
+
+################################################################################
+# 3) DASHBOARD & PAGES — EN-only text, USDC page, dark cards
+################################################################################
+<<mkdir:app/dashboard>>
+<<write_file:app/dashboard/page.tsx>>
+import React from 'react';
+import DashboardShell from '../../components/layout/DashboardShell';
+
+export default function DashboardPage() {
+  // TODO: Replace with real company name from /api/me when wired:
+  const companyName: string | null = null;
+
+  return (
+    <DashboardShell title="Dashboard" companyName={companyName}>
+      <div className="card">
+        <h2>Marketplace</h2>
+        <p>Browse and purchase tax credits</p>
+      </div>
+      <div className="card" style={{marginTop:16}}>
+        <h2>My Purchases</h2>
+        <p>View your purchase orders and status</p>
+      </div>
+      <div className="card" style={{marginTop:16}}>
+        <h2>Pay with USDC</h2>
+        <p>Make payments using USDC on Base</p>
+      </div>
+    </DashboardShell>
+  );
+}
+<<end_file>>
+
+<<mkdir:app/payments/usdc>>
+<<write_file:app/payments/usdc/page.tsx>>
+import React from 'react';
+import DashboardShell from '../../../components/layout/DashboardShell';
+
+export default function PayWithUSDCPage() {
+  const companyName: string | null = null;
+
+  return (
+    <DashboardShell title="Pay with USDC" companyName={companyName}>
+      <div className="card">
+        <h2>Pay with USDC (Base)</h2>
+        <p style={{opacity:0.8, marginBottom:12}}>
+          Connect a wallet to view USDC balance
+        </p>
+        <div style={{display:'grid', gap:12, maxWidth:420}}>
+          <label style={{opacity:0.9}}>Amount:</label>
+          <input type="number" defaultValue={1000} />
+          <button>Open in wallet</button>
+          <button style={{
+            background:'transparent',
+            color:'#E2E8F0',
+            border:'1px solid rgba(255,255,255,0.16)'
+          }}>Copy payment link</button>
+        </div>
+      </div>
+    </DashboardShell>
+  );
+}
+<<end_file>>
+
+################################################################################
+# 4) STYLES — Dark theme (kept), generic card class
+################################################################################
+<<mkdir:styles>>
+<<write_file:styles/globals.css>>
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; height:100%; }
+body {
+  background-color: #0D1117;
+  color: #E2E8F0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Apple Color Emoji','Segoe UI Emoji';
+}
+a { color: #93C5FD; }
+.card {
+  background: #1E293B;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 0 10px rgba(0,0,0,0.25);
+}
+input, select, textarea {
+  background-color: #0B1220;
+  color: #E2E8F0;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+button {
+  background-color: #3B82F6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+button:hover { filter: brightness(0.95); }
+<<end_file>>
+
+################################################################################
+# 5) REMOVE ANY LEFTOVER CYRILLIC IN SOURCE
+################################################################################
+# Ensure no Russian text remains. Perform blanket find/replace for common RU phrases.
+# (Keep safe — only UI strings; do not touch node_modules)
+<<run_bash>>
+set -e
+
+# Quick safety grep — list any Cyrillic occurrences:
+echo "=== Cyrillic scan BEFORE ==="
+grep -RIn "[А-Яа-яЁё]" app components styles || true
+
+# If any 'Подключ' text remains in our source, replace it:
+for f in $(grep -RIl "Подключ" app components || true); do
+  sed -i.bak 's/Подключить кошелек/Connect Wallet/g' "$f"
+done
+
+echo "=== Cyrillic scan AFTER ==="
+grep -RIn "[А-Яа-яЁё]" app components styles || true
+<<end_run>>
+
+################################################################################
+# 6) WIREFRAME PAGE (root) — redirect to /dashboard if missing
+################################################################################
+<<write_file:app/page.tsx>>
+import React from 'react';
+import Link from 'next/link';
+
+export default function Home() {
+  return (
+    <main style={{padding:24}}>
+      <h1>SuVerse Dashboard</h1>
+      <p><Link href="/dashboard">Open Dashboard</Link></p>
+    </main>
+  );
+}
+<<end_file>>
+
+################################################################################
+# 7) FINAL VERIFICATION — must show EN-only "Connect Wallet"
+################################################################################
+# Rebuild the app in Replit. Then verify:
+# - TopBar (Welcome, Guest) + English “Connect Wallet” on the right
+# - Sidebar has “Pay with USDC” under “My Purchases”
+# - /payments/usdc page English-only
+# - No matches from Cyrillic scan
+
+# Manual check command (should output nothing):
+# grep -RIn "[А-Яа-яЁё]" app components styles || true
+################################################################################
