@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import { join, normalize, basename } from "path"
 import { existsSync } from "fs"
@@ -54,7 +55,10 @@ export async function GET(
 
   try {
     const documents = await prisma.document.findMany({
-      where: { companyId: params.companyId },
+      where: { 
+        companyId: params.companyId,
+        deletedAt: null,
+      },
       orderBy: { createdAt: "desc" },
     })
 
@@ -170,9 +174,16 @@ export async function POST(
         filename: filename,
         mimeType: file.type,
         sizeBytes: file.size,
-        storagePath: `uploads/${params.companyId}/${filename}`,
+        storagePath: filePath,
         uploadedById: session.user.id,
       },
+    })
+
+    await logAudit('doc_upload', session.user.id, params.companyId, {
+      docId: document.id,
+      filename: filename,
+      size: file.size,
+      mimeType: file.type,
     })
 
     return NextResponse.json({
