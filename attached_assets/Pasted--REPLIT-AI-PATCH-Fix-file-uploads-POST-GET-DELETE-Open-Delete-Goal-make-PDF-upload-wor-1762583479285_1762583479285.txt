@@ -1,0 +1,126 @@
+# ✅ REPLIT-AI PATCH — Fix file uploads (POST/GET/DELETE) + Open + Delete
+# Goal: make PDF upload work, open inline in new tab, delete files from UI.
+# SAFE: do NOT touch NextAuth, Prisma schema/migrations, RBAC, Stripe, or other business logic.
+
+CONSTRAINTS:
+- Allowed to create/modify ONLY: app/api/upload/route.ts, app/api/files/[name]/route.ts,
+  and the React component that renders “Upload Compliance Documents” block (uploader/list).
+- Preserve dark theme, styles, and existing UI layout.
+- Do NOT modify env vars, providers, or DB models. Store files locally under /public/uploads (existing flow keeps working).
+
+──────────────────────────────────────────────────────────────────────────────
+1) SERVER — create/overwrite API routes
+──────────────────────────────────────────────────────────────────────────────
+
+A) Create/overwrite: app/api/upload/route.ts
+-- Purpose: accept multipart/form-data (field "file"), save to /public/uploads, return JSON.
+-- Must NOT parse body as JSON; must use request.formData().
+
+<<<FILE:app/api/upload/route.ts
+import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
+
+function ensureDir(p: string) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+
+export async function POST(req: Request) {
+  try {
+    const form = await req.formData();
+    const file = form.get("file") as unknown as File | null;
+    if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    ensureDir(uploadDir);
+
+    // sanitize filename (no slashes)
+    const safeName = file.name.replace(/[/\\]/g, "_");
+    const filePath = path.join(uploadDir, safeName);
+
+    fs.writeFileSync(filePath, buffer);
+
+    return NextResponse.json({
+      success: true,
+      name: safeName,
+      url: `/api/files/${encodeURIComponent(safeName)}`,
+      size: file.size,
+      mime: file.type || "application/octet-stream",
+    }, { status: 201 });
+  } catch (e: any) {
+    console.error("Upload error:", e);
+    return NextResponse.json({ error: "Upload failed", details: e?.message }, { status: 500 });
+  }
+}
+FILE>>>
+
+B) Create/overwrite: app/api/files/[name]/route.ts
+-- Purpose: stream file inline by name; support GET (inline view) and DELETE.
+
+<<<FILE:app/api/files/[name]/route.ts
+import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
+
+function getMimeByExt(filename: string) {
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    txt: "text/plain",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { name: string } }
+) {
+  const name = decodeURIComponent(params.name);
+  const filePath = path.join(process.cwd(), "public", "uploads", name);
+  if (!fs.existsSync(filePath)) {
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
+  const data = fs.readFileSync(filePath);
+  const res = new NextResponse(data);
+  res.headers.set("Content-Type", getMimeByExt(name));
+  res.headers.set("Content-Disposition", `inline; filename="${name}"`);
+  return res;
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { name: string } }
+) {
+  const name = decodeURIComponent(params.name);
+  const filePath = path.join(process.cwd(), "public", "uploads", name);
+  if (!fs.existsSync(filePath)) {
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
+  fs.unlinkSync(filePath);
+  return new NextResponse(null, { status: 204 });
+}
+FILE>>>
+
+──────────────────────────────────────────────────────────────────────────────
+2) CLIENT — fix uploader/list component
+──────────────────────────────────────────────────────────────────────────────
+Locate the React component that renders the “Upload Compliance Documents” section
+(Search in source for that exact heading). In that component:
+
+A) Upload (FormData, NO manual Content-Type):
+- Replace current upload call with:
+
+```ts
+const fd = new FormData();
+fd.append("file", selectedFile); // real File object from input
+const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+if (!res.ok) throw new Error("Upload failed");
+const { name, url } = await res.json(); // server returns JSON
+// push item to state: { name, url }
