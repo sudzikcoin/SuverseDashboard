@@ -2,15 +2,11 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import Sidebar from "@/components/Sidebar"
-import Card from "@/components/Card"
 import Link from "next/link"
 import CalculatorCard from "@/components/CalculatorCard"
 import FileUpload from "@/components/FileUpload"
 import DocumentList from "@/components/DocumentList"
-import { WalletConnectBar } from "@/components/wallet/WalletConnectBar"
-import dynamic from "next/dynamic"
-
-const USDCPay = dynamic(() => import("@/components/wallet/USDCPay"), { ssr: false })
+import WalletConnectButton from "@/components/wallet/WalletConnectButton"
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -26,49 +22,49 @@ export default async function DashboardPage() {
       <Sidebar role={session.user.role} />
       
       <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-8 text-su-text">
-          Welcome, {session.user.companyName || session.user.email}
-        </h1>
-
-        <div className="space-y-6 mb-8">
-          <WalletConnectBar />
-          <USDCPay defaultAmount={1000} />
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-100">
+            Welcome, {session.user.companyName || session.user.email}
+          </h1>
+          <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition" />
         </div>
 
         {session.user.role === "COMPANY" && (
           <div className="space-y-8">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Link href="/marketplace" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Marketplace</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Marketplace</h2>
+                  <p className="text-gray-200">
                     Browse and purchase tax credits
                   </p>
                 </div>
               </Link>
 
               <Link href="/purchases" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">My Purchases</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">My Purchases</h2>
+                  <p className="text-gray-200">
                     View your purchase orders and status
                   </p>
                 </div>
               </Link>
 
-              <div className="glass halo rounded-xl p-6">
-                <h2 className="text-xl font-bold mb-2 text-su-text">Quick Links</h2>
-                <p className="text-su-muted">
-                  Calculator & documents below
-                </p>
-              </div>
+              <Link href="/payments/usdc" className="block">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer hover:shadow-[0_0_40px_-12px_rgba(16,185,129,0.25)]">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Pay with USDC</h2>
+                  <p className="text-gray-200">
+                    Make payments using USDC on Base
+                  </p>
+                </div>
+              </Link>
             </div>
 
             <CalculatorCard />
 
             {userCompanyId && (
               <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-su-text">Your Documents</h2>
+                <h2 className="text-2xl font-bold text-gray-100">Your Documents</h2>
                 <FileUpload title="Upload Compliance Documents" defaultType="KYC" />
                 <DocumentList companyId={userCompanyId} />
               </div>
@@ -80,27 +76,27 @@ export default async function DashboardPage() {
           <div className="space-y-8">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Link href="/clients" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Clients</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Clients</h2>
+                  <p className="text-gray-200">
                     Manage your client companies
                   </p>
                 </div>
               </Link>
 
               <Link href="/clients/purchases" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Client Purchases</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Client Purchases</h2>
+                  <p className="text-gray-200">
                     View client purchase orders
                   </p>
                 </div>
               </Link>
 
               <Link href="/marketplace" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Marketplace</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Marketplace</h2>
+                  <p className="text-gray-200">
                     Browse available tax credits
                   </p>
                 </div>
@@ -115,27 +111,27 @@ export default async function DashboardPage() {
           <div className="space-y-8">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Link href="/admin/inventory" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Inventory</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Inventory</h2>
+                  <p className="text-gray-200">
                     Manage tax credit inventory
                   </p>
                 </div>
               </Link>
 
               <Link href="/admin/purchases" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Purchase Orders</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Purchase Orders</h2>
+                  <p className="text-gray-200">
                     Review and approve purchases
                   </p>
                 </div>
               </Link>
 
               <Link href="/admin/audit" className="block">
-                <div className="glass halo rounded-xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
-                  <h2 className="text-xl font-bold mb-2 text-su-text">Audit Log</h2>
-                  <p className="text-su-muted">
+                <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
+                  <h2 className="text-xl font-bold mb-2 text-gray-100">Audit Log</h2>
+                  <p className="text-gray-200">
                     View system activity history
                   </p>
                 </div>

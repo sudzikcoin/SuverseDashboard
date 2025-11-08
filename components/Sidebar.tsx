@@ -15,12 +15,14 @@ export default function Sidebar({ role }: SidebarProps) {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/marketplace", label: "Marketplace" },
     { href: "/purchases", label: "My Purchases" },
+    { href: "/payments/usdc", label: "Pay with USDC" },
   ]
 
   const accountantLinks = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/clients", label: "Clients" },
     { href: "/marketplace", label: "Marketplace" },
+    { href: "/payments/usdc", label: "Pay with USDC" },
   ]
 
   const adminLinks = [
@@ -28,6 +30,7 @@ export default function Sidebar({ role }: SidebarProps) {
     { href: "/admin/inventory", label: "Inventory" },
     { href: "/admin/purchases", label: "Purchase Orders" },
     { href: "/admin/audit", label: "Audit Log" },
+    { href: "/payments/usdc", label: "Pay with USDC" },
   ]
 
   const links =

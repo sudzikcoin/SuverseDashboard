@@ -47,24 +47,24 @@ export function WalletConnectBar() {
   }, [address]);
 
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 p-4 glass">
+    <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4 glass shadow-lg">
       <ConnectButton chainStatus="icon" showBalance={false} />
-      <div className="text-sm text-white/80">
+      <div className="text-sm text-gray-100">
         {address ? (
           <div className="space-y-1">
             <div className="truncate max-w-xs">
-              <span className="text-white/60">Address:</span> {address.slice(0, 6)}...{address.slice(-4)}
+              <span className="text-gray-200">Address:</span> <span className="text-gray-100">{address.slice(0, 6)}...{address.slice(-4)}</span>
             </div>
             <div>
-              <span className="text-white/60">Chain:</span> {chain?.name ?? '—'}
+              <span className="text-gray-200">Chain:</span> <span className="text-gray-100">{chain?.name ?? '—'}</span>
             </div>
             <div>
-              <span className="text-white/60">USDC Balance:</span>{' '}
+              <span className="text-gray-200">USDC Balance:</span>{' '}
               <span className="font-mono text-su-emerald">{usdc || '—'}</span>
             </div>
           </div>
         ) : (
-          <div className="text-white/60">Connect a wallet to view USDC balance</div>
+          <div className="text-gray-200">Connect a wallet to view USDC balance</div>
         )}
       </div>
     </div>

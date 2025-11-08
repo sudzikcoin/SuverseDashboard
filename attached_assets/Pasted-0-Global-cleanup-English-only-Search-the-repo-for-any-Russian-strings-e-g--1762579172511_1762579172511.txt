@@ -1,0 +1,66 @@
+0) Global cleanup (English only)
+	•	Search the repo for any Russian strings (e.g., “Подключить кошелек”, “Оплатить”, etc.) and replace them with concise English equivalents:
+	•	“Подключить кошелек” → “Connect wallet”
+	•	Any other Russian placeholders → clear English copies consistent with the rest of the app.
+	•	Ensure no mixed-locale UI remains.
+
+1) Wallet button in header (all dashboards)
+
+Goal: show a “Connect wallet” button on the right side of the top header in every dashboard (company, accountant, admin).
+
+Implementation:
+	•	Create/ensure a reusable component components/wallet/WalletConnectButton.tsx that renders the same wallet connect UI we already use (do not change provider logic). Accept props { className?: string } and export default.
+	•	In each dashboard header, wrap the title “Welcome, {name}” (or role specific title) and the wallet button in a flex items-center justify-between container.
+	•	Files to update (create if missing / adapt to project structure):
+	•	Company dashboard header: app/(company)/dashboard/page.tsx (or current path where company dashboard page is defined).
+	•	Accountant dashboard header: app/(accountant)/dashboard/page.tsx.
+	•	Admin dashboard header: app/(admin)/dashboard/page.tsx.
+	•	If there is a shared header component (e.g., components/layout/DashboardHeader.tsx), place the change there once and use it everywhere.
+	•	Visual:
+	•	Left: h1 with “Welcome, {displayName}”.
+	•	Right: <WalletConnectButton />.
+	•	Button style: Tailwind classes rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm.
+	•	Remove any separate wallet card from the body if present.
+
+2) Move “Pay with USDC” to sidebar under “My Purchases”
+
+Goal: remove the “Pay with USDC” card from dashboard content and expose it as a dedicated page accessible from the left nav directly under “My Purchases”.
+
+Steps:
+	•	Extract the existing “Pay with USDC” card/component into a new route:
+	•	Create app/(company)/payments/usdc/page.tsx and render the existing USDC payment UI there (same fields, same logic). Title: “Pay with USDC”.
+	•	If accountant/admin have their own dashboards, also create:
+	•	app/(accountant)/payments/usdc/page.tsx
+	•	app/(admin)/payments/usdc/page.tsx
+	•	Keep the functionality identical; just move it out of the dashboard page.
+	•	Remove the old “Pay with USDC” card from:
+	•	app/(company)/dashboard/page.tsx
+	•	app/(accountant)/dashboard/page.tsx
+	•	app/(admin)/dashboard/page.tsx
+	•	Update sidebar/nav configs for each role so a new item appears directly under “My Purchases”:
+	•	Label: Pay with USDC
+	•	Path per role as above (company: /payments/usdc, accountant: /accountant/payments/usdc if the routes are nested, admin accordingly).
+	•	Icons: reuse the same style as other items; if using an icon set, pick a simple wallet/coin icon.
+	•	Ensure the new page uses the same dark theme, rounded design, and readable text (no pale gray). Use Tailwind classes similar to other pages: text-gray-100 for labels, bg-slate-900/60 cards, rounded-2xl, soft shadows, etc.
+
+3) Consistent styling fixes (all dashboards)
+	•	Ensure all pale/low-contrast texts are updated to readable classes:
+	•	Replace text-gray-400/50, text-gray-300/50, etc. with text-gray-200 or text-gray-100 where appropriate.
+	•	Inputs: text-gray-100 and visible borders (e.g., border-white/10 focus:border-emerald-400/40).
+	•	Cards: rounded-2xl with subtle glow: shadow-[0_0_40px_-12px_rgba(16,185,129,0.25)] on hover for CTAs.
+	•	Keep the Clario-like dark theme gradients already added (do not change the color palette tokens).
+
+4) Navigation wiring (all roles)
+	•	In sidebar component(s) (e.g., components/layout/Sidebar*.tsx or role-specific nav configs), add the new link under the existing “My Purchases” link:
+	•	Company sidebar: add { title: 'Pay with USDC', href: '/payments/usdc' }.
+	•	Accountant sidebar: add { title: 'Pay with USDC', href: '/accountant/payments/usdc' } (adjust base path).
+	•	Admin sidebar: add { title: 'Pay with USDC', href: '/admin/payments/usdc' }.
+
+5) QA checklist
+	•	No Russian words remain after search/replace.
+	•	On /dashboard for each role: the header shows “Welcome, …” on the left and a “Connect wallet” button on the right.
+	•	The dashboard body no longer contains the “Pay with USDC” card.
+	•	Sidebar shows “Pay with USDC” directly under “My Purchases” and opens the new page.
+	•	Build and preview without type errors and without React hydration warnings.
+
+Make all changes, run the project, and confirm the three dashboards (company, accountant, admin) meet these requirements. Then summarize files changed.
