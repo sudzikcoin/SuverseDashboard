@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import Sidebar from "@/components/Sidebar"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
+import CompanySelect from "@/components/CompanySelect"
 import { formatNumber } from "@/lib/format"
 import { formatDate } from "@/lib/date"
 
@@ -29,6 +30,7 @@ export default function MarketplacePage() {
   const [loading, setLoading] = useState(true)
   const [selectedCredit, setSelectedCredit] = useState<CreditInventory | null>(null)
   const [purchaseAmount, setPurchaseAmount] = useState("")
+  const [companyId, setCompanyId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -39,6 +41,12 @@ export default function MarketplacePage() {
   useEffect(() => {
     fetchInventory()
   }, [])
+
+  useEffect(() => {
+    if (session?.user.role === "COMPANY" && session.user.companyId) {
+      setCompanyId(session.user.companyId as string)
+    }
+  }, [session])
 
   const fetchInventory = async () => {
     try {
@@ -55,6 +63,11 @@ export default function MarketplacePage() {
   }
 
   const handleReserve = async (item: CreditInventory) => {
+    if (!companyId) {
+      alert("❌ Please select a company first.")
+      return
+    }
+    
     try {
       const amount = parseFloat(purchaseAmount) || Number(item.minBlockUSD)
       
@@ -64,6 +77,7 @@ export default function MarketplacePage() {
         body: JSON.stringify({
           inventoryId: item.id,
           amountUSD: amount,
+          companyId,
         }),
       })
 
@@ -86,6 +100,11 @@ export default function MarketplacePage() {
   }
 
   const handlePurchase = async (item: CreditInventory) => {
+    if (!companyId) {
+      alert("❌ Please select a company first.")
+      return
+    }
+    
     try {
       const amount = parseFloat(purchaseAmount) || Number(item.minBlockUSD)
       
@@ -95,6 +114,7 @@ export default function MarketplacePage() {
         body: JSON.stringify({
           inventoryId: item.id,
           amountUSD: amount,
+          companyId,
         }),
       })
 
@@ -238,6 +258,17 @@ export default function MarketplacePage() {
                 )}
               </div>
 
+              {(session.user.role === "ACCOUNTANT" || session.user.role === "ADMIN") && (
+                <div className="mb-4">
+                  <CompanySelect value={companyId} onChange={setCompanyId} />
+                  {!companyId && (
+                    <p className="text-sm text-red-400 mt-1">
+                      Select company to continue.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="mb-6">
                 <label className="block text-sm font-semibold mb-2 text-gray-200">
                   Purchase Amount (Face Value USD)
@@ -262,13 +293,15 @@ export default function MarketplacePage() {
               <div className="flex gap-4">
                 <button
                   onClick={() => handleReserve(selectedCredit)}
-                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-100 font-semibold rounded-xl transition"
+                  disabled={!companyId}
+                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-gray-100 font-semibold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Reserve (72h Hold)
                 </button>
                 <button
                   onClick={() => handlePurchase(selectedCredit)}
-                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-black font-semibold rounded-xl transition"
+                  disabled={!companyId}
+                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-black font-semibold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Purchase Now
                 </button>
