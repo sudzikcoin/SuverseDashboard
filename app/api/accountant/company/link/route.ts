@@ -89,6 +89,22 @@ export async function DELETE(req: Request) {
       )
     }
 
+    const existingLink = await prisma.accountantClient.findUnique({
+      where: {
+        accountantId_companyId: {
+          accountantId,
+          companyId
+        }
+      }
+    })
+
+    if (!existingLink) {
+      return NextResponse.json(
+        { error: "Link does not exist" },
+        { status: 404 }
+      )
+    }
+
     await prisma.accountantClient.delete({
       where: {
         accountantId_companyId: {
