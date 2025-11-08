@@ -62,3 +62,69 @@ body {
     z-index: -1;
   }
 }
+
+/* Splash animation */
+.suv-group .shape {
+  fill: #0bd68f;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 18px rgba(34,229,139,0.35));
+}
+
+.letter {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-weight: 800;
+  font-size: 120px;
+  fill: transparent;
+  stroke: #22E58B;
+  stroke-width: 2;
+  opacity: 0;
+  letter-spacing: 2px;
+}
+
+/* Slide-in from sides */
+.left { animation: slideInLeft 900ms cubic-bezier(.2,.8,.2,1) forwards; }
+.right { animation: slideInRight 900ms cubic-bezier(.2,.8,.2,1) forwards; }
+
+/* Stagger */
+.d0 { animation-delay: 40ms; }
+.d1 { animation-delay: 120ms; }
+.d2 { animation-delay: 200ms; }
+
+/* Morph into letters: fade shapes out while letters fade in */
+.suv-group { animation: shapesOut 700ms ease-out 900ms forwards; }
+.letters   { animation: lettersIn 700ms ease-out 900ms forwards; }
+
+@keyframes slideInLeft {
+  0%   { transform: translateX(0);   opacity: .0; }
+  100% { transform: translateX(220px); opacity: .95; }
+}
+@keyframes slideInRight {
+  0%   { transform: translateX(0);   opacity: .0; }
+  100% { transform: translateX(-520px); opacity: .95; }
+}
+@keyframes shapesOut {
+  0%   { opacity: .9; }
+  100% { opacity: 0; }
+}
+@keyframes lettersIn {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0)  scale(1); }
+}
+
+/* Flash after letters appear */
+.flash {
+  position: absolute; inset: 0; background: white;
+  opacity: 0; pointer-events: none;
+  animation: flash 200ms ease-out 1600ms forwards;
+}
+@keyframes flash {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Reduced motion: no animation */
+@media (prefers-reduced-motion: reduce) {
+  .left, .right, .suv-group, .letters, .flash { animation: none !important; }
+  .letters { opacity: 1; }
+}

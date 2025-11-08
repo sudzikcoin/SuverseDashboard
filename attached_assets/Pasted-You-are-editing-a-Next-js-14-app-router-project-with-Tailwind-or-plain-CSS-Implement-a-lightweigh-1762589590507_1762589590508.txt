@@ -1,0 +1,176 @@
+You are editing a Next.js 14 (app router) project with Tailwind or plain CSS. Implement a lightweight splash animation shown **once per session**:
+
+Spec:
+- Dark background (#0B1220), neon-green accents (#22E58B).
+- From left and right, simple geometric shapes (rectangles/circles/triangles) slide in and assemble into letters to form the word "SuVerse".
+- After assembly, trigger a short white “flash” overlay, then hide the splash and reveal the app.
+- Total duration ~1.8s + 0.2s flash (≈2.0s overall).
+- Respect `prefers-reduced-motion: reduce` (skip animation and immediately show app).
+- Do not add heavy libraries. Use SVG + CSS keyframes.
+- Show only once per browser session (sessionStorage flag `suv_splash_seen=true`).
+
+Make these changes:
+
+1) Create file: components/Splash.tsx
+------------------------------------------------
+"use client";
+import React, { useEffect, useState } from "react";
+
+export default function Splash() {
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    // Skip if reduced motion or already seen
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (media.matches || sessionStorage.getItem("suv_splash_seen") === "true") {
+      setDone(true);
+      return;
+    }
+    const total = 2000; // ms (animation + flash)
+    const timer = setTimeout(() => {
+      sessionStorage.setItem("suv_splash_seen", "true");
+      setDone(true);
+    }, total);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (done) return null;
+
+  return (
+    <div
+      role="status"
+      aria-label="Loading SuVerse"
+      className="fixed inset-0 z-[9999] bg-[#0B1220] flex items-center justify-center overflow-hidden"
+    >
+      {/* SVG word built from shapes */}
+      <svg
+        className="w-[70vw] max-w-[720px] h-auto"
+        viewBox="0 0 1200 200"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <g className="suv-group">
+          {/* Left shapes (S, u, V) */}
+          <rect className="shape left d0" x="-120" y="20" width="120" height="120" rx="20" />
+          <circle className="shape left d1" cx="-60" cy="160" r="40" />
+          <polygon className="shape left d2" points="-120,0 -20,0 -70,80" />
+
+          {/* Right shapes (e r s e) */}
+          <rect className="shape right d0" x="1200" y="40" width="100" height="100" rx="16" />
+          <circle className="shape right d1" cx="1260" cy="160" r="34" />
+          <polygon className="shape right d2" points="1200,10 1300,10 1250,90" />
+        </g>
+
+        {/* Letter placeholders for final positions */}
+        <g className="letters">
+          <text x="70"  y="135" className="letter">S</text>
+          <text x="200" y="135" className="letter">u</text>
+          <text x="325" y="135" className="letter">V</text>
+          <text x="460" y="135" className="letter">e</text>
+          <text x="580" y="135" className="letter">r</text>
+          <text x="660" y="135" className="letter">s</text>
+          <text x="760" y="135" className="letter">e</text>
+        </g>
+      </svg>
+
+      {/* White flash overlay */}
+      <div className="flash" aria-hidden="true" />
+    </div>
+  );
+}
+------------------------------------------------
+
+2) Add styles (either Tailwind @layer in globals.css or a CSS module).
+Open: app/globals.css (or styles/globals.css) and append:
+
+/* Splash animation */
+.suv-group .shape {
+  fill: #0bd68f;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 18px rgba(34,229,139,0.35));
+}
+
+.letter {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-weight: 800;
+  font-size: 120px;
+  fill: transparent;
+  stroke: #22E58B;
+  stroke-width: 2;
+  opacity: 0;
+  letter-spacing: 2px;
+}
+
+/* Slide-in from sides */
+.left { animation: slideInLeft 900ms cubic-bezier(.2,.8,.2,1) forwards; }
+.right { animation: slideInRight 900ms cubic-bezier(.2,.8,.2,1) forwards; }
+
+/* Stagger */
+.d0 { animation-delay: 40ms; }
+.d1 { animation-delay: 120ms; }
+.d2 { animation-delay: 200ms; }
+
+/* Morph into letters: fade shapes out while letters fade in */
+.suv-group { animation: shapesOut 700ms ease-out 900ms forwards; }
+.letters   { animation: lettersIn 700ms ease-out 900ms forwards; }
+
+@keyframes slideInLeft {
+  0%   { transform: translateX(0);   opacity: .0; }
+  100% { transform: translateX(220px); opacity: .95; }
+}
+@keyframes slideInRight {
+  0%   { transform: translateX(0);   opacity: .0; }
+  100% { transform: translateX(-520px); opacity: .95; }
+}
+@keyframes shapesOut {
+  0%   { opacity: .9; }
+  100% { opacity: 0; }
+}
+@keyframes lettersIn {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0)  scale(1); }
+}
+
+/* Flash after letters appear */
+.flash {
+  position: absolute; inset: 0; background: white;
+  opacity: 0; pointer-events: none;
+  animation: flash 200ms ease-out 1600ms forwards;
+}
+@keyframes flash {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Reduced motion: no animation */
+@media (prefers-reduced-motion: reduce) {
+  .left, .right, .suv-group, .letters, .flash { animation: none !important; }
+  .letters { opacity: 1; }
+}
+
+3) Mount the splash once at the root layout so it overlays any page.
+Open: app/layout.tsx and render <Splash /> just inside <body>:
+
+import Splash from "@/components/Splash";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className={...}>
+        <Splash />
+        {children}
+      </body>
+    </html>
+  );
+}
+
+4) Z-index: ensure site headers/portals don’t cover the splash. We used z-[9999]; keep your modals below that during initial load.
+
+5) Testing:
+- Run dev server, hard-refresh. You should see the animation (~1.8s), a quick white flash, then your page.
+- Navigate around; splash should NOT reappear in this session.
+- Open a new tab or incognito: splash shows once.
+- With `prefers-reduced-motion: reduce` it skips the animation and shows the app instantly.
+
+Commit message:
+chore(ui): add SuVerse splash animation (SVG shapes → word, flash, once-per-session)
