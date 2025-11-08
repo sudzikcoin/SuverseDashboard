@@ -1,0 +1,65 @@
+# ✅ REPLIT-AI INSTRUCTION — FIX WALLET BUTTON LABEL (ONE-SHOT, SAFE)
+# Goal: force the wallet connect button to always display "Connect Wallet" in English,
+# regardless of provider locale (RainbowKit/Web3Modal/WalletConnect), without touching auth/DB/roles.
+
+CONSTRAINTS (important, do NOT violate):
+- Do NOT modify or remove: NextAuth config/routes, Prisma schema/migrations, API routes, RBAC, Stripe, uploads, or any server logic.
+- Only change UI components under components/** and app/** (or pages/** if used).
+- Keep existing wallet provider config (wagmi, RainbowKit, Web3Modal, WalletConnect) intact.
+
+TASKS:
+
+1) Locate the CURRENT wallet connect entry point:
+   - Search for occurrences of ConnectButton / RainbowKit / Web3Modal / WalletConnect in source:
+     components/**, app/**, pages/** (exclude node_modules).
+   - Typical files: components/wallet/*, components/layout/TopBar*.tsx, any *WalletConnect*.tsx, USDCPay.tsx.
+
+2) Replace the visual button with a SMALL CUSTOM WRAPPER that ALWAYS shows "Connect Wallet":
+   - If RainbowKit is used:
+     - Keep provider as is.
+     - Render `<ConnectButton.Custom>` and show:
+       - WHEN NOT CONNECTED → a plain `<button>` with text EXACTLY "Connect Wallet" calling `openConnectModal()`.
+       - WHEN CONNECTED → show compact status (e.g., short address). No other text in Russian.
+   - If Web3Modal (wagmi) is used:
+     - Use `useWeb3Modal()` (or the project’s hook) and render `<button>` "Connect Wallet" that calls `open()`.
+   - If WalletConnect SDK UI is used:
+     - Call the existing open/connect function from the project to open the modal; keep all logic, only replace the label.
+
+   Important: Do not add any new providers; only swap the rendered label component. Keep styles consistent with current theme.
+
+3) Ensure the button instance in the HEADER uses this wrapper:
+   - Open the shared header/topbar (TopBar/Header/AppHeader). 
+   - Right side must contain: `Welcome, {companyLegalName || organization.legalName || displayName || "Guest"}` and the new **Connect Wallet** wrapper button.
+   - Do NOT add or move providers into the header. Only swap the rendered button component.
+
+4) Remove any hardcoded Russian labels in wallet UI components (if present):
+   - Search for these exact strings and replace:
+     - "Подключить кошелек" → "Connect Wallet"
+     - "Адрес" → "Address" (if used in wallet bar)
+     - "Сеть" → "Chain" (if used in wallet bar)
+   - Only visible text; do not rename variables.
+
+5) LAST-RESORT RUNTIME PATCH (safety net, non-breaking):
+   - Add a tiny client-side effect (in the header component that is mounted everywhere) that, after mount,
+     finds any button whose textContent matches /Подключить кошел(е|ё)к/i and replaces it with "Connect Wallet".
+   - The patch must be idempotent and run on route changes (e.g., listen once on mount or with a small MutationObserver).
+   - This is only to override provider UI that injects localized text; it must not interfere with click handlers.
+
+6) Keep the “Pay with USDC” link in the sidebar under “My Purchases” (no header button duplicates).
+   - Verify the link exists for ALL roles using the shared sidebar component.
+
+7) Verify dark theme remains unchanged.
+   - Do NOT add global resets; only keep current classes/tokens.
+
+8) Quick validation (automate in terminal if possible):
+   - Search source for Cyrillic (should be zero):
+     grep -RIn "[А-Яа-яЁё]" components app pages || true
+   - Open routes:
+     /dashboard — Header shows “Welcome, …” and the button text is **Connect Wallet** in English.
+     /payments/usdc — All texts in English; NO Cyrillic on the wallet connect button.
+   - Confirm clicking the button still opens the existing wallet modal.
+
+OUTPUT (required):
+- List the EXACT files you edited and one-line note for each (e.g., “components/wallet/WalletConnectButton.tsx → custom wrapper label ‘Connect Wallet’”).
+- Single commit message: 
+  UI: force English “Connect Wallet” label (wrapper + runtime safety), keep providers/auth/DB intact

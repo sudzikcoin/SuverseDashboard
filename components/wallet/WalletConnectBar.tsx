@@ -48,7 +48,31 @@ export function WalletConnectBar() {
 
   return (
     <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4 glass shadow-lg">
-      <ConnectButton chainStatus="icon" showBalance={false} />
+      <ConnectButton.Custom>
+        {({ account, chain, openConnectModal, mounted }) => {
+          const ready = mounted;
+          const connected = ready && account && chain;
+
+          if (!connected) {
+            return (
+              <button
+                onClick={openConnectModal}
+                type="button"
+                className="rounded-lg px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-emerald-500/20 backdrop-blur-sm transition text-gray-100 font-medium"
+              >
+                Connect Wallet
+              </button>
+            );
+          }
+
+          return (
+            <div className="text-sm text-gray-200">
+              Connected: <span className="text-emerald-400 font-medium">{account.displayName}</span>
+            </div>
+          );
+        }}
+      </ConnectButton.Custom>
+      
       <div className="text-sm text-gray-100">
         {address ? (
           <div className="space-y-1">
