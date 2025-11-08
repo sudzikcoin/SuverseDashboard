@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { formatDate } from "@/lib/date"
 
 interface SettingsPanelProps {
   company: any
@@ -75,7 +76,7 @@ export default function SettingsPanel({ company }: SettingsPanelProps) {
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-yellow-400 mb-2">Company Archived</h3>
               <p className="text-gray-300 mb-4">
-                This company was archived on {new Date(company.deletedAt).toLocaleDateString()}. 
+                This company was archived on {formatDate(company.deletedAt)}. 
                 You can restore it at any time.
               </p>
               <button

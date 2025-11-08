@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { formatDate } from "@/lib/date"
 
 interface DocumentsPanelProps {
   company: any
@@ -191,7 +192,7 @@ export default function DocumentsPanel({ company }: DocumentsPanelProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-gray-100 font-medium truncate">{doc.filename}</p>
                   <p className="text-sm text-gray-400">
-                    {formatFileSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString()}
+                    {formatFileSize(doc.sizeBytes)} • {formatDate(doc.createdAt)}
                   </p>
                 </div>
               </div>

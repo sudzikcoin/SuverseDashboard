@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { formatDate } from "@/lib/date"
 
 interface CompanyOverviewProps {
   company: any
@@ -157,7 +158,7 @@ export default function CompanyOverview({ company }: CompanyOverviewProps) {
             Created At
           </label>
           <p className="text-gray-100 px-4 py-2 bg-white/5 rounded-xl">
-            {new Date(company.createdAt).toLocaleDateString()}
+            {formatDate(company.createdAt)}
           </p>
         </div>
 
@@ -166,7 +167,7 @@ export default function CompanyOverview({ company }: CompanyOverviewProps) {
             Last Updated
           </label>
           <p className="text-gray-100 px-4 py-2 bg-white/5 rounded-xl">
-            {new Date(company.updatedAt).toLocaleDateString()}
+            {formatDate(company.updatedAt)}
           </p>
         </div>
       </div>

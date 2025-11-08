@@ -1,0 +1,71 @@
+You are working in a Next.js + Prisma app. We are seeing a runtime error on /clients:
+
+RangeError: Invalid time value
+
+Root cause: UI components call `new Date(x).toLocaleDateString()` (or similar) where `x` can be null/undefined, a non-ISO string, or already a Date. Fix this globally by introducing a safe date formatter and using it everywhere we render dates (clients list, company detail, documents list, purchases, audit log, etc.). Also ensure Prisma models have default timestamps so null dates never appear.
+
+DO EXACTLY THESE CHANGES:
+
+1) Create a small date utility:
+- File: lib/date.ts
+- Export:
+  - `export function formatDate(input: unknown, fallback = "—"): string`
+  - Behavior:
+    - If `input` is falsy -> return `fallback`.
+    - If `input` is a string, try `new Date(input)`; if invalid, try `new Date(Number(input))` (unix ms). If still invalid -> return `fallback`.
+    - If `input` is a Date -> use it directly.
+    - If date is valid -> return `date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })`.
+- Also export `export function isValidDate(d: Date) { return !isNaN(d.getTime()); }`.
+
+2) Replace ALL direct usages of `new Date(...).toLocale...` and similar date formatting with `formatDate(...)`.
+   Search across the repo for:
+   - `toLocaleDateString`
+   - `toLocaleString`
+   - `new Date(`
+   Update these files first (and any other matches you find):
+   - app/clients/page.tsx  (clients table)
+   - app/clients/[id]/page.tsx  (company detail)
+   - components/documents/ClientDocumentsModal.tsx
+   - components/documents/DocumentsTable.tsx
+   - components/purchases/PurchasesTable.tsx
+   - components/AuditLogTable.tsx
+   Implementation rule: never call `new Date(...)` directly in JSX; always call `formatDate(value)`.
+
+3) Make API responses date-safe:
+   - In API routes that return documents/purchases (e.g., app/api/documents/route.ts, app/api/clients/[id]/documents/route.ts, app/api/purchases/route.ts), ensure dates are returned as ISO strings:
+     Example mapping:
+       `createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,`
+   - Do not manually set `createdAt` on create; let Prisma handle defaults.
+
+4) Ensure Prisma models have defaults to avoid nulls:
+   - Open prisma/schema.prisma
+   - For models that represent records with timestamps (Document, PurchaseOrder, AuditLog, CreditInventory if needed, Company if it shows created date, etc.), ensure:
+       `createdAt DateTime @default(now())`
+       `updatedAt DateTime @updatedAt`
+   - If any of these fields are missing, add them.
+   - Save file, then run:
+       npx prisma generate
+       npx prisma db push
+     (Use the project's package manager and scripts if defined.)
+
+5) Defensive UI rendering:
+   - Where tables or lists map over items that may be empty, guard with optional chaining and defaults:
+       `(items ?? []).map(...)`
+   - Where a date is optional, render `formatDate(item?.createdAt)` with no direct `new Date`.
+
+6) Add a small error boundary around the /clients table to avoid page crash if data is partial:
+   - Wrap the table body mapping in try/catch or pre-validate data shapes so the page never throws; display a non-blocking alert/toast if any row has invalid date.
+
+7) Testing steps (run and verify):
+   - Restart the dev server.
+   - Visit /clients — page must load with no RangeError.
+   - Open a company -> upload a PDF -> the documents list shows a valid "Uploaded" or "Created" date using `formatDate`.
+   - Purchases and AuditLog also render dates without crashing when fields are missing.
+
+Deliverables:
+- New file lib/date.ts with `formatDate` and `isValidDate`.
+- All JSX date usages replaced to use the helper.
+- Prisma schema updated with timestamp defaults; db pushed.
+- API guarantees ISO date strings.
+- /clients no longer throws and all date cells render (or show "—").
+- Commit with message: "fix: robust date formatting + timestamp defaults; prevent RangeError on /clients"

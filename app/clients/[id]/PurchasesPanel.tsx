@@ -1,5 +1,7 @@
 "use client"
 
+import { formatDate } from "@/lib/date"
+
 interface PurchasesPanelProps {
   company: any
 }
@@ -100,7 +102,7 @@ export default function PurchasesPanel({ company }: PurchasesPanelProps) {
                 <div>
                   <p className="text-gray-400">Date</p>
                   <p className="text-gray-100 font-semibold mt-1">
-                    {new Date(purchase.createdAt).toLocaleDateString()}
+                    {formatDate(purchase.createdAt)}
                   </p>
                 </div>
               </div>
