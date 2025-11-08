@@ -11,29 +11,62 @@ export async function GET() {
   }
 
   try {
-    const companies = await prisma.company.findMany({
-      where: {
-        deletedAt: null,
-      },
-      include: {
-        users: {
-          select: {
-            email: true,
-          },
-        },
-        purchases: {
-          select: {
-            id: true,
-            totalUSD: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    })
+    let companies: any[] = []
 
-    const clientData = companies.map((company) => ({
+    if (session.user.role === "ADMIN") {
+      companies = await prisma.company.findMany({
+        where: {
+          deletedAt: null,
+        },
+        include: {
+          users: {
+            select: {
+              email: true,
+            },
+          },
+          purchases: {
+            select: {
+              id: true,
+              totalUSD: true,
+            },
+          },
+        },
+        orderBy: {
+          legalName: "asc",
+        },
+      })
+    } else if (session.user.role === "ACCOUNTANT") {
+      const links = await prisma.accountantClient.findMany({
+        where: { accountantId: session.user.id },
+        include: {
+          company: {
+            include: {
+              users: {
+                select: {
+                  email: true,
+                },
+              },
+              purchases: {
+                select: {
+                  id: true,
+                  totalUSD: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      })
+
+      companies = links
+        .map((link) => link.company)
+        .filter((c) => c.deletedAt === null)
+        .sort((a, b) => a.legalName.localeCompare(b.legalName))
+    }
+
+    const clientData = companies.map((company: any) => ({
       id: company.id,
       legalName: company.legalName,
       state: company.state,
@@ -41,7 +74,7 @@ export async function GET() {
       contactEmail: company.contactEmail,
       totalPurchases: company.purchases.length,
       totalValue: company.purchases.reduce(
-        (sum, p) => sum + Number(p.totalUSD),
+        (sum: number, p: any) => sum + Number(p.totalUSD),
         0
       ),
       createdAt: company.createdAt,
@@ -83,6 +116,15 @@ export async function POST(request: Request) {
         contactEmail,
       },
     })
+
+    if (session.user.role === "ACCOUNTANT") {
+      await prisma.accountantClient.create({
+        data: {
+          accountantId: session.user.id,
+          companyId: company.id,
+        },
+      })
+    }
 
     await prisma.auditLog.create({
       data: {

@@ -1,0 +1,150 @@
+You are a senior Next.js + Prisma + NextAuth engineer working on a SuVerse dashboard.
+
+Goal:
+New accountant accounts must see ONLY companies explicitly linked to them via the join table AccountantClient. The /clients page must never query all companies directly. Also purge any old links and prevent auto-linking in seed/onboarding code.
+
+Make the following exact edits and run the listed commands:
+
+1) PRISMA SCHEMA — enforce uniqueness on the join and prepare for cleanup
+- Open prisma/schema.prisma and ensure these models/parts exist or are updated:
+
+/// --- add/ensure unique on the join table
+model AccountantClient {
+  id           String  @id @default(cuid())
+  accountantId String
+  companyId    String
+  createdAt    DateTime @default(now())
+
+  accountant   User    @relation(fields: [accountantId], references: [id])
+  company      Company @relation(fields: [companyId], references: [id])
+
+  @@unique([accountantId, companyId], name: "AccountantCompany_unique")  // <— enforce unique pair
+}
+
+/// (reference)
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  COMPANY
+}
+
+model User {
+  id              String  @id @default(cuid())
+  email           String  @unique
+  password        String
+  role            Role
+  name            String?
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id])
+
+  accountantLinks AccountantClient[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Company {
+  id              String  @id @default(cuid())
+  name            String
+  ein             String? @unique
+  state           String?
+  email           String?
+
+  accountantLinks AccountantClient[]
+}
+
+2) DATA CLEANUP SCRIPT — remove any old/global links so new accountants start with zero companies
+- Create a file prisma/scripts/cleanup-accountant-links.ts with:
+
+import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient();
+
+async function main() {
+  const deleted = await prisma.accountantClient.deleteMany({});
+  console.log(`Deleted ${deleted.count} AccountantClient rows`);
+}
+main().finally(() => prisma.$disconnect());
+
+3) API — return ONLY companies linked to the logged-in accountant
+- Create app/api/accountant/companies/route.ts:
+
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ companies: [] });
+
+  const role = (session.user as any).role;
+  // Admin may see all companies if needed; accountants see only linked
+  if (role === "ADMIN") {
+    const companies = await prisma.company.findMany({ orderBy: { name: "asc" } });
+    return NextResponse.json({ companies });
+  }
+
+  if (role === "ACCOUNTANT") {
+    const links = await prisma.accountantClient.findMany({
+      where: { accountantId: (session.user as any).id },
+      include: { company: true },
+      orderBy: { createdAt: "desc" },
+    });
+    const companies = links.map(l => l.company);
+    return NextResponse.json({ companies });
+  }
+
+  return NextResponse.json({ companies: [] });
+}
+
+4) CLIENTS PAGE — stop using direct Prisma calls; load via the API above
+- Edit app/clients/page.tsx (or the file that renders /clients). Replace any direct Prisma queries with:
+
+async function getCompanies() {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/accountant/companies`, {
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = await res.json();
+  return data.companies ?? [];
+}
+
+export default async function ClientsPage() {
+  const companies = await getCompanies();
+  // ...render the table strictly from `companies`
+}
+
+- If /clients is a Server Component with access to getServerSession, you may also do a direct fetch("/api/accountant/companies") without NEXT_PUBLIC_BASE_URL. Keep cache: "no-store".
+
+5) PREVENT AUTO-LINKING — remove any seed/onboarding code that links new accountants automatically
+- Open prisma/seed.ts (or any onboarding code). Remove lines that create AccountantClient rows on user registration for ACCOUNTANT role.
+- New accountants must start with zero links.
+
+6) SECURITY GUARDRAILS — reuse this check in any accountant-only actions (purchase/hold, upload docs for client, etc.)
+- Before performing any action on a company as ACCOUNTANT, verify a link exists:
+
+import { prisma } from "@/lib/db";
+async function assertAccountantHasAccess(accountantId: string, companyId: string) {
+  const link = await prisma.accountantClient.findFirst({
+    where: { accountantId, companyId }
+  });
+  if (!link) throw new Error("No access to this company");
+}
+
+7) RUN COMMANDS
+- In shell:
+
+npx prisma generate
+npx prisma db push
+npx tsx prisma/scripts/cleanup-accountant-links.ts
+
+8) TESTING CHECKLIST (do it now)
+- Register a NEW accountant with a name.
+- Go to /clients → the list must be EMPTY.
+- Link the accountant to a company (via your admin flow or manual creation of an AccountantClient row).
+- Refresh /clients → only linked companies appear.
+- Log in as a different accountant → they see only their own linked companies.
+- Try accountant actions (purchase/hold, docs upload) for an unlinked company → must be blocked.
+
+Notes:
+- If /clients still shows all companies, it means the page or a child component still calls prisma.company.findMany() directly. Grep and remove any direct fetch of companies except through /api/accountant/companies.
+- The cleanup script is one-off; keep it for future resets if needed.

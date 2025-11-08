@@ -28,19 +28,27 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **File Storage**: Private per-company document storage in `/uploads/{companyId}/` with RBAC-enforced access via API routes. Security includes path traversal protection (basename normalization), CRLF header injection prevention (control character filtering), and role-based access (ADMIN full, ACCOUNTANT via AccountantClient link, COMPANY self only).
 
 ### Feature Specifications
--   **User Management**: Registration, login, and role-based access.
--   **Marketplace**: Browse, filter, reserve, and purchase tax credits.
+-   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard.
+-   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
 -   **Purchase Workflow**: Stripe checkout integration, purchase order creation, admin approval, and automated PDF generation.
 -   **Inventory Management**: Admin interface for CRUD operations on tax credit inventory.
--   **Accountant Features**: Client management via `/clients` page with per-company document upload/management through DocumentManager modal. Documents are stored in isolated company folders with RBAC access control enforced at the API level.
+-   **Accountant Features**: 
+    - Zero-trust isolation: new accountants start with zero company access
+    - Admin-controlled linking via `/api/accountant/company/link` (POST/DELETE)
+    - Client management via `/clients` page showing only explicitly linked companies
+    - Per-company document upload/management through DocumentManager modal
+    - Marketplace actions (holds, purchases) restricted to linked companies only
+    - Documents stored in isolated company folders with RBAC access control enforced at the API level
+    - Auto-linking when accountant creates a new client company
 -   **Reporting**: CSV exports for inventory and purchases, and Admin audit log viewer.
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router, API routes, pages), `components/`, `lib/` (utilities for auth, db, email, pdf, audit, validations, storage, calculations), `prisma/`, `types/`.
+-   **Project Structure**: `app/` (App Router, API routes, pages), `components/`, `lib/` (utilities for auth, db, email, pdf, audit, validations, storage, calculations, access-control), `prisma/`, `types/`.
 -   **Environment Variables**: Configurable via `.env`.
--   **Database Seeding**: Enhanced script for initial setup.
+-   **Database Seeding**: Enhanced script for initial setup. Does NOT auto-link accountants - they start with zero companies.
 -   **Error Handling**: Integrated error handling and user-friendly alerts.
+-   **Access Control**: `lib/access-control.ts` provides `hasCompanyAccess()` and `assertAccountantHasAccess()` for enforcing accountant isolation across all company-scoped operations.
 
 ## External Dependencies
 -   **Stripe**: Payment processing and webhooks.
