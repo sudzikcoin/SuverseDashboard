@@ -1,0 +1,124 @@
+REPLIT AI — COMPANY DOCS: INLINE PREVIEW + SIGNED SHARE LINK + AUDIT LOG
+
+GOAL
+Enhance /clients/[id] → Documents tab with:
+1) Inline PDF preview (drawer/modal with <iframe>)
+2) Shareable time-limited URL (signed, expires)
+3) Audit log entries for upload/open/delete/share
+
+1) DATA MODEL (Prisma)
+File: prisma/schema.prisma
+- Ensure these models/fields exist (add if missing):
+  model Document {
+    id           String   @id @default(cuid())
+    companyId    String
+    fileName     String
+    filePath     String
+    mime         String
+    size         Int
+    createdAt    DateTime @default(now())
+    uploadedById String?
+    company      Company  @relation(fields: [companyId], references: [id])
+    uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+    deletedAt    DateTime?
+  }
+
+  model AuditLog {
+    id        String   @id @default(cuid())
+    actorId   String?
+    companyId String?
+    action    String   // 'doc_upload' | 'doc_open' | 'doc_delete' | 'doc_share'
+    meta      Json?
+    createdAt DateTime @default(now())
+    actor     User?    @relation(fields: [actorId], references: [id])
+    company   Company? @relation(fields: [companyId], references: [id])
+  }
+- Run: npx prisma db push
+
+2) SIGNING UTILS
+Create: lib/sign.ts
+--------------------------------
+import crypto from 'crypto';
+
+const ALG = 'sha256';
+const ENC = 'base64url';
+const SECRET = process.env.DOCS_SIGN_SECRET!;
+
+export function signPayload(payload: object) {
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const hmac = crypto.createHmac(ALG, SECRET).update(data).digest(ENC);
+  return `${data}.${hmac}`;
+}
+
+export function verifySignature(token: string) {
+  const [data, sig] = token.split('.');
+  if (!data || !sig) return null;
+  const check = crypto.createHmac(ALG, SECRET).update(data).digest(ENC);
+  if (check !== sig) return null;
+  const json = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+  if (json.exp && Date.now() > json.exp) return null;
+  return json; // { docId, companyId, exp }
+}
+--------------------------------
+Add to .env.local (if missing): DOCS_SIGN_SECRET="<random-long-secret>"
+
+3) FILE OPEN (INLINE VIEW + DIRECT)
+Update/ensure GET stream route with proper headers:
+File: app/api/files/route.ts (or [docId]/route.ts if you prefer per-id)
+- Support two modes:
+  a) Authenticated access: query ?id=<docId>; ensure RBAC (ADMIN or linked ACCOUNTANT); log AuditLog(action:'doc_open').
+  b) Signed access: query ?token=<signed>; call verifySignature(token) and bypass session check; log AuditLog with action:'doc_open' and meta:{ via:'signed' }.
+- Always stream the file with headers:
+  Content-Type: <doc.mime>
+  Content-Disposition: inline; filename="<doc.fileName>"
+- Return 404 only if not found.
+
+4) SHARE LINK ENDPOINT
+Create: app/api/documents/[docId]/share/route.ts
+- Method POST
+- Checks RBAC like open
+- Body: { ttlSeconds?: number } default 3600 (1 hour)
+- Build token = signPayload({ docId, companyId: doc.companyId, exp: Date.now() + ttl*1000 })
+- Return { url: `/api/files?token=${token}`, expiresAt }
+- Log AuditLog(action:'doc_share', meta:{ ttlSeconds })
+
+5) DELETE ENDPOINT (if missing)
+File: app/api/documents/[docId]/route.ts
+- Method DELETE
+- RBAC check; soft delete: prisma.document.update({ where:{id}, data:{ deletedAt: new Date() } })
+- Log AuditLog(action:'doc_delete', meta:{ docId })
+
+6) DOCUMENTS TAB UI (clients/[id]/DocumentsPanel.tsx)
+- Add buttons per row:
+  [Open] → opens modal with <iframe src={`/api/files?id=${doc.id}`}></iframe>
+  [Share] → POST /api/documents/${doc.id}/share (optional TTL input); show copyable link
+  [Delete] → DELETE /api/documents/${doc.id}; remove row
+- Add a right-side Drawer/Modal component:
+  - Header shows fileName + file size
+  - <iframe style={{width:'100%', height:'80vh'}} src={`/api/files?id=${doc.id}`} />
+  - Close button
+- On upload success, push new document into state (no full reload).
+
+7) RBAC GUARDS (reuse existing)
+- Only ADMIN or linked ACCOUNTANT can list/upload/delete/share/open.
+- For list queries, filter where: { companyId: params.id, deletedAt: null }
+
+8) AUDIT LOG WRITE HELPER
+Create: lib/audit.ts
+--------------------------------
+import { prisma } from './db';
+export async function logAudit(action: string, actorId?: string, companyId?: string, meta?: any) {
+  await prisma.auditLog.create({ data: { action, actorId: actorId || null, companyId: companyId || null, meta }});
+}
+--------------------------------
+- Call logAudit in upload, open, delete, share endpoints.
+
+9) ACCEPTANCE
+- Click a document → modal with inline PDF preview (no black screen).
+- “Share” returns a 1-hour link; opening it in Incognito streams the PDF.
+- “Delete” hides the row, no 500s.
+- Upload works; new doc appears; “Open” logs audit record.
+- Prisma shows saved AuditLog rows.
+
+10) COMMIT
+feat(company-docs): inline preview, signed share links, audit logging; fixed file headers

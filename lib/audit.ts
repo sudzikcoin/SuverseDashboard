@@ -15,3 +15,23 @@ export async function createAuditLog(
     },
   })
 }
+
+export async function logAudit(
+  action: string,
+  actorId?: string,
+  companyId?: string,
+  meta?: any
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action,
+        actorId: actorId || null,
+        companyId: companyId || null,
+        meta: meta || null,
+      },
+    })
+  } catch (error) {
+    console.error('Failed to create audit log:', error)
+  }
+}

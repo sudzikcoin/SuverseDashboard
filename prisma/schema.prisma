@@ -18,6 +18,8 @@ model User {
   companyId      String?
   company        Company?            @relation(fields: [companyId], references: [id])
   accountantClients AccountantClient[]
+  uploadedDocuments Document[]
+  auditLogs      AuditLog[]
 }
 
 model Company {
@@ -36,6 +38,7 @@ model Company {
   purchases     PurchaseOrder[]
   documents     Document[]
   holds         Hold[]
+  auditLogs     AuditLog[]
 }
 
 model AccountantClient {
@@ -110,7 +113,9 @@ model Document {
   sizeBytes    Int
   storagePath  String
   uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
+  deletedAt    DateTime?
   
   @@index([companyId])
 }
@@ -118,8 +123,15 @@ model Document {
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
+  companyId String?
   action    String
-  entity    String
+  entity    String?
   entityId  String?
+  meta      Json?
   createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
+  
+  @@index([companyId])
+  @@index([actorId])
 }
