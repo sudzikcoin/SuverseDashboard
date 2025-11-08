@@ -25,14 +25,14 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
 -   **Email**: Resend for transactional emails.
 -   **Audit Logging**: Tracks system activity.
--   **File Storage**: Dual-mode adapter for local development (`public/uploads/`) and S3-compatible production storage, with secure file serving and document management per client.
+-   **File Storage**: Private per-company document storage in `/uploads/{companyId}/` with RBAC-enforced access via API routes. Security includes path traversal protection (basename normalization), CRLF header injection prevention (control character filtering), and role-based access (ADMIN full, ACCOUNTANT via AccountantClient link, COMPANY self only).
 
 ### Feature Specifications
 -   **User Management**: Registration, login, and role-based access.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits.
 -   **Purchase Workflow**: Stripe checkout integration, purchase order creation, admin approval, and automated PDF generation.
 -   **Inventory Management**: Admin interface for CRUD operations on tax credit inventory.
--   **Accountant Features**: Client management and per-client document upload/management.
+-   **Accountant Features**: Client management via `/clients` page with per-company document upload/management through DocumentManager modal. Documents are stored in isolated company folders with RBAC access control enforced at the API level.
 -   **Reporting**: CSV exports for inventory and purchases, and Admin audit log viewer.
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
