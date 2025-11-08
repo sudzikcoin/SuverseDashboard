@@ -1,0 +1,45 @@
+REPLIT AI — ADD “DELETE” NEXT TO “OPEN” (ACTION-ONLY, NO CODE)
+
+GOAL
+Add a “Delete” button next to “Open” in the “Upload Compliance Documents” list. When clicked, it must:
+- call DELETE /api/files/{name},
+- remove the item from the list immediately on 204,
+- show a short confirmation prompt before deleting.
+Do not reload the page and do not change Auth/Prisma/Stripe/roles/theme.
+
+SCOPE — MODIFY ONLY
+- The React component that renders the “Upload Compliance Documents” list and actions.
+- If the DELETE endpoint does not exist yet: add it at app/api/files/[name]/route.(ts|js) with 204 on success. Otherwise, reuse the existing one.
+- Do NOT change other routes, providers, or database logic.
+
+UI REQUIREMENTS
+- In each row, render two actions aligned horizontally: [Open] [Delete]
+- “Open”: keep current behavior linking to /api/files/{name} in a new tab.
+- “Delete”: confirm(“Delete this file?”) → fetch(DELETE /api/files/{name}) → on status 204, remove the item from local state immediately.
+- Keep existing dark styling; use the project’s existing button classes if available. Labels must be English: “Open”, “Delete”.
+
+CLIENT LOGIC
+- Do NOT reload the page after deletion.
+- Do NOT refetch all files unless the local state is missing; prefer optimistic removal from state.
+- Preserve current upload logic; do not modify how files are added.
+
+SERVER (ONLY IF MISSING)
+- If DELETE /api/files/{name} does not exist:
+  - Implement minimal handler at app/api/files/[name]/route.(ts|js) that removes the file from /public/uploads and returns 204.
+  - Return 404 JSON if file not found.
+  - Do NOT change POST /api/upload or GET endpoints.
+
+DO NOT
+- Do not touch NextAuth, Prisma schema/migrations, roles, Stripe, .env, or theme tokens.
+- Do not refactor providers or add new dependencies.
+
+ACCEPTANCE CHECKLIST
+1) The list shows both “Open” and “Delete” for each file.
+2) Clicking “Delete” → confirm dialog → on OK the item disappears instantly; no full-page reload.
+3) Endpoint returns 204; reloading the page later does not show the deleted item.
+4) “Open” remains unchanged and opens the file in a new tab (inline if PDF).
+
+OUTPUT
+- Print the list of modified files (component file and optionally the DELETE route) with one-line summaries.
+- Single commit message:
+  docs: add Delete action next to Open; optimistic removal after DELETE 204 (no auth/DB changes)
