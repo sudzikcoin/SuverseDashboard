@@ -13,15 +13,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!session.user.companyId) {
-      return NextResponse.json(
-        { error: "Company not found" },
-        { status: 400 }
-      )
-    }
-
     const body = await req.json()
     const validated = createHoldSchema.parse(body)
+    
+    let { companyId } = body
+
+    if (session.user.role === "COMPANY") {
+      companyId = session.user.companyId
+    }
+
+    if (!companyId) {
+      return NextResponse.json({ error: "Company required" }, { status: 400 })
+    }
+
+    if (session.user.role === "ACCOUNTANT") {
+      const link = await prisma.accountantClient.findFirst({
+        where: { accountantId: session.user.id, companyId }
+      })
+      if (!link) {
+        return NextResponse.json({ error: "No access to this company" }, { status: 403 })
+      }
+    }
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } })
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 })
+    }
 
     const inventory = await prisma.creditInventory.findUnique({
       where: { id: validated.inventoryId },
@@ -54,7 +71,7 @@ export async function POST(req: Request) {
     const hold = await prisma.hold.create({
       data: {
         inventoryId: validated.inventoryId,
-        companyId: session.user.companyId,
+        companyId,
         amountUSD: validated.amountUSD,
         expiresAt,
       },
