@@ -1,0 +1,235 @@
+You are a senior Next.js + Prisma + NextAuth engineer working inside this repo. 
+Goal: (A) New accountant dashboards must not see companies from other accounts. 
+(B) Registration adds a required Name and shows “Welcome, {Name}”. 
+(C) All accountant views/APIs are filtered to only their linked companies. 
+(D) Provide a secure way to link an accountant to a company. 
+Stack: Next.js App Router, Prisma (PostgreSQL), NextAuth (credentials, JWT).
+
+Make the following edits exactly, then run the app and ensure it builds.
+
+───────────────────────────────────────────────
+1) PRISMA SCHEMA — add Name to User and enforce accountant-company link table
+───────────────────────────────────────────────
+Open prisma/schema.prisma and ensure we have:
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  COMPANY
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      Role
+  name      String?            // <-- added
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  accountantLinks AccountantClient[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  ein       String?  @unique
+  state     String?
+  email     String?
+  accountantLinks AccountantClient[]
+}
+
+model AccountantClient {
+  id           String @id @default(cuid())
+  accountantId String
+  companyId    String
+  accountant   User    @relation(fields: [accountantId], references: [id])
+  company      Company @relation(fields: [companyId], references: [id])
+  @@unique([accountantId, companyId])
+}
+
+Then run in console:
+npx prisma generate
+npx prisma db push
+
+───────────────────────────────────────────────
+2) STOP AUTO-SEEDING LINKS
+───────────────────────────────────────────────
+Open prisma/seed.ts (or any onboarding logic) and remove any code that auto-creates AccountantClient entries for new accountants. 
+New accountants must start with ZERO linked companies.
+
+───────────────────────────────────────────────
+3) REGISTRATION — add Name field and persist it
+───────────────────────────────────────────────
+Edit app/register/page.tsx and add:
+<label className="block">
+  <span className="text-sm">Name</span>
+  <input
+    name="name"
+    required
+    className="mt-1 w-full rounded-md px-3 py-2 bg-neutral-900 text-white"
+  />
+</label>
+
+Then edit app/api/auth/register/route.ts:
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import bcrypt from "bcryptjs";
+
+export async function POST(req: Request) {
+  const { email, password, name } = await req.json();
+  if (!email || !password || !name) {
+    return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
+  }
+  const hashed = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({
+    data: { email, password: hashed, name, role: "ACCOUNTANT" },
+    select: { id: true }
+  });
+  return NextResponse.json({ ok: true, userId: user.id });
+}
+
+───────────────────────────────────────────────
+4) NEXTAUTH — expose Name and Role to session and show Welcome, Name
+───────────────────────────────────────────────
+Open lib/auth.ts and modify callbacks:
+
+callbacks: {
+  async jwt({ token, user }) {
+    if (user) {
+      token.role = (user as any).role;
+      token.name = (user as any).name ?? token.name;
+    }
+    return token;
+  },
+  async session({ session, token }) {
+    (session.user as any).role = token.role;
+    (session.user as any).name = token.name ?? (session.user as any).name;
+    return session;
+  }
+}
+
+Then in components/Header.tsx:
+import { useSession } from "next-auth/react";
+export default function Header() {
+  const { data } = useSession();
+  const name = data?.user?.name;
+  const email = data?.user?.email;
+  return (
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-bold">
+        {`Welcome, ${name ? name : (email ?? "Guest")}`}
+      </h1>
+    </div>
+  );
+}
+
+───────────────────────────────────────────────
+5) ACCOUNTANT-SCOPED COMPANIES
+───────────────────────────────────────────────
+Create app/api/accountant/companies/route.ts:
+
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ companies: [] });
+
+  const role = (session.user as any).role;
+  if (role === "ADMIN") {
+    const companies = await prisma.company.findMany({ orderBy: { name: "asc" } });
+    return NextResponse.json({ companies });
+  }
+  if (role === "ACCOUNTANT") {
+    const links = await prisma.accountantClient.findMany({
+      where: { accountantId: (session.user as any).id ?? undefined },
+      include: { company: true }
+    });
+    return NextResponse.json({ companies: links.map(l => l.company) });
+  }
+  if (role === "COMPANY") {
+    const companyId = (session.user as any).companyId ?? "";
+    const company = companyId ? await prisma.company.findUnique({ where: { id: companyId }}) : null;
+    return NextResponse.json({ companies: company ? [company] : [] });
+  }
+  return NextResponse.json({ companies: [] });
+}
+
+Then in app/clients/page.tsx use:
+const res = await fetch("/api/accountant/companies", { cache: "no-store" });
+const { companies } = await res.json();
+
+───────────────────────────────────────────────
+6) SECURE LINK ENDPOINT (Admin Only)
+───────────────────────────────────────────────
+Create app/api/accountant/company/link/route.ts:
+
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    return NextResponse.json({ error: "Only admin can link" }, { status: 403 });
+  }
+  const { accountantId, companyId } = await req.json();
+  if (!accountantId || !companyId) {
+    return NextResponse.json({ error: "accountantId and companyId required" }, { status: 400 });
+  }
+  await prisma.accountantClient.upsert({
+    where: { accountantId_companyId: { accountantId, companyId } },
+    update: {},
+    create: { accountantId, companyId }
+  });
+  return NextResponse.json({ ok: true });
+}
+
+───────────────────────────────────────────────
+7) SECURE ALL API ACTIONS BY LINK VALIDATION
+───────────────────────────────────────────────
+In any API handling purchases, holds, or document uploads, add at the top:
+
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+const session = await getServerSession(authOptions);
+if (!session?.user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+
+const role = (session.user as any).role;
+const userId = (session.user as any).id;
+const { companyId } = await req.json().catch(() => ({}));
+
+if (role === "ACCOUNTANT") {
+  const link = await prisma.accountantClient.findFirst({
+    where: { accountantId: userId, companyId }
+  });
+  if (!link) return NextResponse.json({ error: "No access to this company" }, { status: 403 });
+}
+if (role === "COMPANY") {
+  const own = (session.user as any).companyId;
+  if (!own || own !== companyId) {
+    return NextResponse.json({ error: "No access" }, { status: 403 });
+  }
+}
+
+───────────────────────────────────────────────
+8) TESTING CHECKLIST
+───────────────────────────────────────────────
+✅ Register a new accountant → sees “Welcome, {Name}”  
+✅ /clients list is empty initially  
+✅ Link accountant to a company via POST /api/accountant/company/link → it appears  
+✅ Accountant sees only linked companies  
+✅ Other accountants’ companies are invisible  
+✅ Admin sees all  
+✅ Purchase / upload / reserve APIs blocked for unlinked companies  
+
+───────────────────────────────────────────────
+Commit message suggestion:
+fix(auth): isolate accountant data + add Name field to registration + show Welcome Name

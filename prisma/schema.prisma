@@ -39,6 +39,7 @@ model Company {
   documents     Document[]
   holds         Hold[]
   auditLogs     AuditLog[]
+  accountantLinks AccountantClient[]
 }
 
 model AccountantClient {
@@ -47,6 +48,7 @@ model AccountantClient {
   companyId    String
   createdAt    DateTime @default(now())
   accountant   User     @relation(fields: [accountantId], references: [id])
+  company      Company  @relation(fields: [companyId], references: [id])
 
   @@unique([accountantId, companyId])
 }
