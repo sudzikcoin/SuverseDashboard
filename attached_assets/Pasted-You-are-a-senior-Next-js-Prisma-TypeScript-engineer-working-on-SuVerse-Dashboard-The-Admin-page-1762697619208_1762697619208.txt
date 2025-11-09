@@ -1,0 +1,84 @@
+You are a senior Next.js + Prisma + TypeScript engineer working on SuVerse Dashboard. The Admin page (/admin) currently throws “Failed to fetch stats”. Fix it by removing the client fetch and loading all statistics server-side directly through Prisma with admin authentication. The goal: make /admin fully functional, server-rendered, and protected.
+
+Implement the following in ONE step:
+
+----------------------------------------------------------------
+✅ OVERWRITE FILE: app/admin/page.tsx
+
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+async function getStats() {
+  const safeCount = async (fn: (() => Promise<number>) | undefined) => {
+    try {
+      if (!fn) return 0;
+      return await fn();
+    } catch {
+      return 0;
+    }
+  };
+
+  const usersTotal = await safeCount(() => prisma.user.count());
+  const accountants = await safeCount(() =>
+    prisma.user.count({ where: { role: "ACCOUNTANT" as any } })
+  );
+  const companies = await safeCount(() => prisma.company.count());
+  const credits = await safeCount(() => (prisma as any).taxCredit?.count());
+  const purchaseOrders = await safeCount(() =>
+    (prisma as any).purchaseOrder?.count()
+  );
+
+  return { usersTotal, accountants, companies, credits, purchaseOrders };
+}
+
+export default async function AdminDashboard() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") {
+    redirect("/login");
+  }
+
+  const stats = await getStats();
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard title="Users (total)" value={stats.usersTotal} />
+        <StatCard title="Accountants" value={stats.accountants} />
+        <StatCard title="Companies" value={stats.companies} />
+        <StatCard title="Tax Credits" value={stats.credits} />
+        <StatCard title="Purchase Orders" value={stats.purchaseOrders} />
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value }: { title: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-[#0f1a2b] p-5 border border-white/10">
+      <div className="text-white/70 text-sm">{title}</div>
+      <div className="text-3xl font-semibold mt-1">{value}</div>
+    </div>
+  );
+}
+
+----------------------------------------------------------------
+✅ CLEANUP:
+- Remove any fetch("/api/admin/stats") or getStats() calls using fetch.
+- The page must no longer depend on any API route to get data.
+
+----------------------------------------------------------------
+✅ OPTIONAL (if exists):
+Keep `app/api/admin/stats/route.ts` only for future API integrations, but ensure `app/admin/page.tsx` no longer calls it.
+
+----------------------------------------------------------------
+✅ TEST:
+1. Login as ADMIN.
+2. Go to /admin — should show proper stats and no red error “Failed to fetch stats”.
+3. If a table (like purchaseOrder or taxCredit) doesn’t exist, it must show value “0” without crashing.
+4. If a non-admin tries to open /admin, they are redirected to /login.
+----------------------------------------------------------------
+
+This change makes the Admin Dashboard server-rendered, role-protected, and error-free.
