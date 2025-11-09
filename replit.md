@@ -40,6 +40,14 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
     - Marketplace actions (holds, purchases) restricted to linked companies only
     - Documents stored in isolated company folders with RBAC access control enforced at the API level
     - Auto-linking when accountant creates a new client company
+-   **Admin Panel**: 
+    - Triple-layer security: middleware.ts guards all /admin routes, app/admin/layout.tsx performs server-side session check, API routes validate ADMIN role
+    - Dashboard at /admin showing stats (users, companies, credits, purchases, accountants) and recent activity
+    - Accountant management at /admin/accountants with search, view linked companies, and link/unlink functionality
+    - Company management at /admin/companies with search and view linked accountants
+    - Inventory, purchases, and audit pages use shared server-side protected layout
+    - LinkManagementModal component for linking/unlinking accountants to companies (reuses /api/accountant/company/link endpoint)
+    - Runtime host detection in server components for environment-agnostic API fetching
 -   **Reporting**: CSV exports for inventory and purchases, and Admin audit log viewer.
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
