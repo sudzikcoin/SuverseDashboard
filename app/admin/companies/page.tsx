@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 
 interface Company {
   id: string
@@ -8,6 +9,7 @@ interface Company {
   ein: string | null
   state: string | null
   contactEmail: string
+  status: "ACTIVE" | "BLOCKED"
   createdAt: string
   accountantLinks: Array<{
     accountant: {
@@ -81,14 +83,26 @@ export default function CompaniesPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredCompanies.map((company) => (
-            <div
+            <Link
               key={company.id}
-              className="bg-su-card border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 transition"
+              href={`/admin/companies/${company.id}`}
+              className="block bg-su-card border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 transition cursor-pointer"
             >
               <div className="mb-4">
-                <h3 className="text-xl font-bold text-white">
-                  {company.legalName}
-                </h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xl font-bold text-white">
+                    {company.legalName}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      company.status === "ACTIVE"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-red-500/20 text-red-300"
+                    }`}
+                  >
+                    {company.status}
+                  </span>
+                </div>
                 <p className="text-sm text-su-muted">{company.contactEmail}</p>
                 <div className="flex gap-4 mt-2 text-xs text-su-muted">
                   <span>{company.state || "No state"}</span>
@@ -142,7 +156,7 @@ export default function CompaniesPage() {
                   </div>
                 )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

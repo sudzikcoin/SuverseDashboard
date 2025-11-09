@@ -1,0 +1,270 @@
+You are a senior Next.js (App Router) + Prisma + TypeScript engineer on SuVerse Dashboard. Implement full Admin Company Details with open-on-click, edit, block/unblock, and delete.
+
+ASSUMPTIONS
+- Next.js 14 App Router
+- Prisma Client exported from "@/lib/db"
+- NextAuth config exported from "@/lib/auth"
+- Admin Companies list lives at /admin/companies (cards already render)
+- Tailwind present
+
+============================================================
+1) PRISMA: add company status & archive support
+Open prisma/schema.prisma and update:
+
+enum CompanyStatus {
+  ACTIVE
+  BLOCKED
+}
+
+model Company {
+  id        String         @id @default(cuid())
+  name      String
+  state     String?
+  ein       String?        @unique
+  email     String?
+  status    CompanyStatus  @default(ACTIVE)   // <-- added
+  archivedAt DateTime?                         // <-- optional soft-delete
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // existing relations...
+  accountantLinks AccountantClient[]
+}
+
+- Then run:
+npx prisma generate
+npx prisma db push
+
+============================================================
+2) ADMIN-ONLY API for companies
+Create the following routes. All must verify ADMIN via getServerSession(authOptions).
+
+-- FILE: app/api/admin/companies/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function isAdmin(session:any){ return !!session && (session.user as any)?.role === "ADMIN"; }
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const companies = await prisma.company.findMany({
+    where: { archivedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  return NextResponse.json({ companies });
+}
+
+export async function POST(req:Request){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const { name, state, ein, email } = await req.json();
+  if(!name) return NextResponse.json({ error:"Name required" },{ status:400 });
+  const company = await prisma.company.create({ data: { name, state, ein, email } });
+  return NextResponse.json({ ok:true, company });
+}
+
+-- FILE: app/api/admin/companies/[id]/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function isAdmin(session:any){ return !!session && (session.user as any)?.role === "ADMIN"; }
+
+export async function GET(_req:Request,{ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const company = await prisma.company.findUnique({ where:{ id: params.id } });
+  if(!company) return NextResponse.json({ error:"Not found" },{ status:404 });
+  return NextResponse.json({ company });
+}
+
+export async function PUT(req:Request,{ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const { name, state, ein, email } = await req.json();
+  const company = await prisma.company.update({
+    where:{ id: params.id },
+    data: { name, state, ein, email },
+  });
+  return NextResponse.json({ ok:true, company });
+}
+
+export async function DELETE(_req:Request,{ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  await prisma.company.update({
+    where:{ id: params.id },
+    data: { archivedAt: new Date() }, // soft delete
+  });
+  return NextResponse.json({ ok:true });
+}
+
+-- FILE: app/api/admin/companies/[id]/block/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function isAdmin(session:any){ return !!session && (session.user as any)?.role === "ADMIN"; }
+
+export async function POST(_req:Request,{ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const company = await prisma.company.update({
+    where:{ id: params.id },
+    data: { status: "BLOCKED" },
+  });
+  return NextResponse.json({ ok:true, company });
+}
+
+-- FILE: app/api/admin/companies/[id]/unblock/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function isAdmin(session:any){ return !!session && (session.user as any)?.role === "ADMIN"; }
+
+export async function POST(_req:Request,{ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error:"Unauthorized" },{ status:401 });
+  const company = await prisma.company.update({
+    where:{ id: params.id },
+    data: { status: "ACTIVE" },
+  });
+  return NextResponse.json({ ok:true, company });
+}
+
+============================================================
+3) Make cards clickable → open details
+Open the Admin companies list component (e.g., app/admin/companies/page.tsx or the component that renders the cards). Wrap each card with a Link to /admin/companies/[id].
+
+Example change inside the map():
+import Link from "next/link";
+...
+<Link href={`/admin/companies/${c.id}`} className="block rounded-2xl border border-emerald-700/40 bg-[#0f1a2b] p-5 hover:bg-[#112039] transition">
+  {/* keep existing card content */}
+</Link>
+
+============================================================
+4) Details page with edit form & actions
+Create server page + client form component.
+
+-- FILE: app/admin/companies/[id]/page.tsx
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+import CompanyEditor from "./CompanyEditor";
+
+export default async function CompanyPage({ params }:{ params:{ id:string } }){
+  const session = await getServerSession(authOptions);
+  if(!session || (session.user as any)?.role !== "ADMIN") redirect("/login");
+  const company = await prisma.company.findUnique({ where:{ id: params.id } });
+  if(!company) redirect("/admin/companies");
+  return <CompanyEditor initial={company} />;
+}
+
+-- FILE: app/admin/companies/[id]/CompanyEditor.tsx
+"use client";
+import * as React from "react";
+import { useRouter } from "next/navigation";
+
+export default function CompanyEditor({ initial }:{ initial:any }){
+  const router = useRouter();
+  const [saving, setSaving] = React.useState(false);
+  const [form, setForm] = React.useState({
+    name: initial.name || "",
+    state: initial.state || "",
+    ein: initial.ein || "",
+    email: initial.email || "",
+    status: initial.status as "ACTIVE" | "BLOCKED",
+  });
+
+  async function save(){
+    setSaving(true);
+    const res = await fetch(`/api/admin/companies/${initial.id}`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(form)
+    });
+    setSaving(false);
+    if(!res.ok){ alert("Save failed"); return; }
+    router.refresh();
+  }
+
+  async function block(){
+    const res = await fetch(`/api/admin/companies/${initial.id}/block`,{ method:"POST" });
+    if(!res.ok){ alert("Block failed"); return; }
+    router.refresh();
+  }
+  async function unblock(){
+    const res = await fetch(`/api/admin/companies/${initial.id}/unblock`,{ method:"POST" });
+    if(!res.ok){ alert("Unblock failed"); return; }
+    router.refresh();
+  }
+  async function remove(){
+    if(!confirm("Delete (archive) this company?")) return;
+    const res = await fetch(`/api/admin/companies/${initial.id}`,{ method:"DELETE" });
+    if(!res.ok){ alert("Delete failed"); return; }
+    router.push("/admin/companies");
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Company: {initial.name}</h1>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${form.status==="ACTIVE" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-300"}`}>
+          {form.status}
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <label className="flex flex-col text-sm">Name
+          <input className="mt-1 rounded-md bg-black/30 p-2" value={form.name} onChange={e=>setForm(f=>({ ...f, name:e.target.value }))} />
+        </label>
+        <label className="flex flex-col text-sm">State
+          <input className="mt-1 rounded-md bg-black/30 p-2" value={form.state} onChange={e=>setForm(f=>({ ...f, state:e.target.value }))} />
+        </label>
+        <label className="flex flex-col text-sm">EIN
+          <input className="mt-1 rounded-md bg-black/30 p-2" value={form.ein} onChange={e=>setForm(f=>({ ...f, ein:e.target.value }))} />
+        </label>
+        <label className="flex flex-col text-sm">Contact Email
+          <input type="email" className="mt-1 rounded-md bg-black/30 p-2" value={form.email} onChange={e=>setForm(f=>({ ...f, email:e.target.value }))} />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button onClick={save} disabled={saving} className="px-4 py-2 rounded-md bg-emerald-500 text-black font-semibold">
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+        {form.status === "ACTIVE" ? (
+          <button onClick={block} className="px-4 py-2 rounded-md bg-red-500/80 text-black font-semibold">Block</button>
+        ) : (
+          <button onClick={unblock} className="px-4 py-2 rounded-md bg-emerald-600 text-black font-semibold">Unblock</button>
+        )}
+        <button onClick={remove} className="px-4 py-2 rounded-md bg-white/10">Delete (Archive)</button>
+      </div>
+    </div>
+  );
+}
+
+============================================================
+5) SECURITY
+- All server pages use getServerSession + role check (ADMIN) and redirect to /login if not authorized.
+- All API routes return 401 for non-ADMIN.
+
+============================================================
+6) TEST PLAN
+1) Login as ADMIN → /admin/companies shows list. Clicking a card opens /admin/companies/[id].
+2) Edit fields → “Save changes” → values persist after refresh.
+3) Click “Block” → status becomes BLOCKED; company should be blocked for accountant flows if you already enforce status elsewhere (optional future guard).
+4) Click “Unblock” → returns to ACTIVE.
+5) Click “Delete (Archive)” → returns to list; company removed (archivedAt set).
+6) Non-ADMIN role calling these endpoints gets 401.
+
+This completes: clickable company cards, edit, block/unblock, and delete from Admin.
