@@ -1,0 +1,215 @@
+You are a senior Next.js + Prisma + NextAuth engineer.
+
+GOAL:  
+(A) Allow ADMIN to reset/set company passwords directly inside Admin → Companies → Company Details.  
+(B) Send an automatic welcome email on new Accountant or Company registration.  
+Keep RBAC strict (ADMIN-only for password API). Use bcrypt for hashing. Use Resend (fallback SMTP) for email delivery.
+
+=====================================================
+1) PRISMA — verify schema and push updates
+-----------------------------------------------------
+File: prisma/schema.prisma
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  COMPANY
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  role       Role
+  name       String?
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  state     String?
+  ein       String?  @unique
+  email     String?
+  status    String?  @default("ACTIVE")
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+Run these commands:
+npx prisma generate
+npx prisma db push
+
+=====================================================
+2) ADMIN API — Reset company password
+-----------------------------------------------------
+File: app/api/admin/companies/[id]/password/route.ts
+
+import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { newPassword } = await req.json();
+  if (!newPassword || newPassword.length < 8) {
+    return NextResponse.json({ error: "Password must be at least 8 chars" }, { status: 400 });
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { companyId: params.id, role: "COMPANY" }
+  });
+  if (!user) return NextResponse.json({ error: "Company user not found" }, { status: 404 });
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
+
+  return NextResponse.json({ ok: true });
+}
+
+=====================================================
+3) FRONTEND — Add password editor to Admin Company Page
+-----------------------------------------------------
+Inside app/admin/companies/[id]/page.tsx (below your company form):
+
+"use client";
+import { useState } from "react";
+
+export function AdminSetCompanyPassword({ companyId }: { companyId: string }) {
+  const [pwd, setPwd] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function submit() {
+    setBusy(true); setMsg(null);
+    const res = await fetch(`/api/admin/companies/${companyId}/password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: pwd })
+    });
+    const data = await res.json();
+    setBusy(false);
+    setMsg(res.ok ? "Password updated" : data.error ?? "Error");
+    if (res.ok) setPwd("");
+  }
+
+  return (
+    <div className="mt-6 rounded-lg border border-slate-700 p-4">
+      <h3 className="text-lg font-semibold mb-2">Set / Reset Company Password</h3>
+      <div className="flex gap-3">
+        <input
+          type="password"
+          value={pwd}
+          onChange={(e) => setPwd(e.target.value)}
+          placeholder="New password (min 8 chars)"
+          className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2"
+        />
+        <button
+          onClick={submit}
+          disabled={busy || pwd.length < 8}
+          className="rounded-md bg-emerald-500 px-4 py-2 font-medium disabled:opacity-60"
+        >
+          {busy ? "Saving..." : "Save"}
+        </button>
+      </div>
+      {msg && <p className="mt-2 text-sm opacity-80">{msg}</p>}
+    </div>
+  );
+}
+
+Then in your page component after fetching company data:
+<AdminSetCompanyPassword companyId={company.id} />
+
+=====================================================
+4) EMAIL — Setup Resend or SMTP
+-----------------------------------------------------
+Add to Replit Secrets (.env):
+
+RESEND_API_KEY=your_resend_key
+EMAIL_FROM="SuVerse <no-reply@suverse.io>"
+
+# Optional SMTP fallback:
+SMTP_HOST=smtp.yourhost.com
+SMTP_PORT=587
+SMTP_USER=username
+SMTP_PASS=password
+
+Create lib/mail.ts:
+
+import { Resend } from "resend";
+import nodemailer from "nodemailer";
+
+const resendKey = process.env.RESEND_API_KEY;
+
+export async function sendMail(to: string, subject: string, html: string) {
+  if (resendKey) {
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM || "no-reply@suverse.io",
+      to, subject, html,
+    });
+    return;
+  }
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: false,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || "no-reply@suverse.io",
+    to, subject, html,
+  });
+}
+
+=====================================================
+5) EMAIL — Send on registration
+-----------------------------------------------------
+In app/api/auth/register-company/route.ts add after successful prisma.create:
+
+import { sendMail } from "@/lib/mail";
+
+await sendMail(
+  email,
+  "Welcome to SuVerse — Company Dashboard",
+  `
+  <div style="font-family:Inter,system-ui,sans-serif">
+    <h2>Welcome to SuVerse!</h2>
+    <p>Your company account has been created.</p>
+    <p><b>Email:</b> ${email}</p>
+    <p>You can now sign in at: <a href="${process.env.NEXTAUTH_URL ?? ""}/login">${process.env.NEXTAUTH_URL ?? ""}/login</a></p>
+  </div>`
+);
+
+Do the same in app/api/auth/register-accountant/route.ts with text “Accountant Dashboard”.
+
+=====================================================
+6) NEXTAUTH SETTINGS
+-----------------------------------------------------
+Replit Secrets:
+NEXTAUTH_URL=https://<your-repl>.replit.dev
+NEXTAUTH_SECRET=suverse_nextauth_secret_123456789abcdef
+
+=====================================================
+7) TEST CHECKLIST
+-----------------------------------------------------
+✅ Register Company → receives welcome email  
+✅ Register Accountant → receives welcome email  
+✅ Admin can open company card and reset password  
+✅ Company can login with new password  
+✅ Non-admin users blocked from password API (403)  
+✅ Prisma schema pushes successfully  
+✅ Emails send via Resend or SMTP  
+
+=====================================================
+DONE — full implementation for password management + email notifications for SuVerse Dashboard.
