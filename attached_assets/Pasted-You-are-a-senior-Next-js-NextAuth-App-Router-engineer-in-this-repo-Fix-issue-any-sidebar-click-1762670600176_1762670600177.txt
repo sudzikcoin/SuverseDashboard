@@ -1,0 +1,173 @@
+You are a senior Next.js + NextAuth (App Router) engineer in this repo.
+Fix issue: any sidebar click redirects to /login even when already signed in. Root cause is missing/incorrect NextAuth env and/or overzealous middleware. Normalize auth config and middleware.
+
+Apply all steps exactly:
+
+──────────────────────────────────────────────────────────────────────────────
+0) ENV — Replit → Tools → Secrets
+Add or update:
+- NEXTAUTH_URL="https://<your-repl-domain>.repl.co"
+- NEXTAUTH_SECRET="suverse_nextauth_secret_5b7c1d2a9e1a4f0c3e6d8f2a1c9b7e3d"  (32+ chars)
+(Keep your existing SESSION_SECRET if used elsewhere.)
+Optional but recommended:
+- NEXT_PUBLIC_APP_URL="https://<your-repl-domain>.repl.co"
+
+──────────────────────────────────────────────────────────────────────────────
+1) Unify NextAuth options
+Open/replace lib/auth.ts with:
+
+import NextAuth, { NextAuthOptions } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { compare } from "bcryptjs";
+import { prisma } from "@/lib/db";
+
+export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
+  session: { strategy: "jwt" },
+  providers: [
+    Credentials({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(creds) {
+        if (!creds?.email || !creds?.password) return null;
+        const user = await prisma.user.findUnique({ where: { email: creds.email }});
+        if (!user) return null;
+        const ok = await compare(creds.password, user.password);
+        if (!ok) return null;
+        return { id: user.id, email: user.email, role: user.role, name: user.name ?? null };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as any).role;
+        token.name = (user as any).name ?? token.name ?? null;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      (session.user as any).role = (token as any).role;
+      (session.user as any).name = token.name ?? (session.user as any).name ?? null;
+      return session;
+    },
+  },
+  pages: {
+    signIn: "/login",
+  },
+};
+
+export default authOptions;
+
+If you already have NextAuth route handlers: ensure they import this `authOptions`.
+
+Example handler (keep your existing file, just ensure import):
+// app/api/auth/[...nextauth]/route.ts
+import NextAuth from "next-auth";
+import authOptions from "@/lib/auth";
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
+
+──────────────────────────────────────────────────────────────────────────────
+2) Middleware — protect only real private routes
+Create/replace middleware.ts at repo root:
+
+import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import type { NextRequest } from "next/server";
+
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/register",
+  "/api/auth",          // NextAuth internal
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/_next",             // Next.js assets
+  "/images",
+  "/static",
+];
+
+function isPublic(pathname: string) {
+  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p));
+}
+
+// Any route starting with these must be authenticated
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/clients",
+  "/marketplace",
+  "/company",
+  "/accountant",
+  "/admin",
+  "/pay",
+];
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Always allow public paths
+  if (isPublic(pathname)) return NextResponse.next();
+
+  // Only guard configured private prefixes
+  const needsAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  if (!needsAuth) return NextResponse.next();
+
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) {
+    const url = new URL("/login", req.url);
+    url.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // Role-gated admin area
+  if (pathname.startsWith("/admin")) {
+    if ((token as any).role !== "ADMIN") {
+      const url = new URL("/dashboard", req.url);
+      return NextResponse.redirect(url);
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    "/((?!api/health).*)" // let /api/health pass if you have it
+  ],
+};
+
+Notes:
+- We do NOT apply middleware to NextAuth API (handled by isPublic).
+- We allow assets and public pages.
+- We only guard the listed prefixes, preventing accidental redirects elsewhere.
+
+──────────────────────────────────────────────────────────────────────────────
+3) Server components / route guards
+Search your app for server-side guards like:
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+Ensure they are used only on truly private pages. For public pages (e.g., landing), remove such redirects.
+
+On admin pages (e.g., app/admin/*), keep:
+  if ((session.user as any)?.role !== "ADMIN") redirect("/dashboard");
+
+──────────────────────────────────────────────────────────────────────────────
+4) Client navigation
+If any Link components manually push to /login on error, remove that logic. Use:
+  import Link from "next/link";
+  <Link href="/admin">Admin</Link>
+Next.js will carry cookies; no extra fetch needed.
+
+──────────────────────────────────────────────────────────────────────────────
+5) Smoke test checklist
+- Log in as ADMIN → click Accountants / Companies / Inventory / Purchase Orders / Audit Log → stays in the section, no redirect to /login.
+- Open a private route in a fresh incognito tab (no cookies) → redirected to /login with callbackUrl param, after login you’re returned back.
+- Log in as ACCOUNTANT → /admin redirects to /dashboard.
+- Remove NEXTAUTH_SECRET temporarily → middleware cannot validate token → every protected page redirects (expected). Restore key.
+
+Return “DONE” when complete.
