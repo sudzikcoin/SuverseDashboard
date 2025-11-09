@@ -19,9 +19,9 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 ### Technical Implementations
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.
 -   **Backend**: Next.js API Routes for server-side logic.
--   **Authentication**: NextAuth.js with three roles (Company, Accountant, Admin) and Role-Based Access Control (RBAC).
+-   **Authentication**: NextAuth.js with three roles (Company, Accountant, Admin) and Role-Based Access Control (RBAC). JWT-based sessions with NEXTAUTH_SECRET encryption. Public paths (/, /login, /register, /api/auth, static assets) excluded from middleware checks.
 -   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company`, `CreditInventory`, `Hold`, `PurchaseOrder`, `Document`, `AuditLog`, and `AccountantClient` models.
--   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification.
+-   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects specific route prefixes (/dashboard, /clients, /marketplace, /company, /accountant, /admin, /pay) with JWT token validation.
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
 -   **Email**: Resend for transactional emails.
 -   **Audit Logging**: Tracks system activity.
