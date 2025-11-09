@@ -31,7 +31,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
 -   **Purchase Workflow**: Stripe checkout integration, purchase order creation, admin approval, and automated PDF generation.
--   **Inventory Management**: Admin interface for CRUD operations on tax credit inventory.
+-   **Inventory Management**: Full-featured admin interface at /admin/inventory for CRUD operations on tax credit inventory. Server-rendered page with modal-based create/edit forms, inline delete with confirmation, and audit logging for all operations.
 -   **Accountant Features**: 
     - Zero-trust isolation: new accountants start with zero company access
     - Admin-controlled linking via `/api/accountant/company/link` (POST/DELETE)
@@ -42,11 +42,12 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
     - Auto-linking when accountant creates a new client company
 -   **Admin Panel**: 
     - Triple-layer security: middleware.ts guards all /admin routes, app/admin/layout.tsx performs server-side session check, API routes validate ADMIN role
-    - Dashboard at /admin showing stats (users, companies, credits, purchases, accountants) and recent activity
+    - Dashboard at /admin showing stats (users, companies, credits, purchases, accountants) and recent activity (server-rendered with direct Prisma queries)
     - Accountant management at /admin/accountants with search, view linked companies, and link/unlink functionality
     - Company management at /admin/companies with search and view linked accountants
-    - Inventory, purchases, and audit pages use shared server-side protected layout
-    - LinkManagementModal component for linking/unlinking accountants to companies (reuses /api/accountant/company/link endpoint)
+    - Inventory management at /admin/inventory with full CRUD (create, edit, delete) for tax credits via modal interface
+    - Purchase order management and audit log viewer use shared server-side protected layout
+    - LinkManagementModal and CreditFormModal components for managing accountant-company links and tax credit inventory
     - Runtime host detection in server components for environment-agnostic API fetching
 -   **Reporting**: CSV exports for inventory and purchases, and Admin audit log viewer.
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.

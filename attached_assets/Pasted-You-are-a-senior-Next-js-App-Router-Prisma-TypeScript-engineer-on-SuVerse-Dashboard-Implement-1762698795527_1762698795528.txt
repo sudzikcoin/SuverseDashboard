@@ -1,0 +1,308 @@
+You are a senior Next.js (App Router) + Prisma + TypeScript engineer on SuVerse Dashboard. Implement full Admin Inventory management for Tax Credits: create, edit, delete from /admin/inventory with ADMIN-only access. Do all steps below exactly.
+
+STACK ASSUMPTIONS
+- Next.js 14 App Router, Prisma Client in "@/lib/db", NextAuth config in "@/lib/auth".
+- Existing Admin sidebar "/admin/inventory" that lists credits as cards.
+- If a model or file is missing, create it.
+
+============================================================
+1) PRISMA MODEL (ensure it exists)
+- Open prisma/schema.prisma and add/update:
+
+enum CreditStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model TaxCredit {
+  id          String       @id @default(cuid())
+  code        String       // e.g. "C48E 2025"
+  year        Int
+  faceValue   Int          // total issuance face value in USD (cents ok if you already use cents)
+  available   Int          // remaining face value available
+  minBlock    Int          // minimum face value purchase block
+  price       Decimal      @db.Decimal(6,2) // price per $1 of face value (e.g., 0.89)
+  status      CreditStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+- Run:
+npx prisma generate
+npx prisma db push
+(Do NOT drop existing data.)
+
+============================================================
+2) ADMIN-ONLY API ROUTES
+Create these files. Every handler must verify ADMIN role via getServerSession.
+
+-- CREATE FILE: app/api/admin/credits/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function asInt(v: any) { return Number.isFinite(v) ? v : parseInt(String(v||0),10) || 0 }
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const credits = await prisma.taxCredit.findMany({ orderBy: { createdAt: "desc" } });
+  return NextResponse.json({ credits });
+}
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await req.json();
+  const data = {
+    code: String(body.code || "").trim(),
+    year: asInt(body.year),
+    faceValue: asInt(body.faceValue),
+    available: asInt(body.available),
+    minBlock: asInt(body.minBlock),
+    price: body.price ? Number(body.price) : 0.0,
+    status: (body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE") as any,
+  };
+  if (!data.code || !data.year) return NextResponse.json({ error: "code/year required" }, { status: 400 });
+  const created = await prisma.taxCredit.create({ data });
+  return NextResponse.json({ ok: true, credit: created });
+}
+
+-- CREATE FILE: app/api/admin/credits/[id]/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function asInt(v: any) { return Number.isFinite(v) ? v : parseInt(String(v||0),10) || 0 }
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await req.json();
+  const data: any = {};
+  if (body.code !== undefined) data.code = String(body.code).trim();
+  if (body.year !== undefined) data.year = asInt(body.year);
+  if (body.faceValue !== undefined) data.faceValue = asInt(body.faceValue);
+  if (body.available !== undefined) data.available = asInt(body.available);
+  if (body.minBlock !== undefined) data.minBlock = asInt(body.minBlock);
+  if (body.price !== undefined) data.price = Number(body.price);
+  if (body.status !== undefined) data.status = body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+  const updated = await prisma.taxCredit.update({ where: { id: params.id }, data });
+  return NextResponse.json({ ok: true, credit: updated });
+}
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await prisma.taxCredit.delete({ where: { id: params.id } });
+  return NextResponse.json({ ok: true });
+}
+
+============================================================
+3) ADMIN INVENTORY UI (Create/Edit modal)
+Add a client component used by /admin/inventory to open a modal for create or edit.
+
+-- CREATE FILE: components/admin/CreditFormModal.tsx
+"use client";
+import * as React from "react";
+
+type Credit = {
+  id?: string;
+  code: string;
+  year: number | string;
+  faceValue: number | string;
+  available: number | string;
+  minBlock: number | string;
+  price: number | string;
+  status: "ACTIVE" | "INACTIVE";
+};
+
+export default function CreditFormModal({
+  open, onClose, initial, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initial?: Partial<Credit>;
+  onSaved?: () => void;
+}) {
+  const [loading, setLoading] = React.useState(false);
+  const [form, setForm] = React.useState<Credit>({
+    id: initial?.id,
+    code: initial?.code || "",
+    year: initial?.year ?? "",
+    faceValue: initial?.faceValue ?? "",
+    available: initial?.available ?? "",
+    minBlock: initial?.minBlock ?? "",
+    price: initial?.price ?? "",
+    status: (initial?.status as any) || "ACTIVE",
+  });
+  React.useEffect(() => {
+    setForm({
+      id: initial?.id,
+      code: initial?.code || "",
+      year: initial?.year ?? "",
+      faceValue: initial?.faceValue ?? "",
+      available: initial?.available ?? "",
+      minBlock: initial?.minBlock ?? "",
+      price: initial?.price ?? "",
+      status: (initial?.status as any) || "ACTIVE",
+    });
+  }, [initial, open]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    const payload = {
+      code: form.code,
+      year: Number(form.year),
+      faceValue: Number(form.faceValue),
+      available: Number(form.available),
+      minBlock: Number(form.minBlock),
+      price: Number(form.price),
+      status: form.status,
+    };
+    const res = await fetch(form.id ? `/api/admin/credits/${form.id}` : "/api/admin/credits", {
+      method: form.id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setLoading(false);
+    if (!res.ok) { alert("Save failed"); return; }
+    onSaved?.();
+    onClose();
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/60">
+      <form onSubmit={handleSubmit} className="w-[92vw] max-w-xl rounded-xl bg-[#0f1a2b] p-6 border border-white/10">
+        <h3 className="text-xl font-semibold mb-4">{form.id ? "Edit Tax Credit" : "Create Tax Credit"}</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex flex-col text-sm">Code
+            <input className="mt-1 rounded-md bg-black/30 p-2" value={form.code} onChange={e=>setForm(f=>({ ...f, code: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Year
+            <input type="number" className="mt-1 rounded-md bg-black/30 p-2" value={form.year} onChange={e=>setForm(f=>({ ...f, year: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Face Value ($)
+            <input type="number" className="mt-1 rounded-md bg-black/30 p-2" value={form.faceValue} onChange={e=>setForm(f=>({ ...f, faceValue: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Available ($)
+            <input type="number" className="mt-1 rounded-md bg-black/30 p-2" value={form.available} onChange={e=>setForm(f=>({ ...f, available: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Min Block ($)
+            <input type="number" className="mt-1 rounded-md bg-black/30 p-2" value={form.minBlock} onChange={e=>setForm(f=>({ ...f, minBlock: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Price per $1
+            <input type="number" step="0.01" className="mt-1 rounded-md bg-black/30 p-2" value={form.price} onChange={e=>setForm(f=>({ ...f, price: e.target.value }))} required />
+          </label>
+          <label className="flex flex-col text-sm">Status
+            <select className="mt-1 rounded-md bg-black/30 p-2" value={form.status} onChange={e=>setForm(f=>({ ...f, status: e.target.value as any }))}>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-5 flex gap-3 justify-end">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-white/10">Cancel</button>
+          <button disabled={loading} className="px-4 py-2 rounded-md bg-emerald-500 text-black font-semibold">
+            {loading ? "Saving..." : (form.id ? "Save changes" : "Create")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+============================================================
+4) WIRE UP UI ON /admin/inventory
+Open app/admin/inventory/page.tsx and:
+- Render a “New Credit” button that opens the modal with empty initial.
+- Add “Edit” and “Delete” buttons to each card. After any action, refresh the page (router.refresh()).
+
+If the file is server component, create a small client wrapper.
+
+-- CREATE FILE: app/admin/inventory/InventoryClient.tsx
+"use client";
+import * as React from "react";
+import CreditFormModal from "@/components/admin/CreditFormModal";
+import { useRouter } from "next/navigation";
+
+export default function InventoryClient({ credits }: { credits: any[] }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<any|null>(null);
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this credit?")) return;
+    const res = await fetch(`/api/admin/credits/${id}`, { method: "DELETE" });
+    if (!res.ok) { alert("Delete failed"); return; }
+    router.refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Inventory Management</h1>
+        <button onClick={()=>{ setEditing(null); setOpen(true); }} className="px-4 py-2 rounded-md bg-emerald-500 text-black font-semibold">New Credit</button>
+      </div>
+
+      <div className="grid gap-4">
+        {credits.map(c => (
+          <div key={c.id} className="rounded-2xl bg-[#0f1a2b] p-5 border border-white/10">
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-semibold">{c.code}</div>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${c.status==="ACTIVE" ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-white/70"}`}>{c.status}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm text-white/80">
+              <div><div className="text-white/60">Face Value</div>${c.faceValue.toLocaleString()}</div>
+              <div><div className="text-white/60">Available</div>${c.available.toLocaleString()}</div>
+              <div><div className="text-white/60">Min Block</div>${c.minBlock.toLocaleString()}</div>
+              <div><div className="text-white/60">Price</div>${Number(c.price).toFixed(2)} per $1</div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={()=>{ setEditing(c); setOpen(true); }} className="px-3 py-2 rounded-md bg-white/10">Edit</button>
+              <button onClick={()=>handleDelete(c.id)} className="px-3 py-2 rounded-md bg-red-500/80 text-black font-semibold">Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <CreditFormModal
+        open={open}
+        initial={editing ?? undefined}
+        onClose={()=>setOpen(false)}
+        onSaved={()=>router.refresh()}
+      />
+    </div>
+  );
+}
+
+-- OVERWRITE FILE: app/admin/inventory/page.tsx (server component)
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+import InventoryClient from "./InventoryClient";
+
+export default async function InventoryPage() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "ADMIN") redirect("/login");
+  const credits = await prisma.taxCredit.findMany({ orderBy: { createdAt: "desc" } });
+  return <InventoryClient credits={credits} />;
+}
+
+============================================================
+5) SECURITY
+- No changes to middleware are required if pages call getServerSession and redirect non-ADMIN to /login. Ensure existing middleware doesn’t block API when logged as ADMIN.
+
+============================================================
+6) TEST PLAN
+1) Login as ADMIN → open /admin/inventory.
+2) Click “New Credit”, fill form (code: C48E 2025, year: 2025, faceValue: 300000, available: 285000, minBlock: 5000, price: 0.89, status: ACTIVE) → Create → card appears.
+3) Click “Edit”, change price or availability → Save → card updates.
+4) Click “Delete” → confirm → card disappears.
+5) Try same endpoints as non-ADMIN → should return 401.
+6) Refresh page: list comes from DB.
+
+This completes full create/edit/delete of tax credit cards from Admin.
