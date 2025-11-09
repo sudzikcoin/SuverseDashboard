@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { registerSchema } from "@/lib/validations"
 import { createAuditLog } from "@/lib/audit"
+import { sendWelcomeEmail } from "@/lib/email"
 
 export async function POST(req: Request) {
   try {
@@ -61,6 +62,16 @@ export async function POST(req: Request) {
     }
 
     await createAuditLog(user.id, "CREATE", "User", user.id)
+
+    if (validated.role === "COMPANY" || validated.role === "ACCOUNTANT") {
+      await sendWelcomeEmail(
+        validated.email,
+        validated.role as "COMPANY" | "ACCOUNTANT",
+        validated.name
+      ).catch((err) => {
+        console.error("Failed to send welcome email:", err)
+      })
+    }
 
     return NextResponse.json({
       user: {
