@@ -14,6 +14,9 @@ export default function CompanyEditor({ initial }: { initial: any }) {
     contactEmail: initial.contactEmail || "",
     status: initial.status as "ACTIVE" | "BLOCKED",
   })
+  const [password, setPassword] = React.useState("")
+  const [pwdSaving, setPwdSaving] = React.useState(false)
+  const [pwdMessage, setPwdMessage] = React.useState<string | null>(null)
 
   async function save() {
     setSaving(true)
@@ -65,6 +68,20 @@ export default function CompanyEditor({ initial }: { initial: any }) {
       return
     }
     router.push("/admin/companies")
+  }
+
+  async function resetPassword() {
+    setPwdSaving(true)
+    setPwdMessage(null)
+    const res = await fetch(`/api/admin/companies/${initial.id}/password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: password }),
+    })
+    const data = await res.json()
+    setPwdSaving(false)
+    setPwdMessage(res.ok ? "Password updated successfully" : data.error ?? "Error updating password")
+    if (res.ok) setPassword("")
   }
 
   return (
@@ -195,6 +212,44 @@ export default function CompanyEditor({ initial }: { initial: any }) {
               Archive Company
             </button>
           </div>
+        </div>
+
+        {/* Password Reset */}
+        <div className="bg-su-card border border-white/10 rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-white mb-4">
+            Reset Company Password
+          </h2>
+          <p className="text-sm text-su-muted mb-4">
+            Reset the password for the company user account. This will allow the
+            company to login with a new password.
+          </p>
+          <div className="flex gap-3">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="New password (min 8 characters)"
+              className="flex-1 rounded-md bg-black/30 text-white p-2.5 border border-white/10 focus:border-emerald-500 outline-none"
+            />
+            <button
+              onClick={resetPassword}
+              disabled={pwdSaving || password.length < 8}
+              className="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-black font-semibold transition disabled:opacity-50"
+            >
+              {pwdSaving ? "Saving..." : "Reset Password"}
+            </button>
+          </div>
+          {pwdMessage && (
+            <p
+              className={`mt-3 text-sm ${
+                pwdMessage.includes("successfully")
+                  ? "text-emerald-400"
+                  : "text-red-400"
+              }`}
+            >
+              {pwdMessage}
+            </p>
+          )}
         </div>
 
         {/* Linked Accountants */}
