@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import RequireRole from "@/components/auth/RequireRole"
 
 interface AuditLog {
   id: string
@@ -45,9 +44,8 @@ export default function AuditLogPage() {
   })
 
   return (
-    <RequireRole roles={["ADMIN"]}>
-      <div className="min-h-screen bg-[#0B1220] p-6">
-        <div className="max-w-7xl mx-auto">
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-100">Audit Log</h1>
             <p className="text-gray-400 mt-1">System activity tracking and monitoring</p>
@@ -134,6 +132,5 @@ export default function AuditLogPage() {
           </div>
         </div>
       </div>
-    </RequireRole>
   )
 }

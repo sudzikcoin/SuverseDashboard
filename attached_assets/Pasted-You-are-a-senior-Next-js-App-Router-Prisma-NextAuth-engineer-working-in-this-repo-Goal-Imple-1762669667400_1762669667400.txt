@@ -1,0 +1,96 @@
+You are a senior Next.js (App Router) + Prisma + NextAuth engineer working in this repo.
+Goal: Implement a full ADMIN panel with sections (Accountants, Companies, Credits, Audit), add a “Link accountant to company” flow, protect all /admin routes with ADMIN-only middleware, and wire audit logging. Keep existing features intact (Accountant/Company dashboards, Marketplace, Documents).
+
+Follow ALL steps exactly, in order.
+
+──────────────────────────────────────────────────────────────────────────────
+1) PRISMA: confirm/extend schema (no destructive changes)
+Open prisma/schema.prisma and ensure these models/relations/enum exist (adjust names only if different in repo). Do NOT remove existing fields; add missing ones.
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  COMPANY
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  role           Role
+  name           String?
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
+  // reverse link for accountants
+  accountantLinks AccountantClient[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  name            String
+  ein             String?  @unique
+  state           String?
+  email           String?
+  // reverse link: which accountants serve this company
+  accountantLinks AccountantClient[]
+  documents       Document[]
+  purchases       PurchaseOrder[]
+  holds           Hold[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AccountantClient {
+  id           String  @id @default(cuid())
+  accountantId String
+  companyId    String
+  accountant   User    @relation(fields: [accountantId], references: [id])
+  company      Company @relation(fields: [companyId], references: [id])
+  @@unique([accountantId, companyId])
+}
+
+model CreditInventory {
+  id           String   @id @default(cuid())
+  code         String   // e.g., "C48E 2025"
+  year         Int
+  pricePer1    Decimal  // 0.89
+  minBlock     Int      // e.g., 5000
+  available    Int
+  discountPct  Decimal? // derived or stored
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  companyId   String
+  creditId    String
+  faceValue   Int
+  subtotal    Decimal
+  status      String    // e.g., PENDING, APPROVED, CANCELED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  company     Company   @relation(fields: [companyId], references: [id])
+  credit      CreditInventory @relation(fields: [creditId], references: [id])
+}
+
+model Hold {
+  id        String   @id @default(cuid())
+  companyId String
+  creditId  String
+  faceValue Int
+  expiresAt DateTime
+  status    String    // ACTIVE, EXPIRED, CANCELED
+  company   Company   @relation(fields: [companyId], references: [id])
+  credit    CreditInventory @relation(fields: [creditId], references: [id])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  companyId String?
+  name      String
+  url       String
+  kind      String   // KYC, EIN, etc
+  createdAt Date

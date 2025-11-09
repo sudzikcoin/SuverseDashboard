@@ -1,33 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
-import Sidebar from "@/components/Sidebar"
-import Card from "@/components/Card"
-import Button from "@/components/Button"
 import { formatNumber } from "@/lib/format"
 import { formatDate } from "@/lib/date"
 
 export default function AdminPurchasesPage() {
-  const router = useRouter()
-  const { data: session, status } = useSession()
   const [purchases, setPurchases] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login")
-    } else if (session?.user.role !== "ADMIN") {
-      router.push("/dashboard")
-    }
-  }, [status, session, router])
-
-  useEffect(() => {
-    if (session?.user.role === "ADMIN") {
-      fetchPurchases()
-    }
-  }, [session])
+    fetchPurchases()
+  }, [])
 
   const fetchPurchases = async () => {
     try {
@@ -63,17 +46,12 @@ export default function AdminPurchasesPage() {
     }
   }
 
-  if (status === "loading" || loading) {
-    return <div className="flex items-center justify-center h-screen bg-[#0B1220] text-gray-100">Loading...</div>
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen text-gray-100">Loading...</div>
   }
 
-  if (!session || session.user.role !== "ADMIN") return null
-
   return (
-    <div className="flex min-h-screen bg-[#0B1220]">
-      <Sidebar role={session.user.role} />
-      
-      <main className="flex-1 p-8">
+    <div className="p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">Purchase Order Management</h1>
           <a
@@ -169,7 +147,6 @@ export default function AdminPurchasesPage() {
             ))}
           </div>
         )}
-      </main>
     </div>
   )
 }

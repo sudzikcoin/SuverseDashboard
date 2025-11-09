@@ -1,32 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
-import Sidebar from "@/components/Sidebar"
-import Card from "@/components/Card"
-import Button from "@/components/Button"
 import { formatNumber } from "@/lib/format"
 
 export default function AdminInventoryPage() {
-  const router = useRouter()
-  const { data: session, status } = useSession()
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login")
-    } else if (session?.user.role !== "ADMIN") {
-      router.push("/dashboard")
-    }
-  }, [status, session, router])
-
-  useEffect(() => {
-    if (session?.user.role === "ADMIN") {
-      fetchInventory()
-    }
-  }, [session])
+    fetchInventory()
+  }, [])
 
   const fetchInventory = async () => {
     try {
@@ -42,17 +25,12 @@ export default function AdminInventoryPage() {
     }
   }
 
-  if (status === "loading" || loading) {
+  if (loading) {
     return <div className="flex items-center justify-center h-screen text-su-text">Loading...</div>
   }
 
-  if (!session || session.user.role !== "ADMIN") return null
-
   return (
-    <div className="flex min-h-screen">
-      <Sidebar role={session.user.role} />
-      
-      <main className="flex-1 p-8">
+    <div className="p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">Inventory Management</h1>
           <a
@@ -109,7 +87,6 @@ export default function AdminInventoryPage() {
             </div>
           ))}
         </div>
-      </main>
     </div>
   )
 }
