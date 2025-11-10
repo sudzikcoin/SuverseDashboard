@@ -76,6 +76,24 @@ export async function PATCH(req: Request) {
 
     const { id, txHash, status, meta } = await req.json()
 
+    const existingLog = await prisma.paymentLog.findUnique({
+      where: { id },
+    })
+
+    if (!existingLog) {
+      return NextResponse.json(
+        { error: "Payment log not found" },
+        { status: 404 }
+      )
+    }
+
+    if (existingLog.userId !== session.user.id) {
+      return NextResponse.json(
+        { error: "Unauthorized to update this payment" },
+        { status: 403 }
+      )
+    }
+
     const log = await prisma.paymentLog.update({
       where: { id },
       data: {
@@ -100,7 +118,7 @@ export async function PATCH(req: Request) {
       details: {
         status,
         txHash,
-        ...meta,
+        ...(meta ?? {}),
       },
       companyId: session.user.companyId ?? undefined,
     })

@@ -21,7 +21,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.
 -   **Backend**: Next.js API Routes for server-side logic.
 -   **Authentication**: NextAuth.js with three roles (Company, Accountant, Admin) and Role-Based Access Control (RBAC). JWT-based sessions with NEXTAUTH_SECRET encryption. Public paths (/, /login, /register, /api/auth, static assets) excluded from middleware checks.
--   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company` (with CompanyStatus enum: ACTIVE/BLOCKED/ARCHIVED, archivedAt for soft-delete), `CreditInventory` (with brokerRef, source, importedAt fields for idempotent file imports), `Hold`, `PurchaseOrder`, `Document`, `AuditLog` (with AuditAction and AuditEntity enums for type-safe logging), and `AccountantClient` models.
+-   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company` (with CompanyStatus enum: ACTIVE/BLOCKED/ARCHIVED, archivedAt for soft-delete), `CreditInventory` (with brokerRef, source, importedAt fields for idempotent file imports), `Hold`, `PurchaseOrder`, `Document`, `AuditLog` (with AuditAction and AuditEntity enums for type-safe logging), `AccountantClient`, and `PaymentLog` (with PaymentStatus enum: PENDING/SUBMITTED/CONFIRMED/FAILED) models.
 -   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects specific route prefixes (/dashboard, /clients, /marketplace, /company, /accountant, /admin, /pay) with JWT token validation.
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
 -   **Email**: Resend for transactional emails.
@@ -32,6 +32,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
 -   **Purchase Workflow**: Stripe checkout integration, purchase order creation, admin approval, and automated PDF generation.
+-   **USDC Payment Flow**: Modal-based payment confirmation showing amount, platform fee, and total. Wagmi/Viem integration for on-chain USDC transfers on Base network. PaymentLog model tracks all transactions with status (PENDING, SUBMITTED, CONFIRMED, FAILED). Comprehensive audit logging for payment lifecycle.
 -   **Inventory Management**: Full-featured admin interface at /admin/inventory for CRUD operations on tax credit inventory. Server-rendered page with modal-based create/edit forms, inline delete with confirmation, and audit logging for all operations. Includes broker file upload system (CSV/XLSX) with idempotent imports using brokerRef for duplicate prevention, flexible column mapping, Zod validation, and automatic marketplace sync.
 -   **Accountant Features**: 
     - Zero-trust isolation: new accountants start with zero company access

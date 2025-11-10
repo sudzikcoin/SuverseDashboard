@@ -60,6 +60,8 @@ export default function PayModal({
       return
     }
 
+    let logId: string | null = null
+
     try {
       setError(null)
 
@@ -91,6 +93,7 @@ export default function PayModal({
       }
 
       const { id } = await logResponse.json()
+      logId = id
       setPaymentLogId(id)
 
       const hash = await writeContractAsync({
@@ -106,7 +109,7 @@ export default function PayModal({
       await fetch("/api/payments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, txHash: hash, status: "SUBMITTED" }),
+        body: JSON.stringify({ id: logId, txHash: hash, status: "SUBMITTED" }),
       })
 
       setStatus("confirmed")
@@ -115,16 +118,20 @@ export default function PayModal({
       setError(err.message || "Payment failed")
       setStatus("error")
 
-      if (paymentLogId) {
-        await fetch("/api/payments", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: paymentLogId,
-            status: "FAILED",
-            meta: { error: err.message },
-          }),
-        })
+      if (logId) {
+        try {
+          await fetch("/api/payments", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: logId,
+              status: "FAILED",
+              meta: { error: err.message },
+            }),
+          })
+        } catch (updateErr) {
+          console.error("Failed to update payment log:", updateErr)
+        }
       }
     }
   }
