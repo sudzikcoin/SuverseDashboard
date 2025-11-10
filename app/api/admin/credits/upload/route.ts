@@ -145,8 +145,6 @@ export async function POST(req: Request) {
             where: {
               creditType: r.creditType,
               taxYear: r.taxYear,
-              pricePerDollar: r.pricePerDollar,
-              minBlockUSD: r.minBlockUSD,
             },
           })
           
@@ -158,6 +156,8 @@ export async function POST(req: Request) {
                 jurisdiction: r.jurisdiction ?? null,
                 faceValueUSD: r.faceValueUSD,
                 availableUSD: r.availableUSD,
+                minBlockUSD: r.minBlockUSD,
+                pricePerDollar: r.pricePerDollar,
                 status: r.status,
                 brokerName: r.brokerName ?? null,
                 notes: r.notes ?? null,
