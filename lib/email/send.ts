@@ -1,5 +1,5 @@
 export const runtime = 'nodejs';
-import { resend, fromAddress } from './resend';
+import { resend, fromAddress, maskEmail } from './resend';
 import WelcomeEmail from '@/emails/WelcomeEmail';
 import { writeAudit } from '@/lib/audit';
 
@@ -10,16 +10,23 @@ export async function sendWelcomeEmail(
   name?: string,
   userId?: string
 ): Promise<SendResult> {
+  const masked = maskEmail(to);
+  const from = fromAddress();
+  
+  console.log(`[mail] sending → to=${masked}, from=${from}`);
+  
   try {
     const res = await resend.emails.send({
-      from: fromAddress(),
+      from,
       to,
       subject: `Welcome to SuVerse${name ? ', ' + name : ''}!`,
       react: WelcomeEmail({ name }),
     });
     
     if ('error' in res && res.error) {
-      console.error('[Email] Resend API error:', res.error);
+      const errorMsg = String(res.error?.message || res.error);
+      const errorCode = (res.error as any)?.statusCode || 'UNKNOWN';
+      console.error(`[mail] error code=${errorCode} message=${errorMsg}`);
       
       try {
         await writeAudit({
@@ -32,17 +39,18 @@ export async function sendWelcomeEmail(
             emailStatus: 'FAILED',
             template: 'WelcomeEmail',
             provider: 'Resend',
-            error: String(res.error?.message || res.error),
+            error: errorMsg,
           },
         });
       } catch (auditError) {
-        console.error('[Email] Audit log failed:', auditError);
+        console.error('[mail] Audit log failed:', auditError);
       }
       
-      return { ok: false, error: String(res.error?.message || res.error) };
+      return { ok: false, error: errorMsg };
     }
     
     const emailId = (res as any).data?.id || (res as any).id;
+    console.log(`[mail] sent id=${emailId}`);
     
     try {
       await writeAudit({
@@ -59,12 +67,13 @@ export async function sendWelcomeEmail(
         },
       });
     } catch (auditError) {
-      console.error('[Email] Audit log failed:', auditError);
+      console.error('[mail] Audit log failed:', auditError);
     }
     
     return { ok: true, id: emailId };
   } catch (e: any) {
-    console.error('[Email] Exception:', e?.message || e);
+    const errorMsg = e?.message || 'Unknown error';
+    console.error(`[mail] exception: ${errorMsg}`);
     
     try {
       await writeAudit({
@@ -77,13 +86,13 @@ export async function sendWelcomeEmail(
           emailStatus: 'EXCEPTION',
           template: 'WelcomeEmail',
           provider: 'Resend',
-          error: e?.message || 'Unknown error',
+          error: errorMsg,
         },
       });
     } catch (auditError) {
-      console.error('[Email] Audit log failed:', auditError);
+      console.error('[mail] Audit log failed:', auditError);
     }
     
-    return { ok: false, error: e?.message || 'Unknown error' };
+    return { ok: false, error: errorMsg };
   }
 }
