@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import SessionProvider from "@/components/SessionProvider";
-import Providers from "./providers";
+import UserScopedWagmiProvider from "./providers/UserScopedWagmiProvider";
+import ClientInit from "@/components/ClientInit";
+import WalletGuard from "@/components/wallet/WalletGuard";
 import Splash from "@/components/Splash";
 import "./globals.css";
+import "@rainbow-me/rainbowkit/styles.css";
 
 export const metadata: Metadata = {
   title: "SuVerse Tax Credit Dashboard",
@@ -18,9 +21,13 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#0B1220] text-gray-100">
         <Splash />
-        <Providers>
-          <SessionProvider>{children}</SessionProvider>
-        </Providers>
+        <SessionProvider>
+          <ClientInit />
+          <UserScopedWagmiProvider>
+            <WalletGuard />
+            {children}
+          </UserScopedWagmiProvider>
+        </SessionProvider>
       </body>
     </html>
   );

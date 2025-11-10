@@ -2,6 +2,8 @@
 const nextConfig = {
   webpack: (config) => {
     config.resolve.alias.canvas = false;
+    config.resolve.alias['@react-native-async-storage/async-storage'] = false;
+    config.resolve.alias['pino-pretty'] = false;
     return config;
   },
   env: {

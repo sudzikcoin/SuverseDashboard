@@ -1,0 +1,166 @@
+You are a senior Next.js (App Router) + NextAuth + wagmi/viem engineer. 
+Fix that a connected wallet persists when switching platform users. 
+Make wallet state scoped per user and force disconnect on session change or sign out.
+
+ASSUMPTIONS
+- Next.js App Router
+- NextAuth already configured
+- wagmi v2 + viem already installed
+- We show chain "Base" and use Pay page etc.
+
+========================
+1) Add a user-scoped Wagmi provider
+Create: app/providers/UserScopedWagmiProvider.tsx
+
+"use client";
+import { WagmiConfig, createConfig, http, createStorage, disconnect } from "wagmi";
+import { base } from "wagmi/chains";
+import React from "react";
+import { useSession } from "next-auth/react";
+
+function makeConfig(storageKey: string) {
+  return createConfig({
+    chains: [base],
+    transports: { [base.id]: http() },
+    storage: createStorage({
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+      key: storageKey,              // <— wallet state separated by user
+    }),
+    ssr: true,
+  });
+}
+
+export default function UserScopedWagmiProvider({ children }: { children: React.ReactNode }) {
+  const { data } = useSession();
+  // Prefer a stable unique id; fallback to email; then 'guest'
+  const uid = (data?.user as any)?.id || data?.user?.email || "guest";
+  const storageKey = React.useMemo(() => `suverse:wagmi:${uid}`, [uid]);
+
+  // Keep a config instance tied to the current user key
+  const config = React.useMemo(() => makeConfig(storageKey), [storageKey]);
+
+  // If user changed vs last seen user, disconnect old wallet
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const LAST_KEY = "suverse:lastUserKey";
+    const prev = window.localStorage.getItem(LAST_KEY);
+    if (prev && prev !== storageKey) {
+      // Disconnect any existing session created under previous key
+      disconnect(config).catch(() => {});
+    }
+    window.localStorage.setItem(LAST_KEY, storageKey);
+  }, [storageKey, config]);
+
+  return <WagmiConfig config={config}>{children}</WagmiConfig>;
+}
+
+========================
+2) Use the provider globally
+Edit: app/layout.tsx  (or wherever your root Providers live)
+
+- Import and wrap your tree with the new provider, AFTER the NextAuth SessionProvider.
+
+Example:
+
+import UserScopedWagmiProvider from "./providers/UserScopedWagmiProvider";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <SessionProvider>
+          <UserScopedWagmiProvider>
+            {children}
+          </UserScopedWagmiProvider>
+        </SessionProvider>
+      </body>
+    </html>
+  );
+}
+
+(If you have a central Providers component, wrap children there instead.)
+
+========================
+3) Force disconnect on sign out
+Create: components/auth/SignOutButton.tsx
+
+"use client";
+import { signOut } from "next-auth/react";
+import { useConfig, disconnect } from "wagmi";
+
+export default function SignOutButton({ className }: { className?: string }) {
+  const config = useConfig();
+  return (
+    <button
+      className={className}
+      onClick={async () => {
+        try { await disconnect(config); } catch {}
+        await signOut({ callbackUrl: "/login" });
+      }}
+    >
+      Sign Out
+    </button>
+  );
+}
+
+Use this component wherever you render “Sign Out” (admin/company/accountant layouts).
+
+========================
+4) Guard against cross-user leaks at runtime (optional but safe)
+If you show the connected address badge, ensure it resets when user changes.
+
+Edit (or create): components/wallet/WalletBadge.tsx
+
+"use client";
+import { useAccount, disconnect, useConfig } from "wagmi";
+import { useSession } from "next-auth/react";
+import { useEffect } from "react";
+
+export default function WalletBadge() {
+  const { address, isConnected } = useAccount();
+  const { data } = useSession();
+  const uid = (data?.user as any)?.id || data?.user?.email || "guest";
+  const config = useConfig();
+
+  useEffect(() => {
+    // If localStorage says wallet belongs to a different user, disconnect.
+    const key = typeof window !== "undefined" ? window.localStorage.getItem("suverse:lastUserKey") : null;
+    if (isConnected && key && !key.endsWith(uid)) {
+      disconnect(config).catch(() => {});
+    }
+  }, [uid, isConnected, config]);
+
+  if (!isConnected) return null;
+  const short = `${address?.slice(0, 6)}…${address?.slice(-4)}`;
+  return <span className="wallet-badge">{short}</span>;
+}
+
+========================
+5) Clean up old global keys (one-time)
+We previously used a non-scoped wagmi storage key. To prevent “phantom” connects,
+wipe it once on first load.
+
+Create: app/(site)/_client-init.tsx  (import in your top-level page/layout client side)
+
+"use client";
+import { useEffect } from "react";
+export default function ClientInit() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Remove any old generic wagmi keys to avoid auto-reconnects across users
+    Object.keys(localStorage)
+      .filter(k => k.startsWith("wagmi.") || k === "wagmi.store" || k.startsWith("suverse:wagmi:") && !localStorage.getItem("suverse:lastUserKey"))
+      .forEach(k => localStorage.removeItem(k));
+  }, []);
+  return null;
+}
+
+Then include <ClientInit /> inside your root after SessionProvider (once).
+
+========================
+6) Sanity checks
+- After this change, switching platform users (logout/login) will disconnect the wallet unless it belongs to the same user.
+- Each user gets isolated wallet state: suverse:wagmi:<userId-or-email>.
+- “Sign Out” always disconnects first, then routes to /login.
+
+Done.

@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut } from "next-auth/react"
 import { Menu, X } from "lucide-react"
+import SignOutButton from "@/components/auth/SignOutButton"
 
 interface SidebarProps {
   role: string
@@ -114,12 +114,9 @@ export default function Sidebar({ role }: SidebarProps) {
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="w-full px-4 py-2 glass hover:bg-red-500/20 text-red-400 rounded-xl transition"
-          >
+          <SignOutButton className="w-full px-4 py-2 glass hover:bg-red-500/20 text-red-400 rounded-xl transition">
             Sign Out
-          </button>
+          </SignOutButton>
         </div>
       </aside>
     </>
