@@ -1,0 +1,46 @@
+You are working on a Next.js 14 (app router) project deployed in Replit. Transactional emails stopped working. Your goal is to fully restore Resend email sending for signup notifications AND add a simple, safe test endpoint so we can verify delivery end-to-end.
+
+DO EXACTLY THE FOLLOWING:
+
+SCOPE
+- Do not change auth or database logic beyond adding a call to the mailer after successful signup.
+- Implement a reusable mail helper.
+- Add a minimal API route to send a test email.
+- Add robust logging for diagnostics (server-side only).
+
+SECRETS (already set in Replit → Secrets)
+- RESEND_API_KEY  = <already set>
+- RESEND_FROM     = onboarding@resend.dev    # temporary sender; we’ll switch to info@suverse.io later.
+If any of these are missing, pause and ask me.
+
+TASKS
+
+1) Create a mail helper
+- File: lib/mail.ts
+- Content:
+  - `export const runtime = 'nodejs'`
+  - Initialize `new Resend(process.env.RESEND_API_KEY!)`
+  - `export async function sendEmail({to, subject, html}:{to:string; subject:string; html:string})`
+    - Validate env vars and inputs.
+    - Call `resend.emails.send({ from: process.env.RESEND_FROM || 'onboarding@resend.dev', to, subject, html })`
+    - Log success/failure with full JSON response on the server (console.log/console.error).
+    - Return `{ ok: true, id }` or `{ ok: false, error }`.
+
+2) Add a test API route to verify delivery
+- File: app/api/test-email/route.ts
+- Content:
+  - `export const runtime = 'nodejs'`
+  - POST only. Body JSON: `{ to: string }`
+  - Validate `to`, then call `sendEmail({ to, subject: 'SuVerse Test Email', html: '<p>This is a test email from SuVerse via Resend ✅</p>' })`
+  - Return JSON `{ ok, data | error }` with proper status codes (200 or 400/500).
+  - Never expose API key in the response.
+
+3) Wire welcome email on signup
+- Locate the server action / API that finalizes user registration (where the user record is created).
+- After successful persistence, call:
+  ```ts
+  await sendEmail({
+    to: newUser.email,
+    subject: 'Welcome to SuVerse',
+    html: `<p>Hi ${newUser.name || 'there'}, welcome to SuVerse!</p>`
+  });
