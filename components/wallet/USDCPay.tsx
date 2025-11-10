@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import PayModal from '@/components/wallet/PayModal';
 
-const USDC = process.env.NEXT_PUBLIC_USDC_BASE!;
+const USDC = process.env.NEXT_PUBLIC_USDC_BASE_ADDRESS!;
 const ESCROW = process.env.NEXT_PUBLIC_ESCROW_ADDRESS!;
 const CHAIN_ID = Number(process.env.NEXT_PUBLIC_BASE_CHAIN_ID ?? 8453);
 const FEE_BPS = Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? 100);
