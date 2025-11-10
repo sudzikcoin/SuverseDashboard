@@ -90,12 +90,16 @@ export const authOptions: NextAuthOptions = {
         const userId = user?.id;
         if (email) {
           const r = await sendWelcomeEmail(email, name, userId);
-          if (!r.ok) console.error('[Auth:createUser] email failed:', r.error);
+          if (!r.ok) {
+            console.error('[mail:welcome] email failed:', r.error);
+          } else {
+            console.log('[mail:welcome] email sent successfully');
+          }
         } else {
-          console.warn('[Auth:createUser] user has no email');
+          console.warn('[mail:welcome] user has no email');
         }
       } catch (e: any) {
-        console.error('[Auth:createUser] exception:', e?.message || e);
+        console.error('[mail:welcome] exception:', e?.message || e);
       }
     },
   },
