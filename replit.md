@@ -20,11 +20,11 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.
 -   **Backend**: Next.js API Routes for server-side logic.
 -   **Authentication**: NextAuth.js with three roles (Company, Accountant, Admin) and Role-Based Access Control (RBAC). JWT-based sessions with NEXTAUTH_SECRET encryption. Public paths (/, /login, /register, /api/auth, static assets) excluded from middleware checks.
--   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company` (with CompanyStatus enum: ACTIVE/BLOCKED, archivedAt for soft-delete), `CreditInventory`, `Hold`, `PurchaseOrder`, `Document`, `AuditLog`, and `AccountantClient` models.
+-   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company` (with CompanyStatus enum: ACTIVE/BLOCKED/ARCHIVED, archivedAt for soft-delete), `CreditInventory`, `Hold`, `PurchaseOrder`, `Document`, `AuditLog` (with AuditAction and AuditEntity enums for type-safe logging), and `AccountantClient` models.
 -   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects specific route prefixes (/dashboard, /clients, /marketplace, /company, /accountant, /admin, /pay) with JWT token validation.
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
 -   **Email**: Resend for transactional emails.
--   **Audit Logging**: Tracks system activity.
+-   **Audit Logging**: Comprehensive enum-based system using Prisma AuditAction and AuditEntity enums for type-safe audit trails. The `writeAudit()` helper (in `lib/audit.ts`) creates structured logs with actorId, actorEmail, action, entity, entityId, details, and companyId. All ADMIN operations (archive, unarchive, block, unblock, password reset) are automatically logged with full context. Legacy helpers (createAuditLog, logAudit) maintained for backward compatibility with string-to-enum mapping.
 -   **File Storage**: Private per-company document storage in `/uploads/{companyId}/` with RBAC-enforced access via API routes. Security includes path traversal protection (basename normalization), CRLF header injection prevention (control character filtering), and role-based access (ADMIN full, ACCOUNTANT via AccountantClient link, COMPANY self only).
 
 ### Feature Specifications
@@ -54,7 +54,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router, API routes, pages), `components/`, `lib/` (utilities for auth, db, email, pdf, audit, validations, storage, calculations, access-control), `prisma/`, `types/`.
+-   **Project Structure**: `app/` (App Router, API routes, pages), `components/`, `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control), `prisma/`, `types/`.
 -   **Environment Variables**: Configurable via `.env`.
 -   **Database Seeding**: Enhanced script for initial setup. Does NOT auto-link accountants - they start with zero companies.
 -   **Error Handling**: Integrated error handling and user-friendly alerts.
