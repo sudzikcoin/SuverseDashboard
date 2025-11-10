@@ -28,8 +28,15 @@ export function getAddresses() {
   };
 }
 
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
 export function formatUnitsToUsd(units: bigint): string {
   const decimals = safeInt(env.NEXT_PUBLIC_USDC_DECIMALS ?? 6, 6);
+  
+  if (units > MAX_SAFE_BIGINT) {
+    throw new Error(`Amount too large: exceeds safe integer limit (${MAX_SAFE_BIGINT})`);
+  }
+  
   const value = Number(units) / 10 ** decimals;
   return safeFixed(value, 2);
 }

@@ -1,0 +1,232 @@
+REPLIT AGENT PROMPT — LINK USDC PAYMENTS WITH COMPANIES, ACCOUNTANTS & TAX CREDITS (ONE PASS, END-TO-END)
+
+Goal
+Turn the current standalone “Pay with USDC” screen into a full purchase flow tied to:
+• who buys (accountant session + selected company)
+• what is bought (specific TaxCredit item)
+• how it’s paid (on-chain USDC on Base, escrow, fee calc)
+• auditable records (Purchase + Payment with tx hash)
+
+Tech assumptions (match existing app)
+• Next.js app dir, TypeScript, Postgres, Prisma, viem/wagmi for wallet.
+• Existing tables: User/Accountant, Company, TaxCredit, AuditLog (names may differ).
+• We already have USDC escrow, BASE chainId, fee bps in env.
+
+Deliverables (all tasks below)
+1) DB MODELS (Prisma) + MIGRATION
+2) API ROUTES: /api/purchases, /api/purchases/[id], /api/payments, /api/payments/[id]
+3) UI FLOW CHANGES: Marketplace -> Create Purchase -> Redirect to /payments/usdc?purchase=...
+4) Pay page: load purchase by id, prefill amount, fee, validation, submit tx, persist Payment, update statuses.
+5) Access control: only the accountant who owns the company (or admins) can create/see/pay a purchase.
+6) Audit logging for all state changes.
+7) Robust validation (no NaN, empty inputs, bounds).
+8) Backward compatible env usage. Do not break current standalone pay route; it continues to work if no purchase param is present.
+
+──────────────────────────────────────────────────────────────────────────────
+1) PRISMA SCHEMA — ADD MODELS
+
+Edit prisma/schema.prisma; add (or adapt field names to match current):
+model Purchase {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  accountantId    String   // user/accountant id (FK)
+  companyId       String   // FK -> Company.id
+  taxCreditId     String   // FK -> TaxCredit.id
+  nominalValueUSD Decimal   @db.Decimal(18,2) // face value purchased
+  pricePerDollar  Decimal   @db.Decimal(5,4)  // e.g. 0.9300
+  totalUSD        Decimal   @db.Decimal(18,2) // nominalValueUSD * pricePerDollar
+  status          PurchaseStatus @default(PENDING_PAYMENT)
+  payment         Payment?
+  // indexes
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([taxCreditId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  purchaseId  String   @unique
+  network     String   // "base"
+  token       String   // "USDC"
+  amountUSD   Decimal  @db.Decimal(18,2) // USDC amount in USD terms (1:1)
+  feeUSD      Decimal  @db.Decimal(18,2)
+  txHash      String
+  status      PaymentStatus @default(SUBMITTED)
+  purchase    Purchase @relation(fields: [purchaseId], references: [id])
+}
+
+enum PurchaseStatus {
+  PENDING_PAYMENT
+  PAID
+  COMPLETED
+  CANCELED
+}
+
+enum PaymentStatus {
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
+
+Run migration:
+• npx prisma generate
+• npx prisma migrate dev -n "link-payments-to-purchases"
+
+(If using raw SQL, create equivalent tables, unique(payment.purchaseId), indexes, enums.)
+
+──────────────────────────────────────────────────────────────────────────────
+2) API ROUTES (Next.js /app/api)
+
+Create file: app/api/purchases/route.ts
+- POST creates a Purchase from body: { companyId, taxCreditId, unitsOrNominal?, pricePerDollar? }
+- Derive pricePerDollar & nominalValueUSD from TaxCredit if not provided.
+- totalUSD = nominal * pricePerDollar (round to 2)
+- Ensure session.user.role === 'accountant' OR 'admin'.
+- Ensure company.accountantId === session.user.id unless admin.
+- Ensure TaxCredit.status === 'available' and has sufficient available_units (if applicable).
+- Create Purchase(status=PENDING_PAYMENT).
+- AuditLog: CREATE_PURCHASE.
+- Return { id }.
+
+Create file: app/api/purchases/[id]/route.ts
+- GET returns purchase + joined company, credit names.
+- Enforce access: only owner accountant (via company) or admin.
+- Return 404 if not found.
+
+Create file: app/api/payments/route.ts
+- POST body: { purchaseId, txHash, amountUSD, feeUSD, network="base", token="USDC" }
+- Validate purchase.status === PENDING_PAYMENT.
+- Upsert Payment where purchaseId unique.
+- Set purchase.status = PAID.
+- AuditLog: PAYMENT_SUBMITTED.
+- Return payment record.
+
+Create file: app/api/payments/[id]/route.ts
+- GET returns payment status. (For future polling or admin checks.)
+
+Helper: lib/round.ts
+export const toCents = (n:number|string)=> Math.round(Number(n)*100)/100;
+
+Audit helper: logAudit(userId, entity, entityId, action, meta)
+
+──────────────────────────────────────────────────────────────────────────────
+3) UI FLOW — MARKETPLACE -> PURCHASE -> PAY
+
+Marketplace credit card (where Edit/Delete now exist):
+- Add primary action button: "Buy with USDC".
+- On click open small dialog:
+  • Choose Company (select from accountant’s companies; required).
+  • Quantity selector (by $ nominal if your credits are dollar-based; default = minBlock or remaining).
+  • Show computed total: nominal * pricePerDollar.
+  • Button: "Create Purchase".
+- POST /api/purchases with chosen company & credit; on success:
+  router.push(`/payments/usdc?purchase=${purchaseId}`)
+
+Companies page:
+- In each Company card add "Buy Credits" → prefilters marketplace to show active credits, opens the same dialog with company preselected.
+
+──────────────────────────────────────────────────────────────────────────────
+4) PAY PAGE BEHAVIOR (/payments/usdc)
+
+File: app/(dashboard)/payments/usdc/page.tsx (or existing component)
+- Read search param purchase.
+- If present → fetch /api/purchases/:id and render:
+  • Summary (Company, Credit, Nominal, Price, Total USD)
+  • Amount input prefilled with totalUSD; disable editing by default (toggle “edit amount” if desired).
+  • Fee display: uses NEXT_PUBLIC_PLATFORM_FEE_BPS.
+  • Escrow address and chain from env (already present).
+- If purchase param missing → keep current generic payment (backward compat).
+
+Validation fixes (requested bugs):
+- Amount input: treat empty string as 0 (no toFixed on empty; use safe BigInt/viem parseUnits only when > 0).
+- Button disabled if amount <= 0 or wallet not connected or wrong chain.
+- Confirm modal shows: Amount, Platform Fee (amount * bps / 10000), Total = Amount + Fee (or Amount if fee charged separately; keep current approach but show correct non-zero total).
+
+On Confirm:
+- Execute viem writeContract / erc20 transfer to ESCROW_ADDRESS for (amount) * 10**USDC_DECIMALS.
+- On tx hash success:
+  • POST /api/payments with { purchaseId, txHash, amountUSD, feeUSD }.
+  • Show success state with tx link (BaseScan).
+  • Route user to “My Purchases” detail page or keep success modal.
+
+Edge cases:
+- If tx rejected → show inline error, do not create Payment.
+- If API save fails after tx → show “Saved later” banner and attempt retry; still show tx hash.
+
+──────────────────────────────────────────────────────────────────────────────
+5) ACCESS CONTROL
+
+Server routes:
+- Read session user. If role=admin → allow all.
+- If role=accountant → enforce that queried purchase.company.accountantId === user.id.
+- Deny others (company users can later view their own purchases if you allow; out of scope for now).
+
+Client:
+- Company selector lists only companies linked to the accountant session.
+
+──────────────────────────────────────────────────────────────────────────────
+6) AUDIT LOGS
+
+Add audit events:
+- CREATE_PURCHASE {purchaseId, companyId, taxCreditId, totalUSD}
+- PAYMENT_SUBMITTED {purchaseId, paymentId, txHash, amountUSD, feeUSD}
+- PURCHASE_STATUS_CHANGED {purchaseId, from, to}
+Hook audit calls inside API handlers.
+
+──────────────────────────────────────────────────────────────────────────────
+7) ENV & CONSTANTS (reuse existing)
+
+Already exist in project; ensure reads in both server and client:
+NEXT_PUBLIC_BASE_CHAIN_ID=8453
+NEXT_PUBLIC_USDC_ADDRESS=0x833589fC...A02913
+NEXT_PUBLIC_ESCROW_ADDRESS=0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721
+NEXT_PUBLIC_PLATFORM_FEE_BPS=100        # 1.00%
+NEXT_PUBLIC_USDC_DECIMALS=6
+
+Server duplicates (if you mirror):
+ESCROW_ADDRESS=0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721
+PLATFORM_FEE_BPS=100
+
+Guard all env reads with numeric parsing and defaults; never pass undefined into toFixed().
+
+──────────────────────────────────────────────────────────────────────────────
+8) UI POLISH / BUG FIXES REQUESTED
+
+• “Empty amount” crash: fix by keeping controlled input string; when empty, display 0.00 and disable confirm button.
+• Confirm modal totals: compute correctly (amount, fee, total) and render with two decimals.
+• Wallet scoping: reset wallet connect state on user change (already improved); also on logout clear localStorage key used by wagmi/connector.
+
+──────────────────────────────────────────────────────────────────────────────
+9) ADMIN WORKFLOW (POST-PAY)
+
+Admin panel additions:
+- Purchases list: id, company, credit, total, status; actions: Mark Completed / Cancel.
+- Clicking a purchase shows attached Payment (tx hash link) and allows upload of certificate (document link) → when uploaded + verified, set Purchase.status=COMPLETED and TaxCredit.status=TRANSFERRED (or decrement available_units).
+
+──────────────────────────────────────────────────────────────────────────────
+10) QUICK TEST PLAN
+
+A) Accountant flow
+1. Login as accountant with two companies.
+2. Marketplace → choose credit → Buy with USDC → select Company A → Create Purchase.
+3. Redirects to /payments/usdc?purchase=... with amount prefilled.
+4. Send small USDC payment on Base (1 USDC ok). Confirm modal shows non-zero fee & total.
+5. After tx, API /api/payments called → Purchase.status = PAID. “My Purchases” shows the record.
+
+B) Access control
+1. Try opening another accountant’s purchase → 403.
+2. Admin can view all.
+
+C) Edge cases
+1. Clear amount field → confirm button disabled, no runtime error.
+2. Wrong chain → chain switch prompt.
+3. Payment rejected → no Payment row, Purchase remains PENDING_PAYMENT.
+
+Ship it when all green.
+
+Notes
+• Keep code changes small and idiomatic to current codebase structure.
+• Names can be adapted to existing models/components, but preserve the data flow and endpoints above.
+• Do not remove the current generic Pay screen; just enhance it to read ?purchase=.

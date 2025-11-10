@@ -1,41 +1,68 @@
-"use client";
-
 import { z } from "zod";
 
-const PublicSchema = z.object({
-  NEXT_PUBLIC_BASE_CHAIN_ID: z.coerce.number().int().positive().default(8453),
-  NEXT_PUBLIC_USDC_ADDRESS: z.string().min(10),
-  NEXT_PUBLIC_ESCROW_ADDRESS: z.string().min(10),
-  NEXT_PUBLIC_PLATFORM_FEE_BPS: z.coerce.number().min(0).max(10000).default(100),
-  NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().min(0).max(18).default(6),
+const PublicEnvSchema = z.object({
+  NEXT_PUBLIC_BASE_CHAIN_ID: z.coerce.number().int().positive(),
+  NEXT_PUBLIC_USDC_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  NEXT_PUBLIC_ESCROW_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10000),
+  NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().int().min(0).max(18),
 });
 
-const _pub = {
-  NEXT_PUBLIC_BASE_CHAIN_ID: process.env.NEXT_PUBLIC_BASE_CHAIN_ID,
-  NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
-  NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
-  NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS,
-  NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+type PublicEnv = z.infer<typeof PublicEnvSchema>;
+
+const DEFAULTS: PublicEnv = {
+  NEXT_PUBLIC_BASE_CHAIN_ID: 8453,
+  NEXT_PUBLIC_USDC_ADDRESS: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  NEXT_PUBLIC_ESCROW_ADDRESS: "0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721",
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: 100,
+  NEXT_PUBLIC_USDC_DECIMALS: 6,
 };
 
-const parsed = PublicSchema.safeParse(_pub);
+function parseEnv(raw: Record<string, string | undefined>): PublicEnv {
+  const parsed = PublicEnvSchema.safeParse({
+    NEXT_PUBLIC_BASE_CHAIN_ID: raw.NEXT_PUBLIC_BASE_CHAIN_ID,
+    NEXT_PUBLIC_USDC_ADDRESS: raw.NEXT_PUBLIC_USDC_ADDRESS,
+    NEXT_PUBLIC_ESCROW_ADDRESS: raw.NEXT_PUBLIC_ESCROW_ADDRESS,
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: raw.NEXT_PUBLIC_PLATFORM_FEE_BPS,
+    NEXT_PUBLIC_USDC_DECIMALS: raw.NEXT_PUBLIC_USDC_DECIMALS,
+  });
 
-let env: z.infer<typeof PublicSchema>;
-if (!parsed.success) {
-  if (typeof window !== "undefined") {
-    console.warn("Public env parse failed, using safe defaults:", parsed.error.flatten().fieldErrors);
+  if (parsed.success) {
+    return parsed.data;
   }
-  env = {
-    NEXT_PUBLIC_BASE_CHAIN_ID: Number(_pub.NEXT_PUBLIC_BASE_CHAIN_ID ?? 8453),
-    NEXT_PUBLIC_USDC_ADDRESS: _pub.NEXT_PUBLIC_USDC_ADDRESS ?? "",
-    NEXT_PUBLIC_ESCROW_ADDRESS: _pub.NEXT_PUBLIC_ESCROW_ADDRESS ?? "",
-    NEXT_PUBLIC_PLATFORM_FEE_BPS: Number(_pub.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? 100),
-    NEXT_PUBLIC_USDC_DECIMALS: Number(_pub.NEXT_PUBLIC_USDC_DECIMALS ?? 6),
+
+  if (typeof window !== "undefined") {
+    console.warn(
+      "[env] Validation failed, using defaults:",
+      parsed.error.flatten().fieldErrors
+    );
+  }
+
+  function safeInt(val: string | undefined, min: number, max: number, fallback: number): number {
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < min || n > max) return fallback;
+    return Math.floor(n);
+  }
+
+  const merged: PublicEnv = {
+    NEXT_PUBLIC_BASE_CHAIN_ID: safeInt(raw.NEXT_PUBLIC_BASE_CHAIN_ID, 1, 999999, DEFAULTS.NEXT_PUBLIC_BASE_CHAIN_ID),
+    NEXT_PUBLIC_USDC_ADDRESS: 
+      (raw.NEXT_PUBLIC_USDC_ADDRESS && /^0x[a-fA-F0-9]{40}$/.test(raw.NEXT_PUBLIC_USDC_ADDRESS))
+        ? raw.NEXT_PUBLIC_USDC_ADDRESS
+        : DEFAULTS.NEXT_PUBLIC_USDC_ADDRESS,
+    NEXT_PUBLIC_ESCROW_ADDRESS:
+      (raw.NEXT_PUBLIC_ESCROW_ADDRESS && /^0x[a-fA-F0-9]{40}$/.test(raw.NEXT_PUBLIC_ESCROW_ADDRESS))
+        ? raw.NEXT_PUBLIC_ESCROW_ADDRESS
+        : DEFAULTS.NEXT_PUBLIC_ESCROW_ADDRESS,
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: safeInt(raw.NEXT_PUBLIC_PLATFORM_FEE_BPS, 0, 10000, DEFAULTS.NEXT_PUBLIC_PLATFORM_FEE_BPS),
+    NEXT_PUBLIC_USDC_DECIMALS: safeInt(raw.NEXT_PUBLIC_USDC_DECIMALS, 0, 18, DEFAULTS.NEXT_PUBLIC_USDC_DECIMALS),
   };
-} else {
-  env = parsed.data;
+
+  return merged;
 }
 
-export default env;
+export const env = parseEnv(process.env as Record<string, string | undefined>);
 
 export const clientEnv = env;
+
+export default env;
