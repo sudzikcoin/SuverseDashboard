@@ -1,0 +1,61 @@
+Task: Wipe database so I can re-register with the same emails (remove ALL app data)
+
+Goals
+- Delete all rows from: users, accounts, sessions, verification_tokens, companies, company_accountants (or links), accountants, purchase_orders, order_items, documents, audit_logs, wallets/payments, and any other app tables.
+- Keep schema and _prisma_migrations only. Reset autoincrement IDs. Do NOT seed anything.
+
+Plan
+1) If Prisma exists (prisma/schema.prisma): run a full reset (fast & safe).
+2) If reset isn’t available, run fallback SQL TRUNCATE on every public table except _prisma_migrations.
+3) Show row counts after to confirm wipe.
+4) Restart the app.
+
+Steps
+# 1) Prisma reset (preferred)
+- Detect Prisma: if file prisma/schema.prisma exists then execute:
+  npx prisma migrate reset --force --skip-seed
+  # prisma will drop & recreate tables and keep _prisma_migrations. IDs reset.
+
+# 2) Fallback SQL (when Prisma reset isn’t available)
+- Connect to the same Postgres from DATABASE_URL and run:
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+  EXECUTE 'SET session_replication_role = replica';
+
+  FOR r IN
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = ''public''
+      AND tablename NOT IN (''_prisma_migrations'')
+  LOOP
+    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+  END LOOP;
+
+  EXECUTE 'SET session_replication_role = DEFAULT';
+END $$;
+
+# 3) Optional targeted safety pass (ignore if tables don’t exist)
+TRUNCATE TABLE
+  users, accounts, sessions, verification_token, verification_tokens,
+  companies, company_accountants, company_links, accountants,
+  purchase_orders, order_items, documents, audit_logs,
+  wallets, payments, credit_purchases
+RESTART IDENTITY CASCADE;
+
+# 4) Verify wipe (run whatever applies; rows should be 0; missing tables are OK)
+SELECT 'users' AS tbl, COUNT(*) FROM users
+UNION ALL SELECT 'companies', COUNT(*) FROM companies
+UNION ALL SELECT 'accountants', COUNT(*) FROM accountants
+UNION ALL SELECT 'purchase_orders', COUNT(*) FROM purchase_orders
+UNION ALL SELECT 'sessions', COUNT(*) FROM sessions
+UNION ALL SELECT 'accounts', COUNT(*) FROM accounts
+UNION ALL SELECT 'verification_token', COUNT(*) FROM verification_token;
+
+# 5) Restart dev server so I can test signup + Resend emails again.
+
+Notes
+- Do NOT seed any default users/companies.
+- Leave _prisma_migrations intact.
+- If the browser cached a session, advise to log out or open the site in a private window before testing signup.
