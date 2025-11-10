@@ -1,14 +1,15 @@
 import { clientEnv } from "../env";
+import { safeNum, safeInt, safeFixed } from "../safeNumber";
 
 export function usdToUnits(usdAmount: string | number): bigint {
   if (usdAmount === "" || usdAmount === null || usdAmount === undefined) {
     throw new Error("Amount is required");
   }
-  const n = typeof usdAmount === "string" ? Number(usdAmount) : usdAmount;
-  if (!Number.isFinite(n) || n < 0) throw new Error("Amount must be a positive number");
+  const n = safeNum(usdAmount, 0);
+  if (n <= 0) throw new Error("Amount must be a positive number");
 
-  const decimals = clientEnv.NEXT_PUBLIC_USDC_DECIMALS;
-  const scaled = n.toFixed(decimals);
+  const decimals = safeInt(clientEnv.NEXT_PUBLIC_USDC_DECIMALS, 6);
+  const scaled = safeFixed(n, decimals);
   const unitsStr = scaled.replace(".", "");
   const normalized = unitsStr.replace(/^0+(?!$)/, "");
   return BigInt(normalized);
@@ -28,6 +29,7 @@ export function getAddresses() {
 }
 
 export function formatUnitsToUsd(units: bigint): string {
-  const decimals = clientEnv.NEXT_PUBLIC_USDC_DECIMALS;
-  return (Number(units) / 10 ** decimals).toFixed(2);
+  const decimals = safeInt(clientEnv.NEXT_PUBLIC_USDC_DECIMALS, 6);
+  const value = Number(units) / 10 ** decimals;
+  return safeFixed(value, 2);
 }

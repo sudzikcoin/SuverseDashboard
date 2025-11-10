@@ -56,7 +56,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router with route groups, API routes, pages), `components/` (including DashboardShell and responsive Sidebar, wallet/PayModal, wallet/USDCPay), `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control, env validation with clientEnv, payments/usdc with BigInt helpers), `prisma/`, `types/`.
+-   **Project Structure**: `app/` (App Router with route groups, API routes, pages), `components/` (including DashboardShell and responsive Sidebar, wallet/PayModal, wallet/USDCPay), `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control, env validation with clientEnv, safeNumber with guards for toFixed(), payments/usdc with BigInt helpers), `prisma/`, `types/`.
 -   **Route Organization**: Uses Next.js route groups - `app/(dashboard)/` for authenticated pages with shared responsive sidebar layout. Admin routes at `app/admin/` with role-specific enforcement.
 -   **Layout Pattern**: Shared `DashboardShell` component provides consistent navigation across all dashboard pages with server-side auth and role checking via `requireRole` (single) or `requireRoles` (array).
 -   **Environment Variables**: Configurable via `.env`.

@@ -1,0 +1,151 @@
+You are a senior Next.js (App Router) + TypeScript engineer. Fix the /payments/usdc page crash BEFORE payment:
+
+ASSUMPTIONS
+- Next.js App Router
+- Page lives at app/payments/usdc/page.tsx
+- Pay modal component is components/wallet/PayModal.tsx (or USDCPay.tsx)
+- Env variables exist but may be missing/strings: NEXT_PUBLIC_PLATFORM_FEE_BPS, NEXT_PUBLIC_USDC_ADDRESS, NEXT_PUBLIC_ESCROW_ADDRESS
+
+GOALS
+1) Make /payments/usdc render safely (no toFixed crash).
+2) Parse fee/amount with hard fallbacks; never call toFixed on NaN.
+3) Show normal UI (amount input + Pay button) and open modal only after render.
+
+CHANGES
+
+1) FILE: lib/safeNumber.ts (NEW)
+--------------------------------
+export function safeInt(v: unknown, d = 0) {
+  const n = typeof v === "string" ? Number(v) : (v as number);
+  if (!Number.isFinite(n)) return d;
+  return Math.trunc(n);
+}
+export function safeNum(v: unknown, d = 0) {
+  const n = typeof v === "string" ? Number(v) : (v as number);
+  return Number.isFinite(n) ? n : d;
+}
+export function safeFixed(v: unknown, frac = 2) {
+  const n = safeNum(v, 0);
+  const f = Math.max(0, Math.min(6, Math.trunc(safeNum(frac, 2))));
+  return n.toFixed(f);
+}
+
+2) FILE: lib/env.ts (EDIT)
+--------------------------
+- Make PLATFORM_FEE_BPS optional with fallback.
+Replace relevant part with:
+export const ENV = {
+  USDC: (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "").toString(),
+  ESCROW: (process.env.NEXT_PUBLIC_ESCROW_ADDRESS ?? "").toString(),
+  FEE_BPS: (() => {
+    const raw = process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 100; // 1% default
+    return Math.max(0, Math.min(10000, Math.trunc(n)));
+  })(),
+};
+
+3) FILE: app/payments/usdc/page.tsx (REPLACE CONTENTS)
+------------------------------------------------------
+"use client";
+import { useMemo, useState } from "react";
+import { ENV } from "@/lib/env";
+import { safeNum, safeFixed } from "@/lib/safeNumber";
+
+export default function USDCPayPage() {
+  const [amountInput, setAmountInput] = useState<string>("1.00");
+
+  const feeBps = ENV.FEE_BPS; // already safe
+  const { amount, fee, total } = useMemo(() => {
+    const amt = safeNum(amountInput, 0);
+    const fee = (amt * feeBps) / 10_000;
+    const total = amt + fee;
+    return { amount: amt, fee, total };
+  }, [amountInput, feeBps]);
+
+  const canPay =
+    amount > 0 &&
+    ENV.USDC.match(/^0x[a-fA-F0-9]{40}$/) &&
+    ENV.ESCROW.match(/^0x[a-fA-F0-9]{40}$/);
+
+  return (
+    <div className="max-w-xl mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-semibold">Pay with USDC</h1>
+
+      <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+        <label className="block text-sm opacity-80">Amount (USDC)</label>
+        <input
+          value={amountInput}
+          onChange={(e) => setAmountInput(e.target.value)}
+          inputMode="decimal"
+          placeholder="0.00"
+          className="w-full rounded-md bg-black/30 border border-white/15 px-3 py-2 outline-none"
+        />
+        <div className="text-sm opacity-80">
+          <div className="flex justify-between"><span>Platform Fee ({(feeBps/100).toFixed(2)}%)</span><span>${safeFixed(fee,2)}</span></div>
+          <div className="flex justify-between font-semibold"><span>Total</span><span>${safeFixed(total,2)}</span></div>
+        </div>
+        <button
+          disabled={!canPay}
+          onClick={() =>
+            document.dispatchEvent(new CustomEvent("open-usdc-pay", { detail: { amount } }))
+          }
+          className={`w-full rounded-lg px-4 py-2 font-semibold ${canPay ? "bg-emerald-500 hover:bg-emerald-600" : "bg-gray-600 cursor-not-allowed"}`}
+        >
+          Pay
+        </button>
+        {!canPay && (
+          <p className="text-xs text-red-300">
+            Check env: NEXT_PUBLIC_USDC_ADDRESS / NEXT_PUBLIC_ESCROW_ADDRESS and enter amount &gt; 0.
+          </p>
+        )}
+      </div>
+
+      <USDCModalBridge />
+    </div>
+  );
+}
+
+function USDCModalBridge() {
+  // This tiny bridge opens your existing Pay modal safely AFTER page renders.
+  // Keep your current PayModal component as-is.
+  // Listen once per click to avoid duplicate opens.
+  if (typeof window !== "undefined") {
+    document.removeEventListener("open-usdc-pay", handler as any);
+    document.addEventListener("open-usdc-pay", handler as any);
+  }
+  function handler(e: Event) {
+    const detail = (e as CustomEvent).detail ?? {};
+    // Lazy import to avoid SSR hiccups
+    import("@/components/wallet/PayModal").then(({ openPayModal }) => {
+      // openPayModal should accept { amount } or implement internally.
+      openPayModal(detail);
+    }).catch(console.error);
+  }
+  return null;
+}
+
+4) FILE: components/wallet/PayModal.tsx (SMALL ADD)
+---------------------------------------------------
+- Export a simple imperative opener used above:
+export function openPayModal(opts: { amount: number }) {
+  // existing code that toggles your modal open + sets amount
+  // e.g. use a singleton store or event-based modal controller
+}
+
+- Inside the modal UI: never call .toFixed on env without guarding.
+Display with toFixed(2) only on known numbers; for on-chain use parseUnits.
+
+5) FILE: components/dashboard/tiles/PayWithUsdcTile.tsx (OR where the link lives) (EDIT)
+----------------------------------------------------------------------------------------
+- Ensure it links to the route exactly: href="/payments/usdc"
+
+NOTES
+- Root cause of crash was calling toFixed on a non-integer/NaN before modal mounted.
+- We now: (a) sanitize env/inputs, (b) format only with safe helpers, (c) open modal AFTER successful render via event.
+
+TEST
+1) Rebuild app.
+2) Open /payments/usdc — page must render with amount box and Pay button (no error banners).
+3) Change amount to e.g. 1.23 — totals update, no crashes.
+4) Click Pay — your existing modal opens; proceed with wallet flow as before.
