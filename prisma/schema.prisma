@@ -99,8 +99,13 @@ model CreditInventory {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   status           String          @default("ACTIVE")
+  brokerRef        String?
+  source           String?
+  importedAt       DateTime?
   holds            Hold[]
   purchaseOrders   PurchaseOrder[]
+  
+  @@unique([brokerRef], map: "creditinventory_brokerref_unique")
 }
 
 model Hold {
