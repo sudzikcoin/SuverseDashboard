@@ -32,7 +32,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
 -   **Purchase Workflow**: Stripe checkout integration, purchase order creation, admin approval, and automated PDF generation.
--   **USDC Payment Flow**: Modal-based payment confirmation showing amount, platform fee, and total. Wagmi/Viem integration for on-chain USDC transfers on Base network. PaymentLog model tracks all transactions with status (PENDING, SUBMITTED, CONFIRMED, FAILED). Comprehensive audit logging for payment lifecycle.
+-   **USDC Payment Flow**: Modal-based payment confirmation showing amount, platform fee, and total. Wagmi/Viem integration for on-chain USDC transfers on Base network (Native USDC 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913). PaymentLog model tracks all transactions with status (PENDING, SUBMITTED, CONFIRMED, FAILED). Strict env validation via lib/env.ts prevents address/decimals confusion. Comprehensive audit logging for payment lifecycle.
 -   **Inventory Management**: Full-featured admin interface at /admin/inventory for CRUD operations on tax credit inventory. Server-rendered page with modal-based create/edit forms, inline delete with confirmation, and audit logging for all operations. Includes broker file upload system (CSV/XLSX) with idempotent imports using brokerRef for duplicate prevention, flexible column mapping, Zod validation, and automatic marketplace sync.
 -   **Accountant Features**: 
     - Zero-trust isolation: new accountants start with zero company access
@@ -56,7 +56,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router with route groups, API routes, pages), `components/` (including DashboardShell and responsive Sidebar), `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control), `prisma/`, `types/`.
+-   **Project Structure**: `app/` (App Router with route groups, API routes, pages), `components/` (including DashboardShell and responsive Sidebar), `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control, env validation, payments/usdc), `prisma/`, `types/`.
 -   **Route Organization**: Uses Next.js route groups - `app/(dashboard)/` for authenticated pages with shared responsive sidebar layout. Admin routes at `app/admin/` with role-specific enforcement.
 -   **Layout Pattern**: Shared `DashboardShell` component provides consistent navigation across all dashboard pages with server-side auth and role checking via `requireRole` (single) or `requireRoles` (array).
 -   **Environment Variables**: Configurable via `.env`.
