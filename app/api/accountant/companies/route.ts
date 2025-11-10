@@ -22,7 +22,10 @@ export async function GET() {
     })
     const companyIds = links.map(l => l.companyId)
     const companies = await prisma.company.findMany({
-      where: { id: { in: companyIds } },
+      where: { 
+        id: { in: companyIds },
+        status: { not: "ARCHIVED" }
+      },
       orderBy: { legalName: "asc" }
     })
     return NextResponse.json({ companies })

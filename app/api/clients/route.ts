@@ -62,7 +62,7 @@ export async function GET() {
 
       companies = links
         .map((link) => link.company)
-        .filter((c) => c.deletedAt === null)
+        .filter((c) => c.deletedAt === null && c.status !== "ARCHIVED")
         .sort((a, b) => a.legalName.localeCompare(b.legalName))
     }
 

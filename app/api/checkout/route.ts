@@ -54,6 +54,12 @@ export async function POST(req: Request) {
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 })
     }
+    if (company.status === "ARCHIVED") {
+      return NextResponse.json({ error: "Company is archived" }, { status: 403 })
+    }
+    if (company.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Company is not active" }, { status: 403 })
+    }
 
     const inventory = await prisma.creditInventory.findUnique({
       where: { id: validated.inventoryId },
