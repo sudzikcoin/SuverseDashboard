@@ -13,6 +13,28 @@ enum CompanyStatus {
   ARCHIVED
 }
 
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ARCHIVE_COMPANY
+  UNARCHIVE_COMPANY
+  BLOCK_COMPANY
+  UNBLOCK_COMPANY
+  RESET_PASSWORD
+}
+
+enum AuditEntity {
+  USER
+  COMPANY
+  PURCHASE
+  CREDIT
+  DOCUMENT
+  SYSTEM
+}
+
 model User {
   id             String              @id @default(cuid())
   email          String              @unique
@@ -131,17 +153,20 @@ model Document {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  companyId String?
-  action    String
-  entity    String?
-  entityId  String?
-  meta      Json?
-  createdAt DateTime @default(now())
-  actor     User?    @relation(fields: [actorId], references: [id])
-  company   Company? @relation(fields: [companyId], references: [id])
-  
+  id          String      @id @default(cuid())
+  timestamp   DateTime    @default(now())
+  actorId     String?
+  actorEmail  String?
+  action      AuditAction @default(CREATE)
+  entity      AuditEntity @default(SYSTEM)
+  entityId    String?
+  details     Json?
+  companyId   String?
+  actor       User?       @relation(fields: [actorId], references: [id])
+  company     Company?    @relation(fields: [companyId], references: [id])
+
+  @@index([timestamp])
+  @@index([entity, entityId])
   @@index([companyId])
   @@index([actorId])
 }

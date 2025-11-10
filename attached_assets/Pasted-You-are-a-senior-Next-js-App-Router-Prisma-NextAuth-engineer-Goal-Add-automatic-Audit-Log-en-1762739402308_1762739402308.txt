@@ -1,0 +1,177 @@
+You are a senior Next.js (App Router) + Prisma + NextAuth engineer.
+Goal: Add automatic Audit Log entries when an Admin archives/unarchives and blocks/unblocks a Company. Implement EXACTLY as below.
+
+================================================================================
+1) PRISMA — extend enums/models (single edit)
+- Open prisma/schema.prisma and INSERT/MERGE this content into existing enums/models (do not remove your current values):
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ARCHIVE_COMPANY
+  UNARCHIVE_COMPANY
+  BLOCK_COMPANY
+  UNBLOCK_COMPANY
+}
+
+enum AuditEntity {
+  USER
+  COMPANY
+  PURCHASE
+  CREDIT
+  DOCUMENT
+  SYSTEM
+}
+
+model AuditLog {
+  id          String       @id @default(cuid())
+  timestamp   DateTime     @default(now())
+  actorId     String?
+  actorEmail  String?
+  action      AuditAction
+  entity      AuditEntity
+  entityId    String?
+  details     Json?
+
+  @@index([timestamp])
+  @@index([entity, entityId])
+}
+
+- Then run:
+npx prisma generate
+npx prisma db push
+
+================================================================================
+2) LIB — reusable audit writer
+- Create file: lib/audit.ts
+
+import { prisma } from "@/lib/db";
+
+type AuditParams = {
+  actorId?: string | null;
+  actorEmail?: string | null;
+  action: "ARCHIVE_COMPANY" | "UNARCHIVE_COMPANY" | "BLOCK_COMPANY" | "UNBLOCK_COMPANY";
+  entity: "COMPANY";
+  entityId: string;
+  details?: Record<string, any>;
+};
+
+export async function writeAudit(p: AuditParams) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: p.actorId ?? undefined,
+        actorEmail: p.actorEmail ?? undefined,
+        action: p.action as any,
+        entity: p.entity as any,
+        entityId: p.entityId,
+        details: p.details as any,
+      },
+    });
+  } catch (e) {
+    console.error("Audit write failed", e); // do not break main flow
+  }
+}
+
+================================================================================
+3) LIB — admin session guard (if missing)
+- Create file: lib/admin.ts
+
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function requireAdminSession() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || (session.user as any).role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+  return session;
+}
+
+================================================================================
+4) API — ARCHIVE company (logs ARCHIVE_COMPANY)
+- Edit/create: app/api/admin/companies/[id]/archive/route.ts
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/admin";
+import { writeAudit } from "@/lib/audit";
+
+export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const session = await requireAdminSession();
+  const id = params.id;
+
+  const prev = await prisma.company.findUnique({ where: { id } });
+  const updated = await prisma.company.update({
+    where: { id },
+    data: { status: "BLOCKED", archivedAt: new Date() }, // keep your archive semantics
+  });
+
+  await writeAudit({
+    actorId: (session.user as any).id,
+    actorEmail: (session.user as any).email ?? null,
+    action: "ARCHIVE_COMPANY",
+    entity: "COMPANY",
+    entityId: id,
+    details: { prevStatus: prev?.status ?? null, nextStatus: updated.status, archivedAt: updated.archivedAt },
+  });
+
+  return NextResponse.json({ ok: true, company: updated });
+}
+
+================================================================================
+5) API — UNARCHIVE company (logs UNARCHIVE_COMPANY)
+- Edit/create: app/api/admin/companies/[id]/unarchive/route.ts
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/admin";
+import { writeAudit } from "@/lib/audit";
+
+export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const session = await requireAdminSession();
+  const id = params.id;
+
+  const prev = await prisma.company.findUnique({ where: { id } });
+  const updated = await prisma.company.update({
+    where: { id },
+    data: { status: "ACTIVE", archivedAt: null },
+  });
+
+  await writeAudit({
+    actorId: (session.user as any).id,
+    actorEmail: (session.user as any).email ?? null,
+    action: "UNARCHIVE_COMPANY",
+    entity: "COMPANY",
+    entityId: id,
+    details: { prevStatus: prev?.status ?? null, nextStatus: updated.status, archivedAt: updated.archivedAt },
+  });
+
+  return NextResponse.json({ ok: true, company: updated });
+}
+
+================================================================================
+6) API — optionally log BLOCK/UNBLOCK (if you have these endpoints)
+- In app/api/admin/companies/[id]/block/route.ts and .../unblock/route.ts, after update() add:
+
+await writeAudit({
+  actorId: (session.user as any).id,
+  actorEmail: (session.user as any).email ?? null,
+  action: "BLOCK_COMPANY", // or "UNBLOCK_COMPANY"
+  entity: "COMPANY",
+  entityId: id,
+  details: { prevStatus: prev?.status, nextStatus: updated.status },
+});
+
+================================================================================
+7) TESTING CHECKLIST
+- Login as ADMIN.
+- Archive a company → /admin/audit shows ARCHIVE_COMPANY with entity=COMPANY, correct entityId, actor email, details.
+- Unarchive same company → UNARCHIVE_COMPANY appears.
+- (If implemented) Block/Unblock company → respective entries appear.
+- Unauthorized role cannot hit these routes (guarded by requireAdminSession).
+
+END.
