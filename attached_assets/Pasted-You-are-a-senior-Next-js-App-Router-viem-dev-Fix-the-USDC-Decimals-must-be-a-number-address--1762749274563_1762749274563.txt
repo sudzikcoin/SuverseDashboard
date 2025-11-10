@@ -1,0 +1,175 @@
+You are a senior Next.js (App Router) + viem dev. Fix the USDC “Decimals must be a number / address ‘6’ is invalid” bug and finalize the Base-chain payment flow.
+
+ASSUMPTIONS
+- Next.js 14 App Router
+- viem + wagmi already installed
+- Env schema lives at /lib/env.ts
+- Payment helpers at /lib/payments/usdc.ts
+- Pay modal at /components/wallet/PayModal.tsx
+- We pay native USDC on Base mainnet
+- We use an escrow EOA (or multisig) to receive funds
+
+GOAL
+1) Stop reading the decimals value as a contract address.
+2) Use the correct USDC contract on Base mainnet.
+3) Validate env vars at runtime (numbers vs strings).
+4) Execute ERC-20 transfer(escrow, amount) with proper decimal math.
+5) Show a clean confirmation modal.
+6) (Bonus) Wallet connection is per-user and resets on sign-out.
+
+────────────────────────────────────────────────────────────────────────
+
+A) ENV: add/rename the PUBLIC variables and values (Replit → Tools → Secrets)
+
+# REQUIRED (strings)
+NEXT_PUBLIC_USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913   # Base mainnet USDC
+NEXT_PUBLIC_ESCROW_ADDRESS=<YOUR_ESCROW_ADDRESS>                        # e.g. 0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721
+
+# REQUIRED (numbers; enter as plain numbers, no quotes)
+NEXT_PUBLIC_USDC_DECIMALS=6
+NEXT_PUBLIC_BASE_CHAIN_ID=8453
+NEXT_PUBLIC_PLATFORM_FEE_BPS=100
+
+(If you still have any of the old names like USDC_BASE_ADDRESS or PUBLIC_USDC_DECIMALS as a string, remove them.)
+
+────────────────────────────────────────────────────────────────────────
+
+B) lib/env.ts — strict validation & number coercion
+
+// lib/env.ts
+import { z } from "zod";
+
+const addr = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EVM address");
+const num  = z.coerce.number();
+
+export const clientEnv = z.object({
+  NEXT_PUBLIC_USDC_ADDRESS: addr,
+  NEXT_PUBLIC_ESCROW_ADDRESS: addr,
+  NEXT_PUBLIC_USDC_DECIMALS: num,       // ← coerces "6" to 6; errors on bad input
+  NEXT_PUBLIC_BASE_CHAIN_ID: num,       // 8453
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: num,    // e.g. 100 = 1.00%
+}).parse({
+  NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
+  NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
+  NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+  NEXT_PUBLIC_BASE_CHAIN_ID: process.env.NEXT_PUBLIC_BASE_CHAIN_ID,
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS,
+});
+
+export const {
+  NEXT_PUBLIC_USDC_ADDRESS,
+  NEXT_PUBLIC_ESCROW_ADDRESS,
+  NEXT_PUBLIC_USDC_DECIMALS,
+  NEXT_PUBLIC_BASE_CHAIN_ID,
+  NEXT_PUBLIC_PLATFORM_FEE_BPS,
+} = clientEnv;
+
+────────────────────────────────────────────────────────────────────────
+
+C) lib/payments/usdc.ts — single source of truth for the transfer
+
+// lib/payments/usdc.ts
+"use client";
+import { erc20Abi, createWalletClient, custom, parseUnits, Chain } from "viem";
+import { base } from "viem/chains";
+import {
+  NEXT_PUBLIC_USDC_ADDRESS,
+  NEXT_PUBLIC_ESCROW_ADDRESS,
+  NEXT_PUBLIC_USDC_DECIMALS,
+  NEXT_PUBLIC_BASE_CHAIN_ID,
+} from "@/lib/env";
+
+const chain: Chain = { ...base, id: NEXT_PUBLIC_BASE_CHAIN_ID };
+
+export async function payUsdc(amountUsd: number) {
+  if (!window.ethereum) throw new Error("Wallet not found");
+  const [account] = await window.ethereum.request({ method: "eth_requestAccounts" }) as `0x${string}`[];
+  const client = createWalletClient({ transport: custom(window.ethereum), chain });
+
+  // Convert human USD amount to token units using configured decimals
+  const value = parseUnits(amountUsd.toString(), NEXT_PUBLIC_USDC_DECIMALS);
+
+  return client.writeContract({
+    account,
+    address: NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "transfer",
+    args: [NEXT_PUBLIC_ESCROW_ADDRESS as `0x${string}`, value],
+  });
+}
+
+────────────────────────────────────────────────────────────────────────
+
+D) components/wallet/PayModal.tsx — use env + helper; show fee math
+
+// components/wallet/PayModal.tsx
+"use client";
+import { useState } from "react";
+import { payUsdc } from "@/lib/payments/usdc";
+import { NEXT_PUBLIC_PLATFORM_FEE_BPS } from "@/lib/env";
+
+export default function PayModal({ open, onClose, baseAmountUSD }: { open: boolean; onClose: () => void; baseAmountUSD: number; }) {
+  const [loading, setLoading] = useState(false);
+  const fee = Math.round((baseAmountUSD * NEXT_PUBLIC_PLATFORM_FEE_BPS) / 100) / 100; // 2dp
+  const total = +(baseAmountUSD + fee).toFixed(2);
+
+  async function onConfirm() {
+    try {
+      setLoading(true);
+      const hash = await payUsdc(total);
+      alert(`Transaction sent:\n${hash}`);
+      onClose();
+    } catch (e: any) {
+      alert(`Payment failed: ${e?.message ?? e}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50">
+      <div className="w-[92%] max-w-md rounded-xl bg-[#0E1525] p-5 shadow-xl">
+        <h3 className="text-2xl font-semibold text-white mb-4">Confirm Payment</h3>
+        <div className="space-y-2 text-gray-200">
+          <div className="flex justify-between"><span>Amount</span><span>${baseAmountUSD.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>Platform Fee ({(NEXT_PUBLIC_PLATFORM_FEE_BPS/100).toFixed(2)}%)</span><span>${fee.toFixed(2)}</span></div>
+          <div className="flex justify-between text-emerald-400 font-semibold"><span>Total</span><span>${total.toFixed(2)}</span></div>
+        </div>
+        <div className="mt-5 flex gap-3">
+          <button onClick={onConfirm} disabled={loading} className="flex-1 rounded-lg bg-emerald-500 py-2 font-medium text-black disabled:opacity-60">{loading ? "Processing…" : "Pay"}</button>
+          <button onClick={onClose} className="flex-1 rounded-lg border border-white/20 py-2 text-white">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+────────────────────────────────────────────────────────────────────────
+
+E) Per-user wallet connection (clears on user switch/sign-out)
+
+- Wherever you store the connected wallet (localStorage), key it by user id/email.
+  Example: localStorage.setItem(`wallet:${user.email}`, address)
+- On sign-out or when user changes, remove the previous key and reset UI state.
+
+Minimal helper:
+
+// lib/walletStore.ts
+export const walletKey = (id:string) => `wallet:${id}`;
+export const saveWallet = (id:string, addr:string|null) => {
+  const k = walletKey(id);
+  if (addr) localStorage.setItem(k, addr);
+  else localStorage.removeItem(k);
+};
+
+Call saveWallet(user.email, null) on sign-out and when a different user logs in.
+
+────────────────────────────────────────────────────────────────────────
+
+F) After edits
+1) Save secrets (ensure NEXT_PUBLIC_USDC_DECIMALS is 6 as a number).
+2) Click “Restart/Run” so Next.js picks up the new env.
+3) Refresh the app → connect wallet on Base → Pay → the modal should succeed and your wallet will send an ERC-20 transfer to ESCROW_ADDRESS.
+
+This fixes the decimals error and prevents the “address ‘6’ is invalid” by using the correct USDC address and validated numeric envs.

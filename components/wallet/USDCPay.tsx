@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import PayModal from '@/components/wallet/PayModal';
+import { NEXT_PUBLIC_PLATFORM_FEE_BPS } from '@/lib/env';
 import { getUsdcConfig } from '@/lib/payments/usdc';
 
 const config = getUsdcConfig();
 const USDC = config.usdcAddress;
 const ESCROW = config.escrow;
 const CHAIN_ID = config.chainId;
-const FEE_BPS = config.feeBps;
+const FEE_BPS = NEXT_PUBLIC_PLATFORM_FEE_BPS;
 
 export default function USDCPay({ defaultAmount = 1000 }: { defaultAmount?: number }) {
   const [amt, setAmt] = useState(defaultAmount);

@@ -10,11 +10,10 @@ import {
 import { erc20Abi } from "@/lib/erc20"
 import { toRaw, calcWithFee, fromRaw, formatUSDWithCents } from "@/lib/format"
 import { X } from "lucide-react"
-import { getUsdcConfig } from "@/lib/payments/usdc"
+import { NEXT_PUBLIC_USDC_DECIMALS, NEXT_PUBLIC_BASE_CHAIN_ID } from "@/lib/env"
 
-const config = getUsdcConfig()
-const DECIMALS = config.usdcDecimals
-const CHAIN_ID = config.chainId
+const DECIMALS = NEXT_PUBLIC_USDC_DECIMALS
+const CHAIN_ID = NEXT_PUBLIC_BASE_CHAIN_ID
 
 interface PayModalProps {
   open: boolean
