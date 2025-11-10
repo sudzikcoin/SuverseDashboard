@@ -1,33 +1,33 @@
-"use client";
-import { parseUnits } from "viem";
-import {
-  NEXT_PUBLIC_USDC_ADDRESS,
-  NEXT_PUBLIC_ESCROW_ADDRESS,
-  NEXT_PUBLIC_USDC_DECIMALS,
-  NEXT_PUBLIC_BASE_CHAIN_ID,
-  NEXT_PUBLIC_PLATFORM_FEE_BPS,
-} from "@/lib/env";
+import { clientEnv } from "../env";
 
-export const getUsdcConfig = () => {
-  return {
-    chainId: NEXT_PUBLIC_BASE_CHAIN_ID,
-    usdcAddress: NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`,
-    usdcDecimals: NEXT_PUBLIC_USDC_DECIMALS,
-    escrow: NEXT_PUBLIC_ESCROW_ADDRESS as `0x${string}`,
-    feeBps: NEXT_PUBLIC_PLATFORM_FEE_BPS,
-  };
-};
+export function usdToUnits(usdAmount: string | number): bigint {
+  if (usdAmount === "" || usdAmount === null || usdAmount === undefined) {
+    throw new Error("Amount is required");
+  }
+  const n = typeof usdAmount === "string" ? Number(usdAmount) : usdAmount;
+  if (!Number.isFinite(n) || n < 0) throw new Error("Amount must be a positive number");
 
-export function calcAmounts(inputUsd: number) {
-  const { usdcDecimals, feeBps } = getUsdcConfig();
-  const amount = parseUnits(inputUsd.toString(), usdcDecimals);
-  const fee = (amount * BigInt(feeBps)) / BigInt(10_000);
-  const total = amount + fee;
-  return { amount, fee, total };
+  const decimals = clientEnv.NEXT_PUBLIC_USDC_DECIMALS;
+  const scaled = n.toFixed(decimals);
+  const unitsStr = scaled.replace(".", "");
+  const normalized = unitsStr.replace(/^0+(?!$)/, "");
+  return BigInt(normalized);
 }
 
-export function calcFeeUsd(baseAmount: number) {
-  const fee = Math.round((baseAmount * NEXT_PUBLIC_PLATFORM_FEE_BPS) / 100) / 100;
-  const total = +(baseAmount + fee).toFixed(2);
-  return { fee, total };
+export function calcFeeBps(units: bigint): { fee: bigint; total: bigint } {
+  const bps = BigInt(clientEnv.NEXT_PUBLIC_PLATFORM_FEE_BPS);
+  const fee = (units * bps) / BigInt(10_000);
+  return { fee, total: units + fee };
+}
+
+export function getAddresses() {
+  return {
+    token: clientEnv.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`,
+    escrow: clientEnv.NEXT_PUBLIC_ESCROW_ADDRESS as `0x${string}`,
+  };
+}
+
+export function formatUnitsToUsd(units: bigint): string {
+  const decimals = clientEnv.NEXT_PUBLIC_USDC_DECIMALS;
+  return (Number(units) / 10 ** decimals).toFixed(2);
 }

@@ -1,0 +1,190 @@
+You are a senior Next.js (App Router) + TypeScript + Wagmi/Ethers engineer. Fix the USDC on-chain payment so that clicking “Pay with USDC” no longer throws `RangeError: Not an integer`. Root cause: the code builds the on-chain amount using a non-integer (e.g. string/float) and/or wrong decimals. Implement exact changes below.
+
+ASSUMPTIONS
+- Next.js 14 App Router, TypeScript
+- Wagmi/viem for wallet, ethers not required
+- USDC on Base mainnet, 6 decimals
+- Env values already exist in Replit Secrets:
+  NEXT_PUBLIC_USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+  NEXT_PUBLIC_USDC_DECIMALS = 6
+  NEXT_PUBLIC_ESCROW_ADDRESS = <checksummed escrow EOA/contract>
+  NEXT_PUBLIC_PLATFORM_FEE_BPS = 100 (==1.00%)
+- UI component file: components/wallet/PayModal.tsx
+- Helpers live in lib/payments/usdc.ts and lib/env.ts
+
+=============================
+1) lib/env.ts — strict, numeric-safe env with coercion
+Create/replace with:
+
+import { z } from "zod";
+
+export const clientEnv = (() => {
+  const schema = z.object({
+    NEXT_PUBLIC_USDC_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/,"Invalid USDC address"),
+    NEXT_PUBLIC_ESCROW_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/,"Invalid escrow address"),
+    NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().int().nonnegative(),
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: z.coerce.number().int().nonnegative(),
+  });
+
+  const parsed = schema.safeParse({
+    NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
+    NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
+    NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS ?? 6,
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? 0,
+  });
+
+  if (!parsed.success) {
+    const msg = parsed.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
+    throw new Error("Env validation failed: " + msg);
+  }
+  return parsed.data;
+})();
+
+=============================
+2) lib/payments/usdc.ts — safe math helpers using BigInt
+
+import { clientEnv } from "../env";
+
+export function usdToUnits(usdAmount: string | number): bigint {
+  // guard
+  if (usdAmount === "" || usdAmount === null || usdAmount === undefined) {
+    throw new Error("Amount is required");
+  }
+  const n = typeof usdAmount === "string" ? Number(usdAmount) : usdAmount;
+  if (!Number.isFinite(n) || n < 0) throw new Error("Amount must be a positive number");
+
+  const decimals = clientEnv.NEXT_PUBLIC_USDC_DECIMALS; // 6 for USDC
+  // avoid floating point issues: use toFixed then BigInt
+  const scaled = (n).toFixed(decimals);           // "1.23" -> "1.230000"
+  const unitsStr = scaled.replace(".", "");       // "1230000"
+  // strip any leading zeros safely
+  const normalized = unitsStr.replace(/^0+(?!$)/, "");
+  return BigInt(normalized);
+}
+
+export function calcFeeBps(units: bigint): { fee: bigint; total: bigint } {
+  const bps = BigInt(clientEnv.NEXT_PUBLIC_PLATFORM_FEE_BPS); // e.g. 100 = 1%
+  const fee = (units * bps) / 10_000n;
+  return { fee, total: units + fee };
+}
+
+export function getAddresses() {
+  return {
+    token: clientEnv.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`,
+    escrow: clientEnv.NEXT_PUBLIC_ESCROW_ADDRESS as `0x${string}`,
+  };
+}
+
+=============================
+3) components/wallet/PayModal.tsx — build integer amounts, show clear errors, call viem correctly
+
+"use client";
+import { useState } from "react";
+import { usdToUnits, calcFeeBps, getAddresses } from "@/lib/payments/usdc";
+import { useAccount, useWriteContract } from "wagmi";
+import { erc20Abi } from "viem";
+import { clientEnv } from "@/lib/env";
+
+export default function PayModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [amountUsd, setAmountUsd] = useState<string>("1");
+  const [error, setError] = useState<string>("");
+  const { address: user } = useAccount();
+  const { writeContractAsync, isPending } = useWriteContract();
+
+  const onPay = async () => {
+    setError("");
+    try {
+      const units = usdToUnits(amountUsd);            // bigint
+      const { fee, total } = calcFeeBps(units);       // bigint
+      const { token, escrow } = getAddresses();
+
+      await writeContractAsync({
+        address: token,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [escrow, total],                        // address, uint256 (both valid types)
+        chainId: 8453,                                // Base mainnet
+      });
+
+      onClose();
+      // optional: toast success
+    } catch (e: any) {
+      setError(e?.message ?? "Payment failed");
+      console.error(e);
+    }
+  };
+
+  if (!open) return null;
+
+  const bps = clientEnv.NEXT_PUBLIC_PLATFORM_FEE_BPS;
+  let preview = { fee: "—", total: "—" };
+  try {
+    const u = usdToUnits(amountUsd);
+    const { fee, total } = calcFeeBps(u);
+    // format preview as USD with decimals
+    const toUsd = (x: bigint) => (Number(x) / 10 ** clientEnv.NEXT_PUBLIC_USDC_DECIMALS).toFixed(2);
+    preview = { fee: `$${toUsd(fee)}`, total: `$${toUsd(total)}` };
+  } catch {}
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-2xl bg-[#0f172a] p-6 text-white shadow-xl">
+        <h3 className="text-2xl font-semibold mb-4">Confirm Payment</h3>
+
+        <label className="text-sm opacity-80">Amount (USD)</label>
+        <input
+          inputMode="decimal"
+          value={amountUsd}
+          onChange={(e) => setAmountUsd(e.target.value)}
+          className="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none"
+          placeholder="1.00"
+        />
+
+        <div className="mt-4 space-y-1 text-sm">
+          <div className="flex justify-between"><span>Platform Fee ({(bps/100).toFixed(2)}%)</span><span>{preview.fee}</span></div>
+          <div className="flex justify-between font-semibold"><span>Total</span><span>{preview.total}</span></div>
+        </div>
+
+        {error && <div className="mt-3 rounded-lg bg-red-500/10 p-3 text-red-300 text-sm">{error}</div>}
+
+        <div className="mt-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-lg bg-white/10 py-2">Cancel</button>
+          <button
+            onClick={onPay}
+            disabled={isPending || !user}
+            className="flex-1 rounded-lg bg-emerald-500 py-2 font-semibold disabled:opacity-50"
+          >
+            {isPending ? "Processing…" : "Pay"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+=============================
+4) Optional UX guards
+- Disable “Pay” if !user (wallet not connected).
+- If chainId !== 8453, show prompt to switch network before paying.
+
+=============================
+5) ENV checklist in Replit (App Secrets)
+Set EXACT values (strings without quotes):
+  NEXT_PUBLIC_USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+  NEXT_PUBLIC_USDC_DECIMALS = 6
+  NEXT_PUBLIC_ESCROW_ADDRESS = <YOUR ESCROW CHECKSUM ADDRESS>
+  NEXT_PUBLIC_PLATFORM_FEE_BPS = 100
+
+Remove any old/duplicated keys like USDC_BASE_ADDRESS to avoid confusion.
+
+=============================
+6) After changes
+- Restart the Replit server.
+- Hard refresh the browser (Cmd/Ctrl+Shift+R).
+- Test with amounts like 1, 1.25, 0.01 — no errors; transaction constructs args `[escrow, uint256]` where `uint256` is BigInt.
+- If wallet pops confirmation with the expected USDC token and total, the fix worked.
+
+Deliverables:
+- No more “RangeError: Not an integer”
+- Correct USDC smallest-unit conversion (6 decimals)
+- Robust env validation + clean error messages

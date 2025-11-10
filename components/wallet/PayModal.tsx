@@ -8,12 +8,11 @@ import {
   useSwitchChain,
 } from "wagmi"
 import { erc20Abi } from "@/lib/erc20"
-import { toRaw, calcWithFee, fromRaw, formatUSDWithCents } from "@/lib/format"
+import { usdToUnits, calcFeeBps, formatUnitsToUsd } from "@/lib/payments/usdc"
 import { X } from "lucide-react"
-import { NEXT_PUBLIC_USDC_DECIMALS, NEXT_PUBLIC_BASE_CHAIN_ID } from "@/lib/env"
+import { clientEnv } from "@/lib/env"
 
-const DECIMALS = NEXT_PUBLIC_USDC_DECIMALS
-const CHAIN_ID = NEXT_PUBLIC_BASE_CHAIN_ID
+const CHAIN_ID = clientEnv.NEXT_PUBLIC_BASE_CHAIN_ID
 
 interface PayModalProps {
   open: boolean
@@ -46,14 +45,14 @@ export default function PayModal({
   const [txHash, setTxHash] = useState<string | null>(null)
   const [paymentLogId, setPaymentLogId] = useState<string | null>(null)
 
-  const amountRaw = useMemo(() => toRaw(amount, DECIMALS), [amount])
-  const { fee: feeRaw, total: totalRaw } = useMemo(
-    () => calcWithFee(amountRaw, feeBps),
-    [amountRaw, feeBps]
-  )
+  const { amountRaw, feeRaw, totalRaw } = useMemo(() => {
+    const units = usdToUnits(amount)
+    const { fee, total } = calcFeeBps(units)
+    return { amountRaw: units, feeRaw: fee, totalRaw: total }
+  }, [amount])
 
-  const feeAmount = useMemo(() => fromRaw(feeRaw, DECIMALS), [feeRaw])
-  const totalAmount = useMemo(() => fromRaw(totalRaw, DECIMALS), [totalRaw])
+  const feeAmount = useMemo(() => Number(formatUnitsToUsd(feeRaw)), [feeRaw])
+  const totalAmount = useMemo(() => Number(formatUnitsToUsd(totalRaw)), [totalRaw])
 
   async function handlePay() {
     if (!address) {
@@ -162,7 +161,7 @@ export default function PayModal({
           <div className="flex justify-between items-center">
             <span className="text-gray-400">Amount</span>
             <span className="text-xl font-semibold text-white">
-              {formatUSDWithCents(amount)}
+              ${amount.toFixed(2)}
             </span>
           </div>
 
@@ -171,14 +170,14 @@ export default function PayModal({
               Platform Fee ({(feeBps / 100).toFixed(2)}%)
             </span>
             <span className="text-lg text-gray-300">
-              {formatUSDWithCents(feeAmount)}
+              ${feeAmount.toFixed(2)}
             </span>
           </div>
 
           <div className="border-t border-white/10 pt-3 flex justify-between items-center">
             <span className="text-gray-200 font-medium">Total</span>
             <span className="text-2xl font-bold text-su-emerald">
-              {formatUSDWithCents(totalAmount)}
+              ${totalAmount.toFixed(2)}
             </span>
           </div>
         </div>
