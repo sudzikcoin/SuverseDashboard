@@ -6,8 +6,9 @@ import { useEffect, useState } from 'react';
 import { formatUnits } from 'viem';
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
+import env from '@/lib/env';
 
-const USDC = (process.env.NEXT_PUBLIC_USDC_BASE || '0x833589fCD6eDb6E08f4c7C36aF6aBf4aC5fE0e52') as `0x${string}`;
+const USDC = (env.NEXT_PUBLIC_USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913') as `0x${string}`;
 
 const erc20Abi = [
   {

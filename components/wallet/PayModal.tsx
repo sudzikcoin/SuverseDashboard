@@ -10,9 +10,9 @@ import {
 import { erc20Abi } from "@/lib/erc20"
 import { usdToUnits, calcFeeBps, formatUnitsToUsd } from "@/lib/payments/usdc"
 import { X } from "lucide-react"
-import { clientEnv } from "@/lib/env"
+import env from "@/lib/env"
 
-const CHAIN_ID = clientEnv.NEXT_PUBLIC_BASE_CHAIN_ID
+const CHAIN_ID = env.NEXT_PUBLIC_BASE_CHAIN_ID
 
 interface PayModalProps {
   open: boolean

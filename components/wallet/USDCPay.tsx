@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import PayModal from '@/components/wallet/PayModal';
-import { clientEnv } from '@/lib/env';
+import env from '@/lib/env';
 import { getAddresses } from '@/lib/payments/usdc';
 import { parseAmountInput, isPositiveMoney, fmtMoney, meetsMinimum, MIN_USDC_AMOUNT } from '@/lib/number';
 
 const { token: USDC, escrow: ESCROW } = getAddresses();
-const CHAIN_ID = clientEnv.NEXT_PUBLIC_BASE_CHAIN_ID;
-const FEE_BPS = clientEnv.NEXT_PUBLIC_PLATFORM_FEE_BPS;
+const CHAIN_ID = env.NEXT_PUBLIC_BASE_CHAIN_ID;
+const FEE_BPS = env.NEXT_PUBLIC_PLATFORM_FEE_BPS;
 
 export default function USDCPay({ defaultAmount = 0 }: { defaultAmount?: number }) {
   const [raw, setRaw] = useState<string>(defaultAmount > 0 ? defaultAmount.toFixed(2) : "");

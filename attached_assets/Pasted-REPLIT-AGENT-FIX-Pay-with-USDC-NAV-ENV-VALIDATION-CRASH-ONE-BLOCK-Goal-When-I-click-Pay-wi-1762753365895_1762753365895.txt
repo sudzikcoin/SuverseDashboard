@@ -1,0 +1,111 @@
+REPLIT AGENT — FIX “Pay with USDC” NAV + ENV VALIDATION CRASH (ONE BLOCK)
+
+Goal
+When I click “Pay with USDC”, the app must navigate to /payments/usdc without crashing. Current crash: “Env validation failed: NEXT_PUBLIC_USDC_DECIMALS: Number must be less than or equal to 18”. Also make env parsing resilient so a missing/empty value never blocks page render.
+
+Do exactly this:
+
+1) Patch lib/env.ts to use safe, optional, coerced numbers with sane defaults.
+- Never throw on client if a public env is missing or malformed. Fall back to defaults.
+- Keep a strict server schema, but client-safe for NEXT_PUBLIC_*.
+
+Replace lib/env.ts with:
+────────────────────────────────
+"use client";
+
+import { z } from "zod";
+
+// Client-safe public env (no hard throws)
+const PublicSchema = z.object({
+  NEXT_PUBLIC_BASE_CHAIN_ID: z.coerce.number().int().positive().default(8453),
+  NEXT_PUBLIC_USDC_ADDRESS: z.string().min(10),               // contract addr (Base USDC)
+  NEXT_PUBLIC_ESCROW_ADDRESS: z.string().min(10),             // our escrow EOA/multisig
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: z.coerce.number().min(0).max(10000).default(100), // 1.00%
+  NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().min(0).max(18).default(6),
+});
+
+// Read raw
+const _pub = {
+  NEXT_PUBLIC_BASE_CHAIN_ID: process.env.NEXT_PUBLIC_BASE_CHAIN_ID,
+  NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
+  NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS,
+  NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+};
+
+// Parse with fallback: do not throw; use .safeParse
+const parsed = PublicSchema.safeParse(_pub);
+
+// If parsing failed, build a value object applying defaults where possible
+// and leaving strings as-is (so route can still render). Log once to console.
+let env: z.infer<typeof PublicSchema>;
+if (!parsed.success) {
+  if (typeof window !== "undefined") {
+    console.warn("Public env parse failed, using safe defaults:", parsed.error.flatten().fieldErrors);
+  }
+  env = {
+    NEXT_PUBLIC_BASE_CHAIN_ID: Number(_pub.NEXT_PUBLIC_BASE_CHAIN_ID ?? 8453),
+    NEXT_PUBLIC_USDC_ADDRESS: _pub.NEXT_PUBLIC_USDC_ADDRESS ?? "",
+    NEXT_PUBLIC_ESCROW_ADDRESS: _pub.NEXT_PUBLIC_ESCROW_ADDRESS ?? "",
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: Number(_pub.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? 100),
+    NEXT_PUBLIC_USDC_DECIMALS: Number(_pub.NEXT_PUBLIC_USDC_DECIMALS ?? 6),
+  };
+} else {
+  env = parsed.data;
+}
+
+export default env;
+────────────────────────────────
+
+2) Ensure the Pay page imports the safe env and never runs toFixed on undefined.
+- Open components/wallet/USDCPay.tsx and components/wallet/PayModal.tsx.
+- Replace any direct process.env.* reads with:
+  import env from "@/lib/env";
+  const feeBps = env.NEXT_PUBLIC_PLATFORM_FEE_BPS;
+  const usdcDecimals = env.NEXT_PUBLIC_USDC_DECIMALS ?? 6;
+
+- Guard computations:
+  // amount may be null/empty
+  const fee = amount && amount > 0 ? (amount * feeBps) / 10000 : 0;
+  const total = amount && amount > 0 ? amount + fee : 0;
+
+  // In UI:
+  {fee.toFixed(2)} , {total.toFixed(2)}
+  // Only call toFixed on numbers; default fee/total to 0.
+
+3) Double-check secrets in Replit (App Secrets)
+Set exactly these (no quotes around numbers, no stray keys):
+  NEXT_PUBLIC_BASE_CHAIN_ID = 8453
+  NEXT_PUBLIC_USDC_ADDRESS  = 0x833589fC6eDb6E08f4c7C32D4f71b54bda02913
+  NEXT_PUBLIC_ESCROW_ADDRESS = 0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721
+  NEXT_PUBLIC_PLATFORM_FEE_BPS = 100
+  NEXT_PUBLIC_USDC_DECIMALS = 6
+
+Remove any old/typo keys like:
+  USDC_BASE_ADDRESS, NEXT_PUBLIC_USDC_BASE_ADDRESS, BLIC_USDC_DECIMALS, etc.
+
+4) Make navigation independent of env parse
+- In the dashboard tile/button “Pay with USDC”, ensure it uses Link/route push and does not preload env at click time.
+  Example:
+  import Link from "next/link";
+  <Link href="/payments/usdc" prefetch={false}>
+    <Button>Pay with USDC</Button>
+  </Link>
+  // or onClick={() => router.push("/payments/usdc")}
+
+5) Rebuild & test
+- Stop & Start the Replit run (fresh build).
+- Go to dashboard → Pay with USDC: it must navigate to /payments/usdc.
+- On that page, with amount empty, it should not crash; fee/total show $0.00.
+- Enter 1 → fee & total must be non-zero and consistent; confirm modal shows correct values.
+
+6) (Optional) Add tiny guard where you display the network badge/balance to avoid rendering-time env reads before hydration:
+  const chainId = Number(env.NEXT_PUBLIC_BASE_CHAIN_ID || 8453);
+  // render badges with fallback values
+
+Acceptance
+✔ Clicking “Pay with USDC” always navigates (no Env validation error pages).
+✔ NEXT_PUBLIC_USDC_DECIMALS=6 works; changing/clearing it doesn’t break rendering.
+✔ Fee/Total are stable (no NaN/toFixed crashes when amount is empty).
+
+Ship these exact changes.
