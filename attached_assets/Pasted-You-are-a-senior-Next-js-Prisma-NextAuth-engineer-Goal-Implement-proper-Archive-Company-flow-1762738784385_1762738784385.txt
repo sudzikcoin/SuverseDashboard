@@ -1,0 +1,197 @@
+You are a senior Next.js + Prisma + NextAuth engineer.
+Goal: Implement proper “Archive Company” flow:
+- Archiving a company removes it from public/company UIs,
+- Blocks login for users of that company with a friendly message to write info@suverse.io,
+- Allows ADMIN to restore (Unarchive) later,
+- Keeps all data in DB (soft delete).
+
+ASSUMPTIONS
+- Next.js 14 App Router
+- Prisma client at "@/lib/db"
+- NextAuth Credentials provider configured in "@/lib/auth"
+- Admin company detail page at /admin/companies/[id]
+
+===============================================================
+1) PRISMA: add ARCHIVED status (or keep archivedAt). We'll use enum for clarity.
+Open prisma/schema.prisma and update:
+
+enum CompanyStatus {
+  ACTIVE
+  BLOCKED
+  ARCHIVED
+}
+
+model Company {
+  id          String        @id @default(cuid())
+  name        String
+  state       String?
+  ein         String?       @unique
+  email       String?
+  status      CompanyStatus @default(ACTIVE)
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // existing relations...
+  accountantLinks AccountantClient[]
+}
+
+Run:
+npx prisma generate
+npx prisma db push
+
+===============================================================
+2) NEXTAUTH: deny login for archived companies with a clear error.
+Edit lib/auth.ts (or wherever Credentials authorize / callbacks live).
+In the authorize() (or after fetching user) or in jwt/session callback, check the user’s company if role === "COMPANY":
+
+/* Add near where you validate credentials and load user */
+import { prisma } from "@/lib/db";
+
+async function assertCompanyNotArchived(user: any) {
+  if (user?.role !== "COMPANY") return;
+  // company is identified either by user.companyId OR by company email == user.email
+  let company = null;
+  if (user.companyId) {
+    company = await prisma.company.findUnique({ where: { id: user.companyId }, select: { status: true } });
+  } else if (user.email) {
+    company = await prisma.company.findFirst({ where: { email: user.email }, select: { status: true } });
+  }
+  if (company?.status === "ARCHIVED") {
+    // Throwing triggers credentials error that we can show on /login
+    throw new Error("Company is archived. Please contact info@suverse.io");
+  }
+}
+
+In CredentialsProvider authorize handler (after password check, before returning user):
+await assertCompanyNotArchived(user);
+
+If you don’t have a central authorize, add this to the jwt callback right after you attach role/companyId:
+if (token.role === "COMPANY") {
+  const c = await prisma.company.findFirst({ where: { OR: [ { id: token.companyId ?? "" }, { email: token.email ?? "" } ] }, select: { status: true }});
+  if (c?.status === "ARCHIVED") { throw new Error("Company is archived. Please contact info@suverse.io"); }
+}
+
+Make sure the error reaches the login page. If you use next-auth’s Credentials, the thrown Error message is available in the callbackUrl ?error=CredentialsSignin. Add friendly display:
+
+-- FILE: app/login/page.tsx (error banner)
+import { useSearchParams } from "next/navigation";
+const sp = useSearchParams();
+const error = sp.get("error");
+const msg = error?.includes("archived") ? "Company is archived. Please contact info@suverse.io" : (error ? "Invalid email or password" : null);
+/* Render msg if present */
+
+(If you already render error, just map archived case to the friendly sentence above.)
+
+===============================================================
+3) FILTER archived companies out of non-admin UIs / API.
+Where you fetch companies for accountant/company dashboards, add status filter:
+where: { status: { not: "ARCHIVED" } }
+
+Examples:
+
+// Accountant companies list API
+await prisma.company.findMany({
+  where: { status: { not: "ARCHIVED" }, accountantLinks: { some: { accountantId: session.user.id } } },
+  orderBy: { createdAt: "desc" }
+});
+
+// Any public list or marketplace binding to a company
+where: { status: { not: "ARCHIVED" } }
+
+Admin pages should see all, so do NOT filter there unless a specific view asks so.
+
+===============================================================
+4) ADMIN APIs: archive / unarchive endpoints.
+Create two routes guarded by ADMIN.
+
+-- FILE: app/api/admin/companies/[id]/archive/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function POST(_: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  await prisma.company.update({
+    where: { id: params.id },
+    data: { status: "ARCHIVED", archivedAt: new Date() }
+  });
+  return NextResponse.json({ ok: true });
+}
+
+-- FILE: app/api/admin/companies/[id]/unarchive/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function POST(_: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  await prisma.company.update({
+    where: { id: params.id },
+    data: { status: "ACTIVE", archivedAt: null }
+  });
+  return NextResponse.json({ ok: true });
+}
+
+===============================================================
+5) ADMIN UI: wire Archive / Unarchive buttons on /admin/companies/[id].
+Open the company detail page component and replace the old Archive button logic.
+
+Add helpers:
+
+async function doArchive(companyId: string) {
+  const res = await fetch(`/api/admin/companies/${companyId}/archive`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to archive");
+  location.reload();
+}
+
+async function doUnarchive(companyId: string) {
+  const res = await fetch(`/api/admin/companies/${companyId}/unarchive`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to unarchive");
+  location.reload();
+}
+
+Render conditional buttons based on company.status:
+
+{company.status !== "ARCHIVED" ? (
+  <button
+    onClick={() => doArchive(companyId)}
+    className="rounded-md bg-slate-600 px-4 py-2 font-medium text-white hover:bg-slate-700"
+    title="Hide from access and block login. Admin can restore later."
+  >
+    Archive Company
+  </button>
+) : (
+  <button
+    onClick={() => doUnarchive(companyId)}
+    className="rounded-md bg-emerald-500 px-4 py-2 font-medium text-white hover:bg-emerald-600"
+    title="Restore access."
+  >
+    Unarchive Company
+  </button>
+)}
+
+Optional: show a subtle badge in the header:
+{company.status === "ARCHIVED" && <span className="ml-2 rounded bg-slate-500/30 px-2 py-1 text-xs">ARCHIVED</span>}
+
+===============================================================
+6) BLOCKED vs ARCHIVED behavior (keep both):
+- BLOCKED: company can log in but cannot create holds/purchases (you already gate by status). Keep your purchase/hold API checks: deny if status !== "ACTIVE".
+- ARCHIVED: company cannot log in at all (handled in NextAuth step 2). Also excluded from non-admin lists (step 3).
+
+===============================================================
+7) Smoke test checklist
+- Admin opens any active company → clicks “Archive Company” → page reload shows ARCHIVED state and “Unarchive Company” button.
+- Try to login with that company’s email/password → redirected to /login with message: “Company is archived. Please contact info@suverse.io”.
+- Accountant / marketplace lists no longer display the archived company.
+- Admin clicks “Unarchive Company” → login works again; lists show it again.
+
+That’s it. Please apply exactly as above.
