@@ -4,6 +4,7 @@ import * as React from "react"
 import CreditFormModal from "@/components/admin/CreditFormModal"
 import { useRouter } from "next/navigation"
 import { formatNumber } from "@/lib/format"
+import UploadClient from "./UploadClient"
 
 export default function InventoryClient({ credits }: { credits: any[] }) {
   const router = useRouter()
@@ -48,12 +49,15 @@ export default function InventoryClient({ credits }: { credits: any[] }) {
         </div>
       </div>
 
-      {credits.length === 0 ? (
-        <div className="bg-su-card border border-white/10 rounded-2xl p-12 text-center">
-          <p className="text-su-muted text-lg">No tax credits in inventory yet.</p>
-          <p className="text-white/60 text-sm mt-2">Click "New Credit" to create one.</p>
-        </div>
-      ) : (
+      <UploadClient />
+
+      <div className="mt-8">
+          {credits.length === 0 ? (
+          <div className="bg-su-card border border-white/10 rounded-2xl p-12 text-center">
+            <p className="text-su-muted text-lg">No tax credits in inventory yet.</p>
+            <p className="text-white/60 text-sm mt-2">Click "New Credit" to create one.</p>
+          </div>
+        ) : (
         <div className="space-y-4">
           {credits.map((c) => (
             <div
@@ -155,7 +159,8 @@ export default function InventoryClient({ credits }: { credits: any[] }) {
             </div>
           ))}
         </div>
-      )}
+        )}
+      </div>
 
       <CreditFormModal
         open={open}
