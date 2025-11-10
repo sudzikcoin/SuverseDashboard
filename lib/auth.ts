@@ -87,8 +87,9 @@ export const authOptions: NextAuthOptions = {
       try {
         const email = user?.email as string | undefined;
         const name = (user as any)?.name || (user as any)?.companyName || undefined;
+        const userId = user?.id;
         if (email) {
-          const r = await sendWelcomeEmail(email, name);
+          const r = await sendWelcomeEmail(email, name, userId);
           if (!r.ok) console.error('[Auth:createUser] email failed:', r.error);
         } else {
           console.warn('[Auth:createUser] user has no email');
