@@ -30,7 +30,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **File Storage**: Private per-company document storage in `/uploads/{companyId}/` with RBAC-enforced access via API routes. Security includes path traversal protection (basename normalization), CRLF header injection prevention (control character filtering), and role-based access (ADMIN full, ACCOUNTANT via AccountantClient link, COMPANY self only).
 
 ### Feature Specifications
--   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard.
+-   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard. Admin restoration script (`npm run restore:admin`) available for recreating admin users after database wipes.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
 -   **Purchase Workflows**:
     - **Stripe Checkout** (PurchaseOrder): Traditional Stripe-based purchase flow with checkout integration, admin approval, and automated PDF generation.
@@ -64,6 +64,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Layout Pattern**: Shared `DashboardShell` component provides consistent navigation across all dashboard pages with server-side auth and role checking via `requireRole` (single) or `requireRoles` (array).
 -   **Environment Variables**: Configurable via `.env`.
 -   **Database Seeding**: Enhanced script for initial setup. Does NOT auto-link accountants - they start with zero companies.
+-   **Admin Restoration**: `scripts/restoreAdmin.ts` provides one-command admin user creation/restoration via `npm run restore:admin`. Uses environment variables (ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME) with sensible defaults. Safely handles both new creation and updating existing users to ADMIN role.
 -   **Error Handling**: Integrated error handling and user-friendly alerts.
 -   **Access Control**: `lib/access-control.ts` provides `hasCompanyAccess()` and `assertAccountantHasAccess()` for enforcing accountant isolation across all company-scoped operations.
 
