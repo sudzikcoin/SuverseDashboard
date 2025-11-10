@@ -14,7 +14,8 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Animations**: Utilizes `framer-motion` and `tailwindcss-animate` for smooth transitions and interactive elements.
 -   **Design Elements**: Features glassmorphism, emerald glow shadows, and gradient halos.
 -   **Components**: Reusable components like `Button.tsx`, `GradientBadge.tsx`, and `Section.tsx` for consistency.
--   **Responsiveness**: Mobile-first approach with adaptive grid layouts.
+-   **Responsiveness**: Mobile-first approach with adaptive grid layouts and responsive sidebar navigation.
+-   **Navigation**: Responsive sidebar with hamburger menu for mobile (<768px), fixed sidebar for desktop. Features smooth slide-in/out animations, auto-close on navigation, and backdrop overlay.
 
 ### Technical Implementations
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.
@@ -54,7 +55,9 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router, API routes, pages), `components/`, `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control), `prisma/`, `types/`.
+-   **Project Structure**: `app/` (App Router with route groups, API routes, pages), `components/` (including DashboardShell and responsive Sidebar), `lib/` (utilities for auth, db, email, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control), `prisma/`, `types/`.
+-   **Route Organization**: Uses Next.js route groups - `app/(dashboard)/` for authenticated pages with shared responsive sidebar layout. Admin routes at `app/admin/` with role-specific enforcement.
+-   **Layout Pattern**: Shared `DashboardShell` component provides consistent navigation across all dashboard pages with server-side auth and role checking via `requireRole` (single) or `requireRoles` (array).
 -   **Environment Variables**: Configurable via `.env`.
 -   **Database Seeding**: Enhanced script for initial setup. Does NOT auto-link accountants - they start with zero companies.
 -   **Error Handling**: Integrated error handling and user-friendly alerts.
@@ -69,6 +72,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **bcrypt**: Password hashing.
 -   **Zod**: Input validation.
 -   **xlsx**: Excel/CSV file parsing for broker file uploads.
+-   **lucide-react**: Icon library for UI elements (hamburger menu, etc.).
 -   **framer-motion**: Animations.
 -   **tailwindcss-animate**: Tailwind CSS animations.
 -   **@aws-sdk/client-s3**: S3 integration (optional for production file storage).
