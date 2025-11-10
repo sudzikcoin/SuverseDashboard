@@ -20,6 +20,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       action: "UNBLOCK_COMPANY",
       entity: "COMPANY",
       entityId: id,
+      companyId: id,
       details: { prevStatus: prev?.status ?? null, nextStatus: updated.status },
     })
 

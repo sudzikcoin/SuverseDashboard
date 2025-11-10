@@ -20,6 +20,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       action: "UNARCHIVE_COMPANY",
       entity: "COMPANY",
       entityId: id,
+      companyId: id,
       details: { prevStatus: prev?.status ?? null, nextStatus: updated.status, archivedAt: updated.archivedAt },
     })
 
