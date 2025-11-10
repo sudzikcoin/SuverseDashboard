@@ -34,6 +34,12 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        if (user.role === "COMPANY" && user.company) {
+          if (user.company.status === "ARCHIVED") {
+            throw new Error("Company is archived. Please contact info@suverse.io")
+          }
+        }
+
         return {
           id: user.id,
           email: user.email,

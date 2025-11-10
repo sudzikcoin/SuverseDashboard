@@ -27,7 +27,11 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError("Invalid email or password")
+        if (result.error.toLowerCase().includes("archived")) {
+          setError("Company is archived. Please contact info@suverse.io")
+        } else {
+          setError("Invalid email or password")
+        }
       } else {
         router.push("/dashboard")
         router.refresh()
