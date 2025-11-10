@@ -12,7 +12,7 @@ export default function CompanyEditor({ initial }: { initial: any }) {
     state: initial.state || "",
     ein: initial.ein || "",
     contactEmail: initial.contactEmail || "",
-    status: initial.status as "ACTIVE" | "BLOCKED",
+    status: initial.status as "ACTIVE" | "BLOCKED" | "ARCHIVED",
   })
   const [password, setPassword] = React.useState("")
   const [pwdSaving, setPwdSaving] = React.useState(false)
@@ -57,17 +57,32 @@ export default function CompanyEditor({ initial }: { initial: any }) {
     router.refresh()
   }
 
-  async function remove() {
-    if (!confirm("Archive this company? This will soft-delete the company."))
+  async function archive() {
+    if (!confirm("Archive this company? This will block login and hide it from non-admin views. You can restore it later."))
       return
-    const res = await fetch(`/api/admin/companies/${initial.id}`, {
-      method: "DELETE",
+    const res = await fetch(`/api/admin/companies/${initial.id}/archive`, {
+      method: "POST",
     })
     if (!res.ok) {
-      alert("Delete failed")
+      alert("Archive failed")
       return
     }
-    router.push("/admin/companies")
+    setForm((f) => ({ ...f, status: "ARCHIVED" }))
+    router.refresh()
+  }
+
+  async function unarchive() {
+    if (!confirm("Unarchive this company? This will restore access."))
+      return
+    const res = await fetch(`/api/admin/companies/${initial.id}/unarchive`, {
+      method: "POST",
+    })
+    if (!res.ok) {
+      alert("Unarchive failed")
+      return
+    }
+    setForm((f) => ({ ...f, status: "ACTIVE" }))
+    router.refresh()
   }
 
   async function resetPassword() {
@@ -102,7 +117,9 @@ export default function CompanyEditor({ initial }: { initial: any }) {
             className={`px-4 py-1.5 rounded-full text-sm font-semibold ${
               form.status === "ACTIVE"
                 ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-red-500/20 text-red-300"
+                : form.status === "BLOCKED"
+                ? "bg-red-500/20 text-red-300"
+                : "bg-slate-500/30 text-slate-300"
             }`}
           >
             {form.status}
@@ -190,27 +207,40 @@ export default function CompanyEditor({ initial }: { initial: any }) {
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>
-            {form.status === "ACTIVE" ? (
+            {form.status !== "ARCHIVED" && (
+              form.status === "ACTIVE" ? (
+                <button
+                  onClick={block}
+                  className="px-5 py-2.5 rounded-lg bg-red-500/80 hover:bg-red-500 text-white font-semibold transition"
+                >
+                  Block Company
+                </button>
+              ) : (
+                <button
+                  onClick={unblock}
+                  className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition"
+                >
+                  Unblock Company
+                </button>
+              )
+            )}
+            {form.status !== "ARCHIVED" ? (
               <button
-                onClick={block}
-                className="px-5 py-2.5 rounded-lg bg-red-500/80 hover:bg-red-500 text-white font-semibold transition"
+                onClick={archive}
+                className="px-5 py-2.5 rounded-lg bg-slate-600 hover:bg-slate-700 text-white font-medium transition"
+                title="Hide from access and block login. Admin can restore later."
               >
-                Block Company
+                Archive Company
               </button>
             ) : (
               <button
-                onClick={unblock}
-                className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition"
+                onClick={unarchive}
+                className="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition"
+                title="Restore access."
               >
-                Unblock Company
+                Unarchive Company
               </button>
             )}
-            <button
-              onClick={remove}
-              className="px-5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition"
-            >
-              Archive Company
-            </button>
           </div>
         </div>
 
