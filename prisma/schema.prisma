@@ -47,6 +47,13 @@ enum PaymentStatus {
   FAILED
 }
 
+enum PurchaseStatus {
+  PENDING_PAYMENT
+  PAID
+  COMPLETED
+  CANCELED
+}
+
 model User {
   id             String              @id @default(cuid())
   email          String              @unique
@@ -60,6 +67,7 @@ model User {
   accountantClients AccountantClient[]
   uploadedDocuments Document[]
   auditLogs      AuditLog[]
+  purchases      Purchase[]
 }
 
 model Company {
@@ -77,7 +85,8 @@ model Company {
   updatedAt     DateTime        @updatedAt
   deletedAt     DateTime?
   users         User[]
-  purchases     PurchaseOrder[]
+  purchaseOrders PurchaseOrder[]
+  purchases     Purchase[]
   documents     Document[]
   holds         Hold[]
   auditLogs     AuditLog[]
@@ -116,6 +125,7 @@ model CreditInventory {
   importedAt       DateTime?
   holds            Hold[]
   purchaseOrders   PurchaseOrder[]
+  purchases        Purchase[]
   
   @@unique([brokerRef], map: "creditinventory_brokerref_unique")
 }
@@ -207,4 +217,38 @@ model PaymentLog {
   updatedAt       DateTime      @updatedAt
 
   @@index([userId, companyId, status])
+}
+
+model Purchase {
+  id              String          @id @default(cuid())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  accountantId    String
+  companyId       String
+  taxCreditId     String
+  nominalValueUSD Decimal         @db.Decimal(18,2)
+  pricePerDollar  Decimal         @db.Decimal(5,4)
+  totalUSD        Decimal         @db.Decimal(18,2)
+  status          PurchaseStatus  @default(PENDING_PAYMENT)
+  payment         Payment?
+  company         Company         @relation(fields: [companyId], references: [id])
+  inventory       CreditInventory @relation(fields: [taxCreditId], references: [id])
+  accountant      User            @relation(fields: [accountantId], references: [id])
+
+  @@index([accountantId])
+  @@index([companyId])
+  @@index([taxCreditId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  purchaseId  String        @unique
+  network     String
+  token       String
+  amountUSD   Decimal       @db.Decimal(18,2)
+  feeUSD      Decimal       @db.Decimal(18,2)
+  txHash      String
+  status      PaymentStatus @default(SUBMITTED)
+  purchase    Purchase      @relation(fields: [purchaseId], references: [id])
 }
