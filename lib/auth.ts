@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./db"
+import { sendWelcomeEmail } from "./email/send"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -81,4 +82,20 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: false,
+  events: {
+    async createUser({ user }) {
+      try {
+        const email = user?.email as string | undefined;
+        const name = (user as any)?.name || (user as any)?.companyName || undefined;
+        if (email) {
+          const r = await sendWelcomeEmail(email, name);
+          if (!r.ok) console.error('[Auth:createUser] email failed:', r.error);
+        } else {
+          console.warn('[Auth:createUser] user has no email');
+        }
+      } catch (e: any) {
+        console.error('[Auth:createUser] exception:', e?.message || e);
+      }
+    },
+  },
 }
