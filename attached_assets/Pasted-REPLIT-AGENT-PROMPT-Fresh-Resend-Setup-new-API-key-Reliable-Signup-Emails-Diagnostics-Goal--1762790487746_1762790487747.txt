@@ -1,0 +1,230 @@
+REPLIT AGENT PROMPT — Fresh Resend Setup (new API key) + Reliable Signup Emails + Diagnostics
+
+Goal
+Start from zero and make signup emails work again using a NEW Resend API key. Add a safe “from” fallback, Node runtime routes, a test endpoint/button, robust logging, and a non-blocking hook on user creation. Everything in this block should be applied in one pass.
+
+Assumptions
+- Next.js 14 (App Router), TypeScript.
+- You use either NextAuth or a custom /api/register route.
+- Replit project; we can add secrets and files.
+- Domain can be verified later — we’ll use onboarding@resend.dev as temporary fallback.
+
+──────────────────────────────────────────────────────────────────────────────
+0) Install/Update deps
+
+- Ensure the following packages are installed:
+  npm i resend react-email
+  # (already installed is fine)
+
+──────────────────────────────────────────────────────────────────────────────
+1) Set/Re-set ENV (Replit → Tools → Secrets)
+
+Create or update these keys EXACTLY (no quotes needed except where shown):
+
+RESEND_API_KEY=<PASTE_YOUR_NEW_RESEND_KEY>
+RESEND_FROM="SuVerse <no-reply@suverse.app>"     # if your domain is VERIFIED in Resend
+# Temporary fallback (if domain not verified yet), use instead:
+# RESEND_FROM="onboarding@resend.dev"
+
+APP_URL=https://<your-preview-url>.replit.dev
+# If using NextAuth, also ensure:
+# NEXTAUTH_URL=https://<your-preview-url>.replit.dev
+
+Notes
+- Use a brand NEW Resend key from https://resend.com/api-keys (create, copy).
+- If suverse.app (or suverse.io) isn’t verified yet in Resend → use onboarding@resend.dev for RESEND_FROM until DNS is verified.
+
+──────────────────────────────────────────────────────────────────────────────
+2) Core email client
+
+Create/replace: lib/email/resend.ts
+------------------------------------------------
+export const runtime = 'nodejs';
+import { Resend } from 'resend';
+
+const key = process.env.RESEND_API_KEY;
+if (!key) {
+  console.error('[Email] Missing RESEND_API_KEY env');
+}
+
+export const resend = new Resend(key!);
+
+export function getFrom() {
+  // Prefer verified sender; fallback to onboarding
+  const from = process.env.RESEND_FROM || 'onboarding@resend.dev';
+  return from;
+}
+------------------------------------------------
+
+──────────────────────────────────────────────────────────────────────────────
+3) Minimal template (React Email)
+
+Create/replace: emails/WelcomeEmail.tsx
+------------------------------------------------
+import * as React from 'react';
+
+export default function WelcomeEmail({ name }: { name?: string }) {
+  return (
+    <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: 1.6 }}>
+      <h2>Welcome{ name ? `, ${name}` : '' } to SuVerse!</h2>
+      <p>Your account has been created successfully.</p>
+      <p>You can sign in and start working with Tax Credits right away.</p>
+      <p style={{marginTop:16}}>— SuVerse Team</p>
+    </div>
+  );
+}
+------------------------------------------------
+
+──────────────────────────────────────────────────────────────────────────────
+4) Send helper with logging + resilient errors
+
+Create/replace: lib/email/send.ts
+------------------------------------------------
+export const runtime = 'nodejs';
+import { resend, getFrom } from './resend';
+import WelcomeEmail from '@/emails/WelcomeEmail';
+
+type SendResult = { ok: boolean; id?: string; error?: string };
+
+export async function sendWelcomeEmail(to: string, name?: string): Promise<SendResult> {
+  if (!to) return { ok: false, error: 'Missing recipient email' };
+  try {
+    const res = await resend.emails.send({
+      from: getFrom(),
+      to,
+      subject: `Welcome to SuVerse${name ? ', ' + name : ''}!`,
+      react: WelcomeEmail({ name }),
+    });
+    // Resend SDK returns either {data:{id}} or {error:{name,message}}
+    const id = (res as any)?.data?.id || (res as any)?.id;
+    const err = (res as any)?.error?.message || (res as any)?.error;
+    if (err) {
+      console.error('[Email] Resend API error:', err);
+      return { ok: false, error: String(err) };
+    }
+    return { ok: true, id };
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    console.error('[Email] Exception:', msg);
+    return { ok: false, error: msg };
+  }
+}
+------------------------------------------------
+
+──────────────────────────────────────────────────────────────────────────────
+5) Test endpoint (manual button/POST)
+
+Create/replace: app/api/test-email/route.ts
+------------------------------------------------
+export const runtime = 'nodejs';
+import { NextResponse } from 'next/server';
+import { sendWelcomeEmail } from '@/lib/email/send';
+
+export async function POST(req: Request) {
+  try {
+    const { to, name } = await req.json();
+    if (!to) return NextResponse.json({ ok: false, error: 'Missing "to"' }, { status: 400 });
+    const r = await sendWelcomeEmail(to, name);
+    return NextResponse.json(r, { status: r.ok ? 200 : 500 });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
+  }
+}
+------------------------------------------------
+
+──────────────────────────────────────────────────────────────────────────────
+6) Hook on user registration
+
+A) If you use NextAuth:
+Open your NextAuth route (e.g., app/api/auth/[...nextauth]/route.ts) and set Node runtime + events:
+
+At top-level add (if not present):
+export const runtime = 'nodejs';
+
+In the NextAuth options, add or merge:
+events: {
+  async createUser({ user }) {
+    try {
+      const email = (user as any)?.email as string | undefined;
+      const name = (user as any)?.name || (user as any)?.companyName || undefined;
+      if (email) {
+        const r = await import('@/lib/email/send').then(m => m.sendWelcomeEmail(email, name));
+        if (!r.ok) console.error('[Auth.createUser] email failed:', r.error);
+      } else {
+        console.warn('[Auth.createUser] user has no email');
+      }
+    } catch (e: any) {
+      console.error('[Auth.createUser] exception:', e?.message || e);
+    }
+  },
+},
+
+B) If you use a custom signup route (e.g., app/api/register/route.ts):
+Right after you persist the new user, add:
+await sendWelcomeEmail(email, name).catch(err => console.error('[register] email error', err));
+Make sure the route exports: export const runtime = 'nodejs';
+
+──────────────────────────────────────────────────────────────────────────────
+7) Admin test button (optional but recommended)
+
+Add a tiny test UI where only ADMIN sees it (e.g., in /admin page):
+
+// Add this client component snippet
+"use client";
+import { useState } from 'react';
+
+export function EmailTestWidget() {
+  const [to, setTo] = useState('');
+  const [resp, setResp] = useState<any>(null);
+
+  async function send() {
+    setResp(null);
+    const r = await fetch('/api/test-email', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ to, name: 'Tester' })
+    });
+    setResp(await r.json());
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 p-4">
+      <div className="text-sm mb-2">Test Resend Email</div>
+      <input value={to} onChange={e=>setTo(e.target.value)} placeholder="you@example.com"
+             className="w-full bg-white/5 px-3 py-2 rounded mb-2"/>
+      <button onClick={send} className="px-3 py-2 rounded bg-emerald-500">Send Test</button>
+      {resp && <pre className="mt-2 text-xs opacity-80">{JSON.stringify(resp,null,2)}</pre>}
+    </div>
+  );
+}
+
+Render <EmailTestWidget /> in your admin panel temporarily.
+
+──────────────────────────────────────────────────────────────────────────────
+8) Hardening & common failure fixes
+
+- All email routes/components must be Node runtime: export const runtime = 'nodejs';
+- If using onboarding@resend.dev and you still don’t receive mail:
+  • Check Resend Dashboard → Logs (https://resend.com/logs) for errors/suppressions.
+  • Remove the recipient from Suppressions if listed.
+  • Try another destination mailbox (Gmail often lands in Promotions/Spam on first sends).
+- When you verify your domain in Resend (Domains → Add Domain):
+  • Add DNS records (SPF: TXT, DKIM: CNAME) per Resend instructions.
+  • After “Verified”, change RESEND_FROM to `"SuVerse <no-reply@suverse.app>"`.
+  • Rebuild app; test again.
+
+- Make signup non-blocking:
+  • Email send errors must be logged but NEVER throw/abort user creation.
+
+──────────────────────────────────────────────────────────────────────────────
+9) Quick test plan
+
+1) Set a brand-new RESEND_API_KEY in Replit Secrets; set RESEND_FROM to onboarding@resend.dev for now.
+2) Stop → Run (full rebuild) in Replit.
+3) Open /admin (or wherever you rendered the widget) → send test to your mailbox.
+   • Expect JSON: { ok: true, id: "…" } → check mailbox.
+   • If { ok: false, error: "…" } → copy the error from the widget or Replit logs.
+4) Register a NEW user via your signup page → you should receive a welcome email.
+5) (Later) Verify domain in Resend → switch RESEND_FROM to your branded address → retest.
+
+Done. With a fresh API key, Node runtime routes, fallback sender, test endpoint and a safe NextAuth hook, signup emails should be reliably delivered again.
