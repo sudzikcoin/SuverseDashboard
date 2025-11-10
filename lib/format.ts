@@ -26,3 +26,19 @@ export const formatPercent = (n: number): string => {
   if (isNaN(n) || !isFinite(n)) return '0%';
   return (Math.round(n * 100) / 100).toFixed(2) + '%';
 };
+
+export const toRaw = (amountFloat: number, decimals = 6): bigint => {
+  return BigInt(Math.round(amountFloat * Math.pow(10, decimals)))
+}
+
+export const fromRaw = (raw: bigint, decimals = 6): number => {
+  return Number(raw) / Math.pow(10, decimals)
+}
+
+export const calcWithFee = (
+  raw: bigint,
+  feeBps: number
+): { fee: bigint; total: bigint } => {
+  const fee = (raw * BigInt(feeBps)) / BigInt(10_000)
+  return { fee, total: raw + fee }
+}
