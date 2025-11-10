@@ -8,6 +8,11 @@ const PublicEnvSchema = z.object({
   NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().int().min(0).max(18),
 });
 
+const EmailEnvSchema = z.object({
+  RESEND_API_KEY: z.string().min(10, 'RESEND_API_KEY missing or too short'),
+  RESEND_FROM: z.string().email('RESEND_FROM must be a valid email').or(z.literal('onboarding@resend.dev')),
+});
+
 type PublicEnv = z.infer<typeof PublicEnvSchema>;
 
 const DEFAULTS: PublicEnv = {
@@ -64,5 +69,26 @@ function parseEnv(raw: Record<string, string | undefined>): PublicEnv {
 export const env = parseEnv(process.env as Record<string, string | undefined>);
 
 export const clientEnv = env;
+
+export function getEmailEnv() {
+  const parsed = EmailEnvSchema.safeParse({
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+  });
+
+  if (!parsed.success) {
+    console.error('[env] Email validation failed:', parsed.error.flatten().fieldErrors);
+    return {
+      RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+      RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+      isValid: false,
+    };
+  }
+
+  return {
+    ...parsed.data,
+    isValid: true,
+  };
+}
 
 export default env;
