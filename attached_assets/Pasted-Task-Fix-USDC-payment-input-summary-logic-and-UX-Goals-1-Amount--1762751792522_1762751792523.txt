@@ -1,0 +1,95 @@
+Task: Fix USDC payment input/summary logic and UX.
+
+Goals
+1) Убрать крэш при пустом Amount и при удалении последней цифры.
+2) Корректно считать и показывать Platform Fee и Total в модалке и на странице до подтверждения.
+3) Запретить нулевые/отрицательные суммы, позволить только 2 знака после запятой, форматировать на blur.
+4) Кнопка “Pay” и “Confirm & Pay” активны только при валидной положительной сумме.
+
+Scope & Files
+- components/wallet/USDCPay.tsx  (основное поле ввода и превью)
+- components/wallet/PayModal.tsx (подтверждение и расчёт итогов)
+- lib/env.ts                   (чтение NEXT_PUBLIC_PLATFORM_FEE_BPS)
+- lib/number.ts (НОВЫЙ утиль: безопасный парсинг/форматирование сумм)
+
+Implementation details
+A) Безопасный парсинг и форматирование
+- Создать lib/number.ts:
+  export function parseAmountInput(raw: string): { value: number|null, display: string }
+  Логика:
+    - Разрешить только цифры, одну точку ИЛИ запятую. При вводе запятой — заменять на точку в display.
+    - Паттерн: ^\d{0,9}([.,]\d{0,2})?$  (до 9 целых и до 2 десятичных).
+    - Пустая строка ⇒ {value:null, display:""} (НЕ бросать ошибок).
+    - "0", "0.", "0.0", "0.00" также допустимы в display, но value = 0 для вычислений.
+- Экспортировать helper:
+  export function isPositiveMoney(n: number|null) { return typeof n === 'number' && isFinite(n) && n > 0; }
+  export function fmtMoney(n: number|null) { return (typeof n === 'number' && isFinite(n)) ? n.toFixed(2) : "0.00"; }
+
+B) Вытягивание комиссии из env
+- В lib/env.ts добавить публичный валидатор:
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: z.coerce.number().min(0).max(10000).default(100)
+  (используем z.coerce.number(), чтобы избежать ошибок “not a number” из строки)
+- В USDCPay.tsx и PayModal.tsx брать feeBps из env.
+
+C) USDCPay.tsx (страница оплаты)
+- Переписать состояние Amount:
+  const [raw, setRaw] = useState<string>("");         // то, что в инпуте
+  const parsed = parseAmountInput(raw);               // {value, display}
+  const amount = parsed.value;                        // number | null
+- Инпут:
+  - value = parsed.display
+  - onChange: setRaw(e.target.value)
+  - onBlur: если amount !== null ⇒ setRaw(amount.toFixed(2)); иначе оставить ""
+  - placeholder="0.00", inputMode="decimal", pattern="\d*"
+- Вычисления:
+  const fee = isPositiveMoney(amount) ? (amount! * feeBps) / 10000 : null;
+  const total = isPositiveMoney(amount) ? amount! + (fee ?? 0) : null;
+- В блоке “Pay with USDC (Base)” выводить:
+  - Fee: $ {fmtMoney(fee)}
+  - Total: $ {fmtMoney(total)}
+- Кнопка “Pay”:
+  - disabled={!isPositiveMoney(amount)}
+  - При клике — открывать PayModal и передавать туда amount (number) и feeBps.
+- Если amount === null или amount === 0:
+  - подсказка под инпутом “Enter amount greater than 0.00”
+  - без ошибок/крэшей.
+
+D) PayModal.tsx (подтверждение)
+- Принимает props: { amount: number, feeBps: number, onClose, onConfirmed }
+- Счёт:
+  const fee = (amount * feeBps) / 10000;
+  const total = amount + fee;
+- В UI показать:
+  Amount: $ {amount.toFixed(2)}
+  Platform Fee ({(feeBps/100).toFixed(2)}%): $ {fee.toFixed(2)}
+  Total: $ {total.toFixed(2)}
+- Кнопка “Confirm & Pay” disabled, если amount <= 0 или isNaN(amount).
+- При сабмите:
+  - Конвертировать amount в wei с учётом 6 decimals: const baseUnits = BigInt(Math.round(amount * 1e6));
+  - Вызывать transfer USDC (Base) на ESCROW_ADDRESS; обработать ошибки и показывать тосты.
+- После успеха:
+  - закрыть модалку, показать “Payment Submitted” с tx hash, оставить ссылку на BaseScan.
+
+E) UX детали
+- Пока amount пустой ⇒ Fee/Total показывать как $0.00 (без NaN).
+- Убрать любые toFixed() на null/undefined (все расчёты только через helpers).
+- Добавить минимальную сумму: MIN_USDC = 0.01. Если amount > 0 но < MIN_USDC, подсветка и disabled кнопки, тултип “Min amount is $0.01”.
+- Обновить превью баланса: если баланс не успел подтянуться, показывать “—”, без вычислений.
+- Все вычисления на клиенте в number, а не BigInt — BigInt только на шаге построения транзакции.
+
+F) Tests / Acceptance
+- Пустой инпут: ничего не падает, кнопка “Pay” неактивна, Fee/Total = $0.00.
+- Ввод “1” ⇒ Fee и Total считаются верно, “Pay” активна; в модалке % и суммы отображаются корректно.
+- Удаление последней цифры до пустого ⇒ нет ошибки.
+- Ввод с запятой “1,5” ⇒ парсится как 1.50; onBlur форматируется в “1.50”.
+- Нули/отрицательные/буквы ⇒ “Pay” неактивна, подсказка, без ошибок.
+- Confirm & Pay неактивна при amount <= 0.
+- Успешный платёж — виден tx hash; ошибка сети — дружелюбный тост, без падений.
+
+Non-goals
+- Изменение ончейн логики или адресов контракта/эскроу.
+- Мультивалютные платёжи (это отдельная задача).
+
+Deliverables
+- Обновлённые USDCPay.tsx, PayModal.tsx, lib/env.ts, новый lib/number.ts.
+- Короткие unit-тесты для parseAmountInput и fmtMoney (если тестовая среда готова).

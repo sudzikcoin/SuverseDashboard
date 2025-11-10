@@ -45,18 +45,23 @@ export default function PayModal({
   const [txHash, setTxHash] = useState<string | null>(null)
   const [paymentLogId, setPaymentLogId] = useState<string | null>(null)
 
+  const fee = (amount * feeBps) / 10000;
+  const total = amount + fee;
+
   const { amountRaw, feeRaw, totalRaw } = useMemo(() => {
     const units = usdToUnits(amount)
     const { fee, total } = calcFeeBps(units)
     return { amountRaw: units, feeRaw: fee, totalRaw: total }
   }, [amount])
 
-  const feeAmount = useMemo(() => Number(formatUnitsToUsd(feeRaw)), [feeRaw])
-  const totalAmount = useMemo(() => Number(formatUnitsToUsd(totalRaw)), [totalRaw])
-
   async function handlePay() {
     if (!address) {
       setError("Please connect your wallet first")
+      return
+    }
+
+    if (!amount || amount <= 0 || !isFinite(amount)) {
+      setError("Invalid amount")
       return
     }
 
@@ -170,14 +175,14 @@ export default function PayModal({
               Platform Fee ({(feeBps / 100).toFixed(2)}%)
             </span>
             <span className="text-lg text-gray-300">
-              ${feeAmount.toFixed(2)}
+              ${fee.toFixed(2)}
             </span>
           </div>
 
           <div className="border-t border-white/10 pt-3 flex justify-between items-center">
             <span className="text-gray-200 font-medium">Total</span>
             <span className="text-2xl font-bold text-su-emerald">
-              ${totalAmount.toFixed(2)}
+              ${total.toFixed(2)}
             </span>
           </div>
         </div>
@@ -191,7 +196,15 @@ export default function PayModal({
         {status === "confirmed" && txHash && (
           <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 text-emerald-400 text-sm">
             <p className="font-semibold mb-1">Payment Submitted!</p>
-            <p className="text-xs text-gray-400 break-all">TX: {txHash}</p>
+            <p className="text-xs text-gray-400 break-all mb-2">TX: {txHash}</p>
+            <a
+              href={`https://basescan.org/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-emerald-400 hover:text-emerald-300 underline"
+            >
+              View on BaseScan →
+            </a>
           </div>
         )}
 
@@ -201,7 +214,7 @@ export default function PayModal({
               <button
                 onClick={handlePay}
                 disabled={
-                  isWriting || status === "switching" || status === "pending"
+                  isWriting || status === "switching" || status === "pending" || amount <= 0 || !isFinite(amount)
                 }
                 className="flex-1 rounded-lg bg-su-emerald px-6 py-3 font-semibold text-black hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
