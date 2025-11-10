@@ -1,17 +1,18 @@
-import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Environment variables are automatically loaded from .env.local by Next.js
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@suverse.app';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin123!';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin User';
 
 async function columnExists(table: string, column: string) {
+  // PostgreSQL stores unquoted names in lowercase, so we need to check lowercase version
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2 LIMIT 1`,
-    table, column
+    table, column.toLowerCase()
   );
   return rows && rows.length > 0;
 }
@@ -39,47 +40,45 @@ async function detect() {
 }
 
 async function ensureAdmin() {
-  const d = await detect();
+  const pwdHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
 
-  // 1) find user by email using Prisma model (fallback to raw if needed)
-  let user = await prisma.user?.findUnique?.({ where: { email: ADMIN_EMAIL } } as any).catch(() => null);
+  // 1) Try to find existing user
+  let user = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } }).catch(() => null);
+  
   if (!user) {
-    // Create new user via raw insert to handle various column names
-    const pwdHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-
-    const cols = ['email'];
-    const vals = [`'${ADMIN_EMAIL}'`];
-    if (d.hasName) { cols.push('name'); vals.push(`'${ADMIN_NAME}'`); }
-    if (d.hasHashed) { cols.push('hashedPassword'); vals.push(`'${pwdHash}'`); }
-    else if (d.hasPassword) { cols.push('password'); vals.push(`'${pwdHash}'`); }
-
-    const insertSql = `INSERT INTO "${d.table}" (${cols.join(',')}) VALUES (${vals.join(',')}) RETURNING *;`;
-    const rows: any[] = await prisma.$queryRawUnsafe(insertSql);
-    user = rows?.[0];
-    if (!user) throw new Error('Insert admin failed.');
-  }
-
-  // 2) Elevate to admin
-  if (d.hasRole) {
-    await prisma.$executeRawUnsafe(`UPDATE "${d.table}" SET role='ADMIN' WHERE email=$1`, ADMIN_EMAIL);
-  } else if (d.hasIsAdmin) {
-    await prisma.$executeRawUnsafe(`UPDATE "${d.table}" SET "isAdmin"=true WHERE email=$1`, ADMIN_EMAIL);
+    // Create new admin user using Prisma (safer than raw SQL)
+    user = await prisma.user.create({
+      data: {
+        email: ADMIN_EMAIL,
+        name: ADMIN_NAME,
+        hashedPassword: pwdHash,
+        role: 'ADMIN',
+      },
+    });
+    console.log('✅ Admin user created successfully!');
   } else {
-    console.warn('No role/isAdmin column found. Skipping role elevation.');
+    // User exists, ensure they have admin role and password
+    user = await prisma.user.update({
+      where: { email: ADMIN_EMAIL },
+      data: {
+        role: 'ADMIN',
+        hashedPassword: pwdHash,
+        name: ADMIN_NAME,
+      },
+    });
+    console.log('✅ Existing user updated to Admin!');
   }
 
-  // Fetch back
-  const row: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "${d.table}" WHERE email=$1 LIMIT 1`, ADMIN_EMAIL);
-  const finalUser = row?.[0] || user;
-
-  console.log('✅ Admin restored/created:');
+  console.log('\n🔑 Admin Credentials:');
   console.log({
-    id: finalUser?.id,
-    email: finalUser?.email,
-    role: finalUser?.role ?? (finalUser?.isAdmin ? 'ADMIN (isAdmin=true)' : 'UNKNOWN'),
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
   });
-  console.log('Use these creds to login:');
-  console.log({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+  console.log('\n📧 Login with:');
+  console.log(`   Email: ${ADMIN_EMAIL}`);
+  console.log(`   Password: ${ADMIN_PASSWORD}`);
 }
 
 ensureAdmin()
