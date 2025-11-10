@@ -1,0 +1,136 @@
+You are a senior Next.js 14 (App Router) + Tailwind + NextAuth engineer.
+Goal: Optimize SuVerse dashboard layout for mobile and small screens.
+Implement responsive navigation with a hamburger (burger) menu that expands/collapses the sidebar.
+
+===============================================================================
+ASSUMPTIONS
+- Project uses TailwindCSS, Next.js 14 App Router
+- Sidebar currently in `components/Sidebar.tsx` or similar
+- Pages layout at `app/(dashboard)/layout.tsx` or `app/layout.tsx`
+
+===============================================================================
+1) CREATE RESPONSIVE SIDEBAR COMPONENT
+
+📄 components/Sidebar.tsx
+
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
+
+const navItems = [
+  { name: "Dashboard", href: "/admin" },
+  { name: "Accountants", href: "/admin/accountants" },
+  { name: "Companies", href: "/admin/companies" },
+  { name: "Inventory", href: "/admin/inventory" },
+  { name: "Purchase Orders", href: "/admin/orders" },
+  { name: "Audit Log", href: "/admin/audit" },
+];
+
+export default function Sidebar() {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  return (
+    <nav className="bg-[#0a0f1a] border-r border-white/10 text-white min-h-screen md:w-64 w-full md:static fixed md:translate-x-0 transition-transform duration-300 z-50">
+      {/* Top bar for mobile */}
+      <div className="flex items-center justify-between md:hidden p-4 border-b border-white/10 bg-[#0a0f1a]">
+        <span className="text-lg font-semibold text-emerald-400">SuVerse</span>
+        <button onClick={() => setOpen(!open)} className="p-2 focus:outline-none">
+          {open ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Sidebar content */}
+      <div
+        className={`absolute md:static top-14 left-0 w-64 bg-[#0a0f1a] h-[calc(100vh-56px)] md:h-auto transition-transform duration-300 ${
+          open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="flex flex-col p-4 space-y-3">
+          <h1 className="text-xl font-bold text-emerald-400 hidden md:block">SuVerse</h1>
+          <p className="text-xs opacity-60 hidden md:block mb-3">Tax Credit Dashboard</p>
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                pathname === item.href
+                  ? "bg-emerald-600 text-black"
+                  : "hover:bg-white/10 text-white/80"
+              }`}
+              onClick={() => setOpen(false)}
+            >
+              {item.name}
+            </Link>
+          ))}
+          <div className="mt-6">
+            <button
+              onClick={() => {
+                window.location.href = "/logout";
+              }}
+              className="text-red-400 hover:text-red-500 text-sm"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+===============================================================================
+2) WRAP MAIN LAYOUT
+
+📄 app/(dashboard)/layout.tsx
+
+import Sidebar from "@/components/Sidebar";
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#050812] text-white">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+    </div>
+  );
+}
+
+===============================================================================
+3) INSTALL ICONS PACKAGE
+
+npm install lucide-react
+
+===============================================================================
+4) TAILWIND OPTIMIZATION
+
+Ensure in tailwind.config.js you have:
+
+content: [
+  "./app/**/*.{js,ts,jsx,tsx}",
+  "./components/**/*.{js,ts,jsx,tsx}"
+],
+
+===============================================================================
+5) MOBILE OPTIMIZATION (VISUAL)
+
+- Sidebar hides under hamburger on <768px width.
+- Menu slides in from left with smooth animation.
+- Clicking outside or a link closes it.
+- Top bar always visible with brand name & burger icon.
+- Main content automatically resizes.
+- “Sign Out” button remains visible at the bottom.
+
+===============================================================================
+6) TEST FLOW
+
+✅ Desktop → Sidebar always visible (fixed left)
+✅ Mobile → Click burger → Menu slides in/out smoothly
+✅ Links navigate and auto-close menu
+✅ Layout adjusts properly for all pages
+✅ Sign Out still functional
+
+===============================================================================
+RESULT
+This prompt converts your current static sidebar into a fully responsive burger navigation system across all dashboards (Admin, Accountant, Company) — clean, compact, mobile-friendly.
