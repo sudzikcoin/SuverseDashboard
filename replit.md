@@ -15,7 +15,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Design Elements**: Features glassmorphism, emerald glow shadows, and gradient halos.
 -   **Components**: Reusable components like `Button.tsx`, `GradientBadge.tsx`, and `Section.tsx` for consistency.
 -   **Responsiveness**: Mobile-first approach with adaptive grid layouts and responsive sidebar navigation.
--   **Navigation**: Responsive sidebar with hamburger menu for mobile (<768px), fixed sidebar for desktop. Features smooth slide-in/out animations, auto-close on navigation, and backdrop overlay.
+-   **Navigation**: Responsive sidebar with fixed top bar and hamburger menu for mobile (<768px), persistent sidebar for desktop. The mobile menu slides over content from the left with a dimmed backdrop overlay, smooth animations, and auto-close on navigation. Z-index layering ensures proper stacking: top bar (z-30), overlay (z-40), sidebar (z-50).
 
 ### Technical Implementations
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.

@@ -61,17 +61,22 @@ export default function Sidebar({ role }: SidebarProps) {
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#0E1526] border border-white/10 text-su-text hover:text-su-emerald transition"
-        aria-label="Toggle menu"
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      <div className="flex items-center justify-between md:hidden p-4 border-b border-white/10 bg-[#0E1526] fixed top-0 left-0 right-0 z-30">
+        <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-300 to-sky-300 bg-clip-text text-transparent">
+          SuVerse
+        </h1>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 focus:outline-none text-su-text hover:text-su-emerald transition"
+          aria-label="Toggle menu"
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
 
       {isOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -80,7 +85,7 @@ export default function Sidebar({ role }: SidebarProps) {
         className={`
           fixed md:static top-0 left-0 h-screen w-64 
           bg-[#0E1526] border-r border-white/10 
-          flex flex-col z-40
+          flex flex-col z-50
           transform transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}

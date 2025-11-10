@@ -29,9 +29,9 @@ export default async function DashboardShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-su-base">
+    <div className="flex flex-col md:flex-row min-h-screen bg-su-base">
       <Sidebar role={session.user.role} />
-      <main className="flex-1 md:ml-0">
+      <main className="flex-1 pt-16 md:pt-0 md:ml-0">
         {children}
       </main>
     </div>
