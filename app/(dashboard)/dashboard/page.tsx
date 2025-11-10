@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import Sidebar from "@/components/Sidebar"
 import Link from "next/link"
 import CalculatorCard from "@/components/CalculatorCard"
 import FileUpload from "@/components/FileUpload"
@@ -18,15 +17,12 @@ export default async function DashboardPage() {
   const userCompanyId = session.user.companyId
 
   return (
-    <div className="flex min-h-screen bg-[#0B1220]">
-      <Sidebar role={session.user.role} />
-      
-      <main className="flex-1 p-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-100">
+    <div className="p-4 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-100">
             Welcome, {session.user.companyName || session.user.name || "Guest"}
           </h1>
-          <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition" />
+          <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition w-fit" />
         </div>
 
         {session.user.role === "COMPANY" && (
@@ -138,7 +134,6 @@ export default async function DashboardPage() {
             <CalculatorCard />
           </div>
         )}
-      </main>
     </div>
   )
 }

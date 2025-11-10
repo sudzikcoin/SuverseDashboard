@@ -66,7 +66,7 @@ export default function ClientsPage() {
 
   return (
     <RequireRole roles={["ACCOUNTANT", "ADMIN"]}>
-      <div className="min-h-screen bg-[#0B1220] p-6">
+      <div className="min-h-screen bg-su-base p-4 md:p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
