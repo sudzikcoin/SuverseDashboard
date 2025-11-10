@@ -24,6 +24,10 @@ enum AuditAction {
   BLOCK_COMPANY
   UNBLOCK_COMPANY
   RESET_PASSWORD
+  PAYMENT_INITIATED
+  PAYMENT_SUBMITTED
+  PAYMENT_CONFIRMED
+  PAYMENT_FAILED
 }
 
 enum AuditEntity {
@@ -33,6 +37,14 @@ enum AuditEntity {
   CREDIT
   DOCUMENT
   SYSTEM
+  PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
 }
 
 model User {
@@ -174,4 +186,25 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([companyId])
   @@index([actorId])
+}
+
+model PaymentLog {
+  id              String        @id @default(cuid())
+  userId          String?
+  companyId       String?
+  purchaseOrderId String?
+  chainId         Int
+  tokenAddress    String
+  toAddress       String
+  amountRaw       String
+  feeBps          Int
+  feeRaw          String
+  totalRaw        String
+  txHash          String?
+  status          PaymentStatus @default(PENDING)
+  meta            Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId, companyId, status])
 }
