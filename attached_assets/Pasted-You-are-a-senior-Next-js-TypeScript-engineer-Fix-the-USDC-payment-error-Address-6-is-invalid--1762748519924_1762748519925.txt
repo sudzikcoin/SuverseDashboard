@@ -1,0 +1,134 @@
+You are a senior Next.js + TypeScript engineer. Fix the USDC payment error
+`Address "6" is invalid` by hardening env usage and wiring the correct Base
+USDC contract address variable (the bug happens because the code is reading
+the DECIMALS env "6" instead of the contract address).
+
+ASSUMPTIONS
+- Next.js App Router
+- viem / wagmi used for on-chain tx
+- Current secrets already set in Replit
+- Chain: Base mainnet (id 8453), USDC native contract
+
+GOALS
+1) Strict env schema so address & decimals cannot be confused.
+2) Use `NEXT_PUBLIC_USDC_ADDRESS` for the ERC20 contract and
+   `NEXT_PUBLIC_USDC_DECIMALS` ONLY for amount formatting.
+3) Validate addresses at runtime and show friendly errors.
+
+──────────────────────────────────────────────────────────────────────────────
+1) ADD /lib/env.ts (create or replace)
+
+-- FILE: lib/env.ts
+import { z } from "zod";
+
+const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid 0x address");
+
+const publicSchema = z.object({
+  NEXT_PUBLIC_BASE_CHAIN_ID: z.string().default("8453"),
+  NEXT_PUBLIC_USDC_ADDRESS: address,
+  NEXT_PUBLIC_USDC_DECIMALS: z.string().regex(/^\d+$/, "Decimals must be a number"),
+  NEXT_PUBLIC_ESCROW_ADDRESS: address,
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: z.string().regex(/^\d+$/).default("100"),
+});
+
+export type PublicEnv = z.infer<typeof publicSchema>;
+
+export const env: PublicEnv = publicSchema.parse({
+  NEXT_PUBLIC_BASE_CHAIN_ID: process.env.NEXT_PUBLIC_BASE_CHAIN_ID,
+  NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
+  NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+  NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
+  NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS,
+});
+
+export const asNumber = (v: string) => Number.parseInt(v, 10);
+
+──────────────────────────────────────────────────────────────────────────────
+2) UPDATE the USDC payment util to consume the strict env
+
+-- FILE: lib/payments/usdc.ts (create or replace)
+import { parseUnits } from "viem";
+import { env, asNumber } from "@/lib/env";
+
+export const getUsdcConfig = () => {
+  const chainId = asNumber(env.NEXT_PUBLIC_BASE_CHAIN_ID);
+  const decimals = asNumber(env.NEXT_PUBLIC_USDC_DECIMALS);
+  const feeBps = asNumber(env.NEXT_PUBLIC_PLATFORM_FEE_BPS);
+
+  return {
+    chainId,
+    usdcAddress: env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}`,
+    usdcDecimals: decimals,
+    escrow: env.NEXT_PUBLIC_ESCROW_ADDRESS as `0x${string}`,
+    feeBps,
+  };
+};
+
+export function calcAmounts(inputUsd: string) {
+  const { usdcDecimals, feeBps } = getUsdcConfig();
+  const amount = parseUnits(inputUsd, usdcDecimals);
+  const fee = (amount * BigInt(feeBps)) / BigInt(10_000);
+  const total = amount + fee;
+  return { amount, fee, total };
+}
+
+──────────────────────────────────────────────────────────────────────────────
+3) UPDATE the component that calls writeContract
+
+-- FILE: components/pay/PayWithUSDC.tsx (find & replace the config usage)
+import { writeContract } from "wagmi/actions";
+import { erc20Abi } from "viem";
+import { getUsdcConfig, calcAmounts } from "@/lib/payments/usdc";
+
+async function onConfirmPay(rawAmountUsd: string) {
+  const { usdcAddress, escrow } = getUsdcConfig();
+  const { amount } = calcAmounts(rawAmountUsd);
+
+  // SAFETY: usdcAddress & escrow are validated in env.ts
+  await writeContract({
+    address: usdcAddress,
+    abi: erc20Abi,
+    functionName: "transfer",
+    args: [escrow, amount],
+  });
+}
+
+──────────────────────────────────────────────────────────────────────────────
+4) OPTIONAL: Improve error shown in the modal (so the “Address '6'” message
+   becomes readable for users)
+
+-- FILE: components/pay/ConfirmModal.tsx (patch the catch block)
+catch (e: any) {
+  const msg = (e?.shortMessage || e?.message || "").toString();
+  const friendly =
+    msg.includes("Invalid 0x address") || msg.includes('Address "6" is invalid')
+      ? "Payment configuration error: invalid contract or escrow address. Please contact support."
+      : msg;
+  setError(friendly);
+}
+
+──────────────────────────────────────────────────────────────────────────────
+5) .env / Replit Secrets — ensure EXACT variable names (case sensitive)
+
+Set these keys (you already have most of them; verify spelling):
+- NEXT_PUBLIC_BASE_CHAIN_ID = 8453
+- NEXT_PUBLIC_USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54b2689996
+  (Native USDC on Base mainnet)
+- NEXT_PUBLIC_USDC_DECIMALS = 6
+- NEXT_PUBLIC_ESCROW_ADDRESS = 0xf0b86c1E38ed881e3C94b8096DFE6FD1a71F8721
+  (your wallet/escrow)
+- NEXT_PUBLIC_PLATFORM_FEE_BPS = 100  (→ 1.00%)
+
+⚠️ Remove any legacy/mistyped keys like:
+  NEXT_PUBLIC_USDC (without suffix), USDC_BASE_ADDRESS (non-public) if code
+  no longer uses them. We only use the five variables above.
+
+──────────────────────────────────────────────────────────────────────────────
+6) QUICK TEST (no code changes required)
+- Reload the app after updating secrets (Stop ▶ Run in Replit).
+- Connect a wallet on Base.
+- Try $1.00 payment again. The modal should show Amount + 1% fee.
+- Tx request must be an ERC20 `transfer(escrow, amount)` to USDC contract
+  0x8335…89996. No more “Address '6'” errors.
+
+Done. This eliminates the DECIMALS→address mix-up and hardens the flow.

@@ -10,9 +10,11 @@ import {
 import { erc20Abi } from "@/lib/erc20"
 import { toRaw, calcWithFee, fromRaw, formatUSDWithCents } from "@/lib/format"
 import { X } from "lucide-react"
+import { getUsdcConfig } from "@/lib/payments/usdc"
 
-const DECIMALS = Number(process.env.NEXT_PUBLIC_USDC_DECIMALS ?? 6)
-const CHAIN_ID = Number(process.env.NEXT_PUBLIC_BASE_CHAIN_ID ?? 8453)
+const config = getUsdcConfig()
+const DECIMALS = config.usdcDecimals
+const CHAIN_ID = config.chainId
 
 interface PayModalProps {
   open: boolean
@@ -115,7 +117,12 @@ export default function PayModal({
       setStatus("confirmed")
     } catch (err: any) {
       console.error("Payment error:", err)
-      setError(err.message || "Payment failed")
+      const msg = (err?.shortMessage || err?.message || "").toString()
+      const friendly =
+        msg.includes("Invalid 0x address") || msg.includes('Address "6" is invalid')
+          ? "Payment configuration error: invalid contract or escrow address. Please contact support."
+          : msg || "Payment failed"
+      setError(friendly)
       setStatus("error")
 
       if (logId) {
