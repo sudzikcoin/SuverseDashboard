@@ -1,0 +1,148 @@
+REPLIT PROMPT — Restore lost Admin login (Next.js + Prisma + NextAuth)
+
+Goal
+Re-create a working Admin user even after DB wipe.
+
+What to build
+1) Script `scripts/restoreAdmin.ts` that:
+   - Takes ADMIN_EMAIL and ADMIN_PASSWORD from env (or hardcoded defaults).
+   - If a user with ADMIN_EMAIL exists → ensure it has admin role.
+   - If not exists → create it with a bcrypt-hashed password and set admin role.
+   - Works with common schemas:
+       • password column name: `hashedPassword` OR `password`
+       • role column: `role` (enum/string) OR `isAdmin` (boolean)
+   - Prints the final user id + role to console.
+
+2) NPM script `"restore:admin"` to run it with `tsx` (or `ts-node`).
+
+3) Minimal guard in UI: if no admin exists, show a tiny banner “No admin found, run yarn restore:admin”.
+
+Implementation
+- Add dev deps: `bcryptjs tsx` if missing.
+- Create file: `scripts/restoreAdmin.ts` with defensive logic:
+   - Load env (`dotenv/config`).
+   - Build prisma client.
+   - Probe table columns via `information_schema.columns` to detect which password/role fields exist.
+   - Upsert user and set the correct field names accordingly.
+   - For role semantics, try in order:
+       a) set role='ADMIN' (string/enum)
+       b) set isAdmin=true (boolean)
+
+- Add to `package.json`:
+   "scripts": {
+     "restore:admin": "tsx scripts/restoreAdmin.ts"
+   }
+
+Code (create exactly this file)
+— scripts/restoreAdmin.ts —
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@suverse.app';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin123!';
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin User';
+
+async function columnExists(table: string, column: string) {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2 LIMIT 1`,
+    table, column
+  );
+  return rows && rows.length > 0;
+}
+
+// Try to detect actual table & column names
+async function detect() {
+  // Prisma usually pluralizes to "User" model -> "User" table or "users"
+  // We’ll probe both to maximize compatibility.
+  const candidates = ['User', 'users'];
+  for (const t of candidates) {
+    const ok = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1 LIMIT 1`, t
+    );
+    if (ok && ok.length) {
+      const hasHashed = await columnExists(t, 'hashedPassword');
+      const hasPassword = await columnExists(t, 'password');
+      const hasRole = await columnExists(t, 'role');
+      const hasIsAdmin = await columnExists(t, 'isAdmin');
+      const hasEmail = await columnExists(t, 'email');
+      const hasName = await columnExists(t, 'name');
+      return { table: t, hasHashed, hasPassword, hasRole, hasIsAdmin, hasEmail, hasName };
+    }
+  }
+  throw new Error('Could not find users table (tried "User" and "users").');
+}
+
+async function ensureAdmin() {
+  const d = await detect();
+
+  // 1) find user by email using Prisma model (fallback to raw if needed)
+  let user = await prisma.user?.findUnique?.({ where: { email: ADMIN_EMAIL } } as any).catch(() => null);
+  if (!user) {
+    // Create new user via raw insert to handle various column names
+    const pwdHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+
+    const cols = ['email'];
+    const vals = [`'${ADMIN_EMAIL}'`];
+    if (d.hasName) { cols.push('name'); vals.push(`'${ADMIN_NAME}'`); }
+    if (d.hasHashed) { cols.push('hashedPassword'); vals.push(`'${pwdHash}'`); }
+    else if (d.hasPassword) { cols.push('password'); vals.push(`'${pwdHash}'`); }
+
+    const insertSql = `INSERT INTO "${d.table}" (${cols.join(',')}) VALUES (${vals.join(',')}) RETURNING *;`;
+    const rows: any[] = await prisma.$queryRawUnsafe(insertSql);
+    user = rows?.[0];
+    if (!user) throw new Error('Insert admin failed.');
+  }
+
+  // 2) Elevate to admin
+  if (d.hasRole) {
+    await prisma.$executeRawUnsafe(`UPDATE "${d.table}" SET role='ADMIN' WHERE email=$1`, ADMIN_EMAIL);
+  } else if (d.hasIsAdmin) {
+    await prisma.$executeRawUnsafe(`UPDATE "${d.table}" SET "isAdmin"=true WHERE email=$1`, ADMIN_EMAIL);
+  } else {
+    console.warn('No role/isAdmin column found. Skipping role elevation.');
+  }
+
+  // Fetch back
+  const row: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "${d.table}" WHERE email=$1 LIMIT 1`, ADMIN_EMAIL);
+  const finalUser = row?.[0] || user;
+
+  console.log('✅ Admin restored/created:');
+  console.log({
+    id: finalUser?.id,
+    email: finalUser?.email,
+    role: finalUser?.role ?? (finalUser?.isAdmin ? 'ADMIN (isAdmin=true)' : 'UNKNOWN'),
+  });
+  console.log('Use these creds to login:');
+  console.log({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+}
+
+ensureAdmin()
+  .then(() => process.exit(0))
+  .catch((e) => { console.error('❌ Restore admin failed:', e); process.exit(1); });
+
+— end of file —
+
+package.json addition
+- If not present, add:
+  "devDependencies": { "tsx": "^4.7.0", "bcryptjs": "^2.4.3" }
+
+Run
+1) In Replit “Secrets”, set (optional, or leave defaults):
+   ADMIN_EMAIL=admin@suverse.app
+   ADMIN_PASSWORD=Admin123!
+   ADMIN_NAME=Admin User
+2) In the shell:
+   npm i -D tsx bcryptjs
+   npm run restore:admin
+
+After login
+- Go to the app, sign in with the above email/password.
+- If you use NextAuth Credentials provider, it will accept the bcrypt hash.
+- If your UI gates admin by role or isAdmin, it should now render Admin panel.
+
+Notes
+- If your Prisma model name isn’t `User`, adjust the candidates array in the script.
+- If you use email-only auth and don’t use password at all, keep the user creation and role elevation; your magic-link flow will still work for the admin email.
