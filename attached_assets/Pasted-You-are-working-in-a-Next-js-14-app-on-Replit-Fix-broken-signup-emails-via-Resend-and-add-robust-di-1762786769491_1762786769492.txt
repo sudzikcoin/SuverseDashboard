@@ -1,0 +1,176 @@
+You are working in a Next.js 14 app on Replit. Fix broken signup emails via Resend and add robust diagnostics.
+
+GOALS
+1) Restore transactional email on new user registration (welcome/verification as applicable).
+2) Add solid error logging (server + console) and user-visible status in Audit Log.
+3) Provide a test endpoint `/api/test-email` and a UI test button.
+4) Ensure Node runtime (not Edge) for any route using Resend.
+5) Make failures non-blocking for signup (no crashes).
+
+DEPENDENCIES
+- Ensure `resend` is installed; if missing: `npm i resend react-email`.
+- Do NOT remove existing auth; only hook events.
+
+ENV (Replit → Secrets)
+- RESEND_API_KEY = <your_Resend_API_key>
+- RESEND_FROM = "SuVerse <no-reply@suverse.app>"  // use verified domain; TEMP fallback allowed: "onboarding@resend.dev"
+- APP_URL = "https://<your-app-url>"
+(Keep existing: NEXTAUTH_URL / RESEND_API_KEY that already exists; update values only if empty.)
+
+CREATE/UPDATE FILES
+
+1) lib/email/resend.ts  (new)
+------------------------------------------------
+export const runtime = 'nodejs';
+import { Resend } from 'resend';
+
+const key = process.env.RESEND_API_KEY;
+if (!key) {
+  console.error('[Email] Missing RESEND_API_KEY');
+}
+
+export const resend = new Resend(key!);
+
+export function fromAddress() {
+  return process.env.RESEND_FROM || 'onboarding@resend.dev';
+}
+------------------------------------------------
+
+2) emails/WelcomeEmail.tsx  (new – simple React Email)
+------------------------------------------------
+import * as React from 'react';
+
+export default function WelcomeEmail({ name }: { name?: string }) {
+  return (
+    <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: 1.5 }}>
+      <h2>Welcome to SuVerse{ name ? `, ${name}` : '' }!</h2>
+      <p>Your account has been created successfully.</p>
+      <p>You can log in to your dashboard and start working with tax credits.</p>
+      <p>— SuVerse Team</p>
+    </div>
+  );
+}
+------------------------------------------------
+
+3) lib/email/send.ts  (new – helper with logging + fallback)
+------------------------------------------------
+export const runtime = 'nodejs';
+import { resend, fromAddress } from './resend';
+import WelcomeEmail from '@/emails/WelcomeEmail';
+
+type SendResult = { ok: boolean; id?: string; error?: string };
+
+export async function sendWelcomeEmail(to: string, name?: string): Promise<SendResult> {
+  try {
+    const res = await resend.emails.send({
+      from: fromAddress(),
+      to,
+      subject: `Welcome to SuVerse${name ? ', ' + name : ''}!`,
+      react: WelcomeEmail({ name }),
+    });
+    if ('error' in res && res.error) {
+      console.error('[Email] Resend API error:', res.error);
+      return { ok: false, error: String(res.error?.message || res.error) };
+    }
+    return { ok: true, id: (res as any).data?.id || (res as any).id };
+  } catch (e: any) {
+    console.error('[Email] Exception:', e?.message || e);
+    return { ok: false, error: e?.message || 'Unknown error' };
+  }
+}
+------------------------------------------------
+
+4) app/api/test-email/route.ts  (new – manual test)
+------------------------------------------------
+export const runtime = 'nodejs';
+import { NextResponse } from 'next/server';
+import { sendWelcomeEmail } from '@/lib/email/send';
+
+export async function POST(req: Request) {
+  try {
+    const { to, name } = await req.json();
+    if (!to) return NextResponse.json({ ok: false, error: 'Missing "to"' }, { status: 400 });
+    const r = await sendWelcomeEmail(to, name);
+    return NextResponse.json(r, { status: r.ok ? 200 : 500 });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
+  }
+}
+------------------------------------------------
+
+5) Hook email on user creation.
+If you use NextAuth, add an event. Open: app/api/auth/[...nextauth]/route.ts (or your NextAuth file) and ensure:
+
+- Import:
+  import { sendWelcomeEmail } from '@/lib/email/send';
+
+- In the NextAuth options, add:
+  events: {
+    async createUser({ user }) {
+      try {
+        const email = user?.email as string | undefined;
+        const name = (user as any)?.name || (user as any)?.companyName || undefined;
+        if (email) {
+          const r = await sendWelcomeEmail(email, name);
+          if (!r.ok) console.error('[Auth:createUser] email failed:', r.error);
+        } else {
+          console.warn('[Auth:createUser] user has no email');
+        }
+      } catch (e: any) {
+        console.error('[Auth:createUser] exception:', e?.message || e);
+      }
+    },
+  },
+
+Ensure this auth route file exports `export const runtime = 'nodejs';` at top if not present.
+
+6) If you don’t use NextAuth events but a custom signup API:
+Locate your registration handler (e.g., app/api/register/route.ts). After successful user insert/creation, call:
+  await sendWelcomeEmail(email, name);
+Wrap in try/catch and do not block response on failure.
+
+7) Add minimal UI test button (optional but useful).
+In an admin-only page (e.g., /admin or /dashboard), add a small card:
+------------------------------------------------
+async function testEmail(to: string) {
+  await fetch('/api/test-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, name: 'Test' }),
+  });
+}
+------------------------------------------------
+Display last result and error in a toast or small text.
+
+8) Audit Log integration (if you have an Audit model/util).
+Where you already log actions, add:
+  createAudit({
+    entity: 'Email',
+    action: 'SEND',
+    actorId: currentUserId ?? null,
+    meta: { to, template: 'WelcomeEmail', provider: 'Resend', ok, error, id },
+  });
+This line should not throw; wrap with try/catch.
+
+9) Common failure protections:
+- Ensure any API route using Resend has `export const runtime = 'nodejs';`.
+- If domain not verified yet, default to `onboarding@resend.dev` and leave a TODO.
+- Handle 429 by logging; no retries necessary for now.
+- Don’t call `.toFixed()` on undefined; all strings validated before send.
+
+TEST PLAN
+1) Replit → Secrets: set/update RESEND_API_KEY, RESEND_FROM, APP_URL.
+2) Rebuild the app.
+3) Use the admin test widget or run:
+   curl -X POST "<APP_URL>/api/test-email" -H "Content-Type: application/json" --data '{"to":"your@email.com","name":"Tester"}'
+   Expect { ok: true, id: "..." } and receive an email.
+4) Create a new account via normal signup → email should arrive; check server console for `[Email]` logs.
+5) If email not received:
+   - Check Resend Dashboard → Logs & Suppressions (bounced/blocked).
+   - Confirm RESEND_FROM is from a verified domain (or use onboarding fallback).
+   - Check spam folder and DMARC/DKIM on your domain.
+
+DELIVERABLES
+- New files: lib/email/resend.ts, lib/email/send.ts, emails/WelcomeEmail.tsx, app/api/test-email/route.ts
+- Updated NextAuth (events.createUser) or custom registration route.
+- No breaking changes to signup flow; email failures are logged but do not block.
