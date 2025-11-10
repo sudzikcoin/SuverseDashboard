@@ -52,7 +52,7 @@ export default function PayModal({
     const units = usdToUnits(amount)
     const { fee, total } = calcFeeBps(units)
     return { amountRaw: units, feeRaw: fee, totalRaw: total }
-  }, [amount])
+  }, [amount, feeBps])
 
   async function handlePay() {
     if (!address) {
