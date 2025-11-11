@@ -41,7 +41,7 @@ export async function writeAudit(p: AuditParams): Promise<void> {
       ip,
       userAgent,
       txHash: p.txHash ?? undefined,
-      amountUSD: p.amountUSD ? new Prisma.Decimal(p.amountUSD.toString()) : undefined,
+      amountUSD: p.amountUSD != null ? new Prisma.Decimal(p.amountUSD.toString()) : undefined,
     },
   })
 }
