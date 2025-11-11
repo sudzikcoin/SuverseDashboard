@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./db"
 import { sendWelcomeEmail } from "./email/send"
+import { writeAudit } from "./audit"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -100,6 +101,23 @@ export const authOptions: NextAuthOptions = {
         }
       } catch (e: any) {
         console.error('[mail:welcome] exception:', e?.message || e);
+      }
+    },
+    async signIn({ user }) {
+      try {
+        if (user?.id && user?.email) {
+          await writeAudit({
+            actorId: user.id,
+            actorEmail: user.email,
+            action: "LOGIN",
+            entity: "USER",
+            entityId: user.id,
+            details: { method: "credentials" },
+            skipRequestContext: true,
+          })
+        }
+      } catch (e: any) {
+        console.error('[audit:login] Failed to log login event:', e?.message || e)
       }
     },
   },

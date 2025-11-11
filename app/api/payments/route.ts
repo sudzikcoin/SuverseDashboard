@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
+import { getRequestContext } from "@/lib/reqctx";
 
 const db = prisma;
 
@@ -110,19 +111,23 @@ export async function POST(req: NextRequest) {
       data: { status: "PAID" },
     });
 
+    const ctx = await getRequestContext()
     await writeAudit({
       actorId: user.id,
       actorEmail: user.email!,
-      action: "PAYMENT_SUBMITTED",
+      action: "TRANSACTION_CRYPTO",
       entity: "PAYMENT",
       entityId: payment.id,
       companyId: purchase.companyId,
+      txHash: validated.txHash,
+      amountUSD: purchaseTotalUSD.toNumber(),
       details: {
         purchaseId: validated.purchaseId,
-        txHash: validated.txHash,
-        amountUSD: validated.amountUSD,
         feeUSD: validated.feeUSD,
+        network: validated.network,
+        token: validated.token,
       },
+      ...ctx,
     });
 
     return NextResponse.json(payment, { status: 201 });

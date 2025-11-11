@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { registerSchema } from "@/lib/validations"
-import { createAuditLog } from "@/lib/audit"
+import { writeAudit } from "@/lib/audit"
 import { sendWelcomeEmail } from "@/lib/email"
+import { getRequestContext } from "@/lib/reqctx"
 
 export async function POST(req: Request) {
   try {
@@ -61,7 +62,20 @@ export async function POST(req: Request) {
       })
     }
 
-    await createAuditLog(user.id, "CREATE", "User", user.id)
+    const ctx = await getRequestContext()
+    await writeAudit({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "REGISTER",
+      entity: "USER",
+      entityId: user.id,
+      companyId: company?.id,
+      details: {
+        role: user.role,
+        companyCreated: !!company,
+      },
+      ...ctx,
+    })
 
     if (validated.role === "COMPANY" || validated.role === "ACCOUNTANT") {
       await sendWelcomeEmail(
