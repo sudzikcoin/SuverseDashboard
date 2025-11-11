@@ -5,6 +5,9 @@ import ClientInit from "@/components/ClientInit";
 import WalletGuard from "@/components/wallet/WalletGuard";
 import WalletBanner from "@/components/WalletBanner";
 import Splash from "@/components/Splash";
+import { GlobalErrorBoundary } from "@/components/ops/GlobalErrorBoundary";
+import { ReleaseChecklist } from "@/components/ops/ReleaseChecklist";
+import { ShieldToastSetup } from "@/components/ops/ShieldToastSetup";
 import "./globals.css";
 import "@rainbow-me/rainbowkit/styles.css";
 
@@ -25,9 +28,13 @@ export default function RootLayout({
         <SessionProvider>
           <ClientInit />
           <UserScopedWagmiProvider>
-            <WalletBanner />
-            <WalletGuard />
-            {children}
+            <GlobalErrorBoundary>
+              <ShieldToastSetup />
+              <WalletBanner />
+              <WalletGuard />
+              {children}
+              <ReleaseChecklist />
+            </GlobalErrorBoundary>
           </UserScopedWagmiProvider>
         </SessionProvider>
       </body>

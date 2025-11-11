@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkWallet } from '@/lib/ops/health';
+import { runAllChecks } from '@/lib/ops/health';
 import { requireAdmin } from '@/lib/ops/auth-middleware';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export async function GET() {
   if (authError) return authError;
 
   try {
-    const result = await checkWallet();
+    const result = await runAllChecks();
     return NextResponse.json(result, { 
       status: 200,
       headers: {
@@ -17,11 +17,13 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error('[shield] /api/health/wallet error:', error);
+    console.error('[shield] /api/health error:', error);
     return NextResponse.json(
       { 
         ok: false, 
-        error: error instanceof Error ? error.message : 'Wallet health check failed' 
+        ts: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Health check aggregation failed',
+        checks: {},
       },
       { status: 200 }
     );

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkWallet } from '@/lib/ops/health';
+import { checkAudit } from '@/lib/ops/health';
 import { requireAdmin } from '@/lib/ops/auth-middleware';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export async function GET() {
   if (authError) return authError;
 
   try {
-    const result = await checkWallet();
+    const result = await checkAudit();
     return NextResponse.json(result, { 
       status: 200,
       headers: {
@@ -17,11 +17,11 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error('[shield] /api/health/wallet error:', error);
+    console.error('[shield] /api/health/audit error:', error);
     return NextResponse.json(
       { 
         ok: false, 
-        error: error instanceof Error ? error.message : 'Wallet health check failed' 
+        error: error instanceof Error ? error.message : 'Audit health check failed' 
       },
       { status: 200 }
     );

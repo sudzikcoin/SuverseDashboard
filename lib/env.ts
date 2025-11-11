@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash } from "crypto";
 
 const PublicEnvSchema = z.object({
   NEXT_PUBLIC_BASE_CHAIN_ID: z.coerce.number().int().positive(),
@@ -9,8 +10,14 @@ const PublicEnvSchema = z.object({
 });
 
 const EmailEnvSchema = z.object({
-  RESEND_API_KEY: z.string().min(10, 'RESEND_API_KEY missing or too short'),
-  RESEND_FROM: z.string().email('RESEND_FROM must be a valid email').or(z.literal('onboarding@resend.dev')),
+  RESEND_API_KEY: z.string().min(10, 'RESEND_API_KEY missing or too short').optional(),
+  RESEND_FROM: z.string()
+    .refine((val) => {
+      const rfc5322 = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      const nameEmail = /^.+\s+<[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*>$/;
+      return rfc5322.test(val) || nameEmail.test(val);
+    }, 'RESEND_FROM must be RFC5322 email or "Name <email@example.com>"')
+    .optional(),
 });
 
 const TelegramEnvSchema = z.object({
@@ -25,14 +32,20 @@ const CronEnvSchema = z.object({
 
 const AuthEnvSchema = z.object({
   NEXTAUTH_SECRET: z.string().min(32, 'NEXTAUTH_SECRET too short (min 32 chars)'),
-  SESSION_SECRET: z.string().min(32).optional(),
-  NEXTAUTH_URL: z.string().url('NEXTAUTH_URL must be a valid URL').optional(),
-  DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET too short (min 32 chars)').optional(),
+  NEXTAUTH_URL: z.string().optional(),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   AUTH_TRUST_HOST: z.coerce.boolean().default(true),
 });
 
 const WalletEnvSchema = z.object({
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().default("MISSING"),
+});
+
+const UsdcEnvSchema = z.object({
+  USDC_BASE_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  NEXT_PUBLIC_USDC_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
+  PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(100),
 });
 
 const ServerEnvSchema = PublicEnvSchema.merge(EmailEnvSchema).merge(TelegramEnvSchema).merge(CronEnvSchema);
@@ -182,7 +195,7 @@ export function getWalletEnv() {
 
   if (!walletParsed.success) {
     console.warn("[walletenv] parse error", walletParsed.error?.flatten?.().fieldErrors);
-    return { projectId: null as string | null };
+    return { projectId: null as string | null, isValid: false };
   }
 
   const pid = walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
@@ -191,10 +204,66 @@ export function getWalletEnv() {
   
   if (!pid || INVALID_VALUES.includes(pid.toLowerCase())) {
     console.warn("[walletenv] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing or invalid (placeholder detected)");
-    return { projectId: null as string | null };
+    return { projectId: null as string | null, isValid: false };
   }
 
-  return { projectId: pid };
+  return { projectId: pid, isValid: true };
 }
+
+export function getUsdcEnv() {
+  const parsed = UsdcEnvSchema.safeParse({
+    USDC_BASE_ADDRESS: process.env.USDC_BASE_ADDRESS,
+    NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+    PLATFORM_FEE_BPS: process.env.PLATFORM_FEE_BPS,
+  });
+
+  if (!parsed.success) {
+    console.warn('[shield] USDC env validation failed:', parsed.error.flatten().fieldErrors);
+    return {
+      USDC_BASE_ADDRESS: process.env.USDC_BASE_ADDRESS,
+      NEXT_PUBLIC_USDC_DECIMALS: 6,
+      PLATFORM_FEE_BPS: 100,
+      isValid: false,
+    };
+  }
+
+  return {
+    ...parsed.data,
+    isValid: true,
+  };
+}
+
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return '<not set>';
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  const maskedLocal = local.length > 2 ? local.substring(0, 2) + '***' : '***';
+  return `${maskedLocal}@${domain}`;
+}
+
+export function maskKey(key: string | null | undefined, showChars = 4): string {
+  if (!key) return '<not set>';
+  if (key.length <= showChars) return '***';
+  return key.substring(0, showChars) + '***';
+}
+
+export function computeVersionHash(): string {
+  try {
+    const secret = process.env.NEXTAUTH_SECRET || '';
+    const sessionSecret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '';
+    const resendFrom = process.env.RESEND_FROM || '';
+    
+    const combined = `${secret}:${sessionSecret}:${resendFrom}`;
+    const hash = createHash('sha256').update(combined).digest('hex');
+    
+    console.log('[shield] VERSION_HASH computed:', hash.substring(0, 8));
+    return hash;
+  } catch (error) {
+    console.error('[shield] Failed to compute VERSION_HASH:', error);
+    return 'fallback-version';
+  }
+}
+
+export const VERSION_HASH = computeVersionHash();
 
 export default env;

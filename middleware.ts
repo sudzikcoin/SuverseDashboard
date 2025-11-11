@@ -29,13 +29,64 @@ const PROTECTED_PREFIXES = [
   "/pay",
 ]
 
+async function computeVersionHash(req: NextRequest): Promise<string> {
+  try {
+    const secret = process.env.NEXTAUTH_SECRET || '';
+    const sessionSecret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '';
+    const resendFrom = process.env.RESEND_FROM || '';
+    
+    const combined = `${secret}:${sessionSecret}:${resendFrom}`;
+    
+    const encoder = new TextEncoder();
+    const data = encoder.encode(combined);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
+  } catch (error) {
+    console.error('[shield] Failed to compute VERSION_HASH in middleware:', error);
+    return 'fallback-version';
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  if (isPublic(pathname)) return NextResponse.next()
+  const response = NextResponse.next()
+
+  try {
+    const currentVersion = req.cookies.get("sv.version")?.value
+    const expectedVersion = (await computeVersionHash(req)).substring(0, 8)
+
+    if (currentVersion !== expectedVersion) {
+      console.log('[shield] Version mismatch detected, clearing auth cookies')
+      
+      response.cookies.delete("sv.session.v2")
+      response.cookies.delete("next-auth.session-token")
+      response.cookies.delete("__Secure-next-auth.session-token")
+      
+      response.cookies.set("sv.version", expectedVersion, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      })
+
+      if (!isPublic(pathname) && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
+        const url = new URL("/login", req.url)
+        url.searchParams.set("callbackUrl", pathname)
+        return NextResponse.redirect(url)
+      }
+    }
+  } catch (error) {
+    console.error('[shield] Version guard error:', error)
+  }
+
+  if (isPublic(pathname)) return response
 
   const needsAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
-  if (!needsAuth) return NextResponse.next()
+  if (!needsAuth) return response
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token) {
@@ -54,11 +105,11 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
   matcher: [
-    "/((?!api/health).*)"
+    "/((?!_next/static|_next/image|favicon.ico).*)"
   ],
 }

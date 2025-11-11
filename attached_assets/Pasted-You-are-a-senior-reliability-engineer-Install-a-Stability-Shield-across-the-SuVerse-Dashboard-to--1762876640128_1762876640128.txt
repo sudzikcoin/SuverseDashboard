@@ -1,0 +1,95 @@
+You are a senior reliability engineer. Install a “Stability Shield” across the SuVerse Dashboard to stop regressions and make issues obvious.
+
+GOALS
+1) Add a Diagnostics page at /admin/diagnostics showing live status of: DB, Prisma migrations, NextAuth, Secrets VERSION_HASH, Email (Resend), WalletConnect, USDC env, and Audit logger.
+2) Add unified health endpoints: /api/health (summary) plus /api/health/{db,auth,email,wallet,usdc,audit}.
+3) Add a one-click server self-test: /api/selftest that runs checks and returns a structured JSON report.
+4) Centralize and validate secrets with zod in lib/env.ts and compute VERSION_HASH (sha256 of core secrets) to detect config drift.
+5) Add a global error boundary + toast reporter so runtime errors never white-screen the app and are visible in UI/logs.
+6) Add a small “Release Checklist” modal (Ctrl/Cmd+K → “Checklist”) to run pre/post-deploy smoke tests.
+
+SCOPE (create/update exactly these):
+- lib/env.ts                         (zod env validation + VERSION_HASH + masking helpers)
+- lib/ops/health.ts                  (all health check helpers)
+- app/api/health/db/route.ts
+- app/api/health/auth/route.ts
+- app/api/health/email/route.ts
+- app/api/health/wallet/route.ts
+- app/api/health/usdc/route.ts
+- app/api/health/audit/route.ts
+- app/api/health/route.ts            (summary)
+- app/api/selftest/route.ts          (aggregated self test)
+- app/admin/diagnostics/page.tsx     (UI grid + run selftest + JSON panel)
+- components/ops/ReleaseChecklist.tsx (floating modal with quick checks)
+- app/layout.tsx                     (GlobalErrorBoundary + Toast injector)
+- middleware.ts                      (cookie version guard using VERSION_HASH; do NOT break auth)
+
+DETAILS (implement precisely):
+A) lib/env.ts
+- Use zod; coerce numerics; never throw in production—log warn and provide safe defaults.
+- Validate and export:
+  NEXTAUTH_SECRET(min 32), SESSION_SECRET(min 32), NEXTAUTH_URL, DATABASE_URL,
+  RESEND_API_KEY(optional), RESEND_FROM(optional, RFC5322 or "Name <email@example.com>"),
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID(optional),
+  USDC_BASE_ADDRESS(optional 0x + 40 hex), NEXT_PUBLIC_USDC_DECIMALS(coerce number, default 6, 0..18),
+  PLATFORM_FEE_BPS(coerce number, default 100, 0..10000).
+- Export VERSION_HASH = sha256(NEXTAUTH_SECRET + ":" + SESSION_SECRET + ":" + (RESEND_FROM ?? "")).
+- Export maskEmail()/maskKey() helpers for logging.
+
+B) lib/ops/health.ts
+- Implement async checks returning { ok:boolean, info?:any, error?:string }:
+  checkDb(): prisma.$queryRaw`select 1` and list applied migrations if available.
+  checkAuth(): presence/length of NEXTAUTH_SECRET + SESSION_SECRET and VERSION_HASH prefix (first 8 chars).
+  checkEmail(): validate formats; if RESEND_API_KEY present, do HEAD https://api.resend.com/emails with Authorization: Bearer <key>; treat 200/405 as reachable; never send emails.
+  checkWallet(): check NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID shape/length.
+  checkUsdc(): check USDC_BASE_ADDRESS and decimals (<=18).
+  checkAudit(): ensure AuditLog model exists by running a no-op transaction (create+rollback) or a safe introspection query; no data persisted.
+- Export runAllChecks(): runs all in parallel and returns { ok, ts, versionHashPrefix, checks:{db,auth,email,wallet,usdc,audit} }.
+
+C) API routes
+- Each /api/health/* route calls the respective checker and returns JSON.
+- /api/health returns runAllChecks() output.
+- /api/selftest:
+  - Runs runAllChecks().
+  - Builds { ok:boolean, durationMs:number, failures:string[], report:any } (failures are names of failed checks).
+  - Status code 200 always; never crash.
+
+D) Global error handling
+- Add GlobalErrorBoundary in app/layout.tsx around <body>. On error: render a non-blocking banner “⚠️ An error occurred — see console”, console.error with prefix “[shield]”.
+- Inject a minimal toast system or reuse existing; expose window.__shieldToast(msg:string,type?:'info'|'warn'|'error').
+
+E) /admin/diagnostics UI
+- Show a responsive grid of cards: DB, Auth, Email, Wallet, USDC, Audit with ✅/❌ and short details.
+- “Run Self-Test” button calls /api/selftest, prints JSON in a collapsible <pre>, and toasts result.
+- Display VERSION_HASH prefix and current server time.
+
+F) Release Checklist modal
+- components/ops/ReleaseChecklist.tsx: small floating button “Checklist” (bottom-right). Hotkey via command palette if present.
+- Items with “Run” buttons:
+  1) Ping /api/health and show ✅/❌.
+  2) Open /admin/diagnostics in a new tab.
+  3) Verify login page GET /login returns 200.
+  4) Optional: simple DB query count of users (read-only).
+- Persist results in localStorage session.
+
+G) middleware.ts (Version guard)
+- Read VERSION_HASH; if cookie “ver” differs → clear auth/session cookies safely and set new “ver” cookie; continue request (no throw, no redirect loops).
+
+H) Logging
+- Prefix all messages with “[shield]”; never log raw secrets; mask emails/keys using helpers.
+- All server check errors must return structured { ok:false, error } but not throw.
+
+ACCEPTANCE (run now and paste outputs in the final message):
+1) GET /api/health → paste JSON.
+2) GET /api/selftest → paste { ok, durationMs, failures.length }.
+3) Screenshot or paste rendered statuses from /admin/diagnostics (text summary is fine).
+4) Temporarily unset NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (in dev env only), restart, confirm /admin/diagnostics shows Wallet ❌ and /api/health ok=false; then restore it.
+5) Change NEXTAUTH_SECRET (dev only), restart, verify users are forced to re-login (cookie cleared) without white-screen; diagnostics still loads.
+
+NON-GOALS
+- No real emails or on-chain transactions.
+- Do not alter existing business logic; all changes are additive.
+
+QUALITY
+- TypeScript strict, small functions, comments, clean UI consistent with current dark theme.
+- Handle missing secrets gracefully (warning banners + ❌ in diagnostics), never crash the app.
