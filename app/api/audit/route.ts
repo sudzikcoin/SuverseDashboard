@@ -13,9 +13,9 @@ export async function GET() {
   try {
     const logs = await prisma.auditLog.findMany({
       orderBy: {
-        createdAt: "desc",
+        timestamp: "desc",
       },
-      take: 100,
+      take: 500,
     })
 
     return NextResponse.json({ logs })
