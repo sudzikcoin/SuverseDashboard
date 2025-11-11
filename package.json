@@ -12,6 +12,7 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "link:accountant": "tsx scripts/linkAccountantToCompany.ts",
     "restore:admin": "tsx scripts/restoreAdmin.ts"
