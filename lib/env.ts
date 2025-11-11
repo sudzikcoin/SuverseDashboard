@@ -29,6 +29,10 @@ const AuthEnvSchema = z.object({
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
 });
 
+const WalletEnvSchema = z.object({
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional(),
+});
+
 const ServerEnvSchema = PublicEnvSchema.merge(EmailEnvSchema).merge(TelegramEnvSchema).merge(CronEnvSchema);
 
 type PublicEnv = z.infer<typeof PublicEnvSchema>;
@@ -160,6 +164,28 @@ export function getAuthEnv() {
     ...parsed.data,
     isValid: true,
   };
+}
+
+export function getWalletEnv() {
+  const walletParsed = WalletEnvSchema.safeParse({
+    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+  });
+
+  if (!walletParsed.success) {
+    console.warn("[walletenv] parse error", walletParsed.error?.flatten?.().fieldErrors);
+    return { projectId: null as string | null };
+  }
+
+  const pid = walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  
+  const INVALID_VALUES = ['demo', 'MISSING', 'test', 'placeholder', ''];
+  
+  if (!pid || INVALID_VALUES.includes(pid.toLowerCase())) {
+    console.warn("[walletenv] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing or invalid (placeholder detected)");
+    return { projectId: null as string | null };
+  }
+
+  return { projectId: pid };
 }
 
 export default env;

@@ -1,0 +1,174 @@
+You are a senior Next.js + wagmi + RainbowKit engineer working in a Replit project called “SuVerse Dashboard”. Fix the WalletConnect v2 error “No projectId found” and make the wallet connection crash-proof. Perform all steps below and then self-test. Do not ask questions—apply changes directly and print a final summary of files changed and healthcheck output.
+
+========================
+GOALS
+========================
+1) Add WalletConnect Cloud projectId support from Replit Secrets (key: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID).
+2) Wire RainbowKit/wagmi to use the projectId (Base chain enabled).
+3) If projectId is missing, app must not crash: show a small warning banner and disable the Connect Wallet button.
+4) Add a /api/health/wallet endpoint to confirm runtime config.
+
+========================
+A) DEPENDENCIES (update if needed)
+========================
+- Ensure compatible versions (wagmi v2 / RainbowKit ^2 / viem):
+  @rainbow-me/rainbowkit, wagmi, viem, @tanstack/react-query
+- If legacy wagmi v1 / RainbowKit v1 code exists, migrate to RainbowKit v2 getDefaultConfig.
+
+========================
+B) ENV VALIDATION HELPER (lib/env.ts)
+========================
+- Create or extend lib/env.ts with a safe parser for the projectId.
+
+CODE (overwrite or append):
+----------------------------------------------------------------
+import { z } from "zod";
+
+const WalletEnvSchema = z.object({
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional(), // may be absent in dev
+});
+
+const walletParsed = WalletEnvSchema.safeParse({
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+});
+
+export function getWalletEnv() {
+  if (!walletParsed.success) {
+    console.warn("[walletenv] parse error", walletParsed.error?.flatten?.().fieldErrors);
+    return { projectId: null as string | null };
+  }
+  const pid = walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  if (!pid) {
+    console.warn("[walletenv] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing");
+    return { projectId: null as string | null };
+  }
+  return { projectId: pid };
+}
+----------------------------------------------------------------
+
+- If the secret is missing in Replit, create it with a TEMP placeholder “demo” so the app boots. Then log a warning.
+
+========================
+C) WALLET PROVIDER (components/wallet/WalletProvider.tsx OR app/providers.tsx)
+========================
+- Create this file if it does not exist. Ensure it is used to wrap the App (App Router: import in app/layout.tsx; Pages Router: use _app.tsx).
+- Remove any legacy getDefaultWallets / walletConnectProvider v1 usage anywhere in the project.
+
+CODE (replace existing wallet provider with this):
+----------------------------------------------------------------
+// components/wallet/WalletProvider.tsx
+"use client";
+
+import { ReactNode } from "react";
+import { WagmiProvider } from "wagmi";
+import { getDefaultConfig, RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
+import { base } from "wagmi/chains";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "@rainbow-me/rainbowkit/styles.css";
+import { getWalletEnv } from "@/lib/env";
+
+const { projectId } = getWalletEnv();
+const queryClient = new QueryClient();
+
+const config = getDefaultConfig({
+  appName: "SuVerse",
+  projectId: projectId ?? "MISSING",
+  chains: [base],
+  ssr: true,
+});
+
+export default function WalletProvider({ children }: { children: ReactNode }) {
+  return (
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider theme={darkTheme()}>
+          {!projectId ? (
+            <div style={{ background: "#2b2b2b", color: "#ffdd57", padding: "10px 14px", fontSize: 14 }}>
+              ⚠️ WalletConnect projectId is missing. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in Replit Secrets and restart.
+            </div>
+          ) : null}
+          {children}
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+----------------------------------------------------------------
+
+- Ensure a single provider tree app-wide:
+  - App Router: in app/layout.tsx, wrap <body>{children}</body> with <WalletProvider>…</WalletProvider>.
+  - Pages Router: wrap in pages/_app.tsx.
+
+========================
+D) DISABLE CONNECT WHEN MISSING (components/wallet/ConnectButton.tsx or wherever UI button lives)
+========================
+- If you use RainbowKit’s <ConnectButton />, wrap it to disable when projectId is null.
+
+CODE:
+----------------------------------------------------------------
+"use client";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { getWalletEnv } from "@/lib/env";
+
+export default function SafeConnectButton() {
+  const { projectId } = getWalletEnv();
+  if (!projectId) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="WalletConnect is not configured"
+        style={{ opacity: 0.6, cursor: "not-allowed" }}
+        className="btn btn-secondary"
+      >
+        Connect Wallet (disabled)
+      </button>
+    );
+  }
+  return <ConnectButton />;
+}
+----------------------------------------------------------------
+
+- Replace old usages of <ConnectButton /> with <SafeConnectButton />.
+
+========================
+E) HEALTHCHECK ENDPOINT (app/api/health/wallet/route.ts)
+========================
+CODE:
+----------------------------------------------------------------
+// app/api/health/wallet/route.ts
+import { NextResponse } from "next/server";
+import { getWalletEnv } from "@/lib/env";
+
+export async function GET() {
+  const { projectId } = getWalletEnv();
+  return NextResponse.json({
+    ok: Boolean(projectId && projectId !== "MISSING"),
+    projectIdPresent: Boolean(projectId),
+    length: projectId?.length ?? 0,
+  });
+}
+----------------------------------------------------------------
+
+========================
+F) REPLIT SECRETS TO SET (do not print values)
+========================
+- NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID = <real WalletConnect Cloud project id>
+(Obtain at https://cloud.walletconnect.com; create a project and copy its “Project ID”)
+
+If the secret is not present, temporarily set value “demo” so the app boots and shows banner.
+
+========================
+G) SELF-TEST (automate in the Replit shell and log results)
+========================
+1) Restart server to reload secrets.
+2) Fetch GET /api/health/wallet and print JSON response to console.
+3) Open the app home page; confirm no red runtime overlay. If projectId is real, Connect Wallet modal should open normally. If missing/“demo”, the warning banner is visible and the connect button is disabled (no crash).
+
+========================
+EXPECTED OUTPUT SUMMARY (print at the end)
+========================
+- Files created/modified list with paths.
+- Package updates (if any).
+- Healthcheck JSON result.
+- Short root-cause note: RainbowKit v2 requires WalletConnect Cloud projectId; previously absent → runtime crash. We added env validation, provider wiring, graceful fallback, and a health endpoint.

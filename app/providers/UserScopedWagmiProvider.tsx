@@ -6,7 +6,9 @@ import { useSession } from "next-auth/react";
 import { disconnect } from "wagmi/actions";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, getDefaultConfig, darkTheme } from "@rainbow-me/rainbowkit";
-import { base, mainnet } from "viem/chains";
+import { base } from "viem/chains";
+import "@rainbow-me/rainbowkit/styles.css";
+import { getWalletEnv } from "@/lib/env";
 
 function createUserStorage(userKey: string) {
   if (typeof window === "undefined") {
@@ -35,7 +37,7 @@ const queryClient = new QueryClient();
 
 export default function UserScopedWagmiProvider({ children }: { children: ReactNode }) {
   const { data } = useSession();
-  const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || '';
+  const { projectId } = getWalletEnv();
   
   const uid = (data?.user as any)?.id || data?.user?.email || "guest";
   const storageKey = useMemo(() => `suverse:wagmi:${uid}`, [uid]);
@@ -43,12 +45,12 @@ export default function UserScopedWagmiProvider({ children }: { children: ReactN
   const config = useMemo(() => {
     return getDefaultConfig({
       appName: 'SuVerse Tax Credit Dashboard',
-      projectId: wcProjectId,
-      chains: [base, mainnet],
+      projectId: projectId || "demo",
+      chains: [base],
       ssr: true,
       storage: createUserStorage(storageKey),
     });
-  }, [storageKey, wcProjectId]);
+  }, [storageKey, projectId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,6 +75,18 @@ export default function UserScopedWagmiProvider({ children }: { children: ReactN
             borderRadius: 'large'
           })}
         >
+          {!projectId && (
+            <div style={{ 
+              background: '#1e293b', 
+              color: '#fbbf24', 
+              padding: '12px 16px', 
+              fontSize: '14px',
+              borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
+              textAlign: 'center'
+            }}>
+              ⚠️ WalletConnect projectId is missing. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in Replit Secrets and restart.
+            </div>
+          )}
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>
