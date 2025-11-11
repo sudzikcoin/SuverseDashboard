@@ -68,3 +68,81 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **framer-motion**: Animations.
 -   **tailwindcss-animate**: Tailwind CSS animations.
 -   **@aws-sdk/client-s3**: S3 integration (optional).
+## Setup Instructions
+
+### Telegram Notifications (Optional)
+To enable real-time Telegram notifications for critical events:
+
+1. **Create a Telegram Bot**:
+   - Open Telegram and search for `@BotFather`
+   - Send `/newbot` and follow the prompts
+   - Save the bot token provided
+
+2. **Get Your Chat ID**:
+   - Send a message to your bot
+   - Visit `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+   - Find your `chat.id` in the response
+
+3. **Configure Environment Variables**:
+   Add to your `.env` file:
+   ```bash
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   TELEGRAM_CHAT_ID=your_chat_id_here
+   ```
+
+4. **Test the Integration**:
+   ```bash
+   npm run test:notify
+   ```
+   Or via API (requires ADMIN login):
+   ```bash
+   POST /api/notify-test
+   ```
+
+### Cron Jobs (Optional)
+To enable automated daily summary reports:
+
+1. **Set Cron Secret**:
+   Add to your `.env` file:
+   ```bash
+   CRON_SECRET=your_secure_random_string_here
+   ```
+
+2. **Configure Cron Job**:
+   Set up a daily cron job (e.g., via cron, GitHub Actions, or external service) to call:
+   ```bash
+   POST /api/cron/daily-summary
+   Headers: x-cron-secret: your_secure_random_string_here
+   ```
+
+### Audit Dashboard
+Access the enhanced audit dashboard at `/admin/audit` (ADMIN role required). Features:
+- Real-time charts showing events by day, action distribution, and payment volume
+- Time range filters (24h, 7d, 30d)
+- Search across email, IP addresses, and entity IDs
+- CSV export for offline analysis
+- Color-coded action badges
+- Clickable BaseScan transaction links
+- Statistical summaries with anomaly detection
+
+### Testing Workflow
+1. **Admin Account**: Run `npm run restore:admin` to create/restore admin user
+2. **Database Setup**: Run `npm run db:push` to sync schema
+3. **Seed Data**: Run `npm run db:seed` to populate test data
+4. **Start Development**: Run `npm run dev`
+5. **Test Notifications** (if configured): Run `npm run test:notify`
+
+### Security Notes
+- The `/api/notify-test` endpoint requires ADMIN authentication
+- Cron endpoints require the `CRON_SECRET` header
+- All admin audit APIs require ADMIN role
+- IP addresses and User-Agent strings are stored for audit purposes (consider GDPR/CCPA compliance)
+- Telegram credentials are optional; the system operates silently when not configured
+
+### Recent Changes (November 2025)
+- ✅ Enhanced audit logging with IP tracking, transaction hashes, and USD amounts
+- ✅ Telegram notification system for real-time alerts
+- ✅ AI-style analytics dashboard with charts and anomaly detection
+- ✅ Automated daily summary reports via cron endpoint
+- ✅ Integrated audit logging into registration, login, and payment flows
+- ✅ Secured all notification endpoints with proper authentication
