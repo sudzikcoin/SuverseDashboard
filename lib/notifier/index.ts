@@ -1,7 +1,16 @@
 import { notifyTelegram } from "./telegram"
-import type { AuditLog } from "@prisma/client"
 
-export function formatAuditMessage(log: Partial<AuditLog> & { action: string; entity: string }): string {
+type AuditLogLike = {
+  action: string
+  entity: string
+  actorEmail?: string | null
+  entityId?: string | null
+  amountUSD?: number | any | null
+  txHash?: string | null
+  details?: any
+}
+
+export function formatAuditMessage(log: AuditLogLike): string {
   const { action, entity, actorEmail, entityId, amountUSD, txHash, details } = log
   
   const actor = actorEmail || 'System'
@@ -91,7 +100,7 @@ export function formatAuditMessage(log: Partial<AuditLog> & { action: string; en
   }
 }
 
-export async function notifyAudit(log: Partial<AuditLog> & { action: string; entity: string }): Promise<void> {
+export async function notifyAudit(log: AuditLogLike): Promise<void> {
   const text = formatAuditMessage(log)
   await notifyTelegram(text)
 }
