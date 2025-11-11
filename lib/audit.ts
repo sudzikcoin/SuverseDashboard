@@ -1,5 +1,6 @@
 import { prisma } from "./db"
-import { AuditAction, AuditEntity } from "@prisma/client"
+import { AuditAction, AuditEntity, Prisma } from "@prisma/client"
+import { getRequestContext } from "./reqctx"
 
 type AuditParams = {
   actorId?: string | null
@@ -9,9 +10,25 @@ type AuditParams = {
   entityId: string
   details?: Record<string, any>
   companyId?: string | null
+  txHash?: string | null
+  amountUSD?: number | Prisma.Decimal | null
+  skipRequestContext?: boolean
 }
 
 export async function writeAudit(p: AuditParams): Promise<void> {
+  let ip: string | undefined;
+  let userAgent: string | undefined;
+  
+  if (!p.skipRequestContext) {
+    try {
+      const ctx = await getRequestContext();
+      ip = ctx.ip;
+      userAgent = ctx.userAgent;
+    } catch (error) {
+      console.error("[audit] Failed to get request context:", error);
+    }
+  }
+  
   await prisma.auditLog.create({
     data: {
       actorId: p.actorId ?? undefined,
@@ -21,6 +38,10 @@ export async function writeAudit(p: AuditParams): Promise<void> {
       entityId: p.entityId,
       details: p.details as any,
       companyId: p.companyId ?? undefined,
+      ip,
+      userAgent,
+      txHash: p.txHash ?? undefined,
+      amountUSD: p.amountUSD ? new Prisma.Decimal(p.amountUSD.toString()) : undefined,
     },
   })
 }
