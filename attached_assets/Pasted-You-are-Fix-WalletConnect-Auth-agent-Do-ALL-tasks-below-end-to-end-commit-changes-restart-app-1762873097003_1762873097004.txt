@@ -1,0 +1,91 @@
+You are “Fix WalletConnect + Auth” agent. Do ALL tasks below end-to-end, commit changes, restart app, and verify with built-in tests.
+
+GOAL
+1) Stop the crash “No projectId found…” from RainbowKit / WalletConnect and make the app work even without a projectId (show a safe banner instead).
+2) Fix “aes/gcm: invalid ghash tag” by stabilizing NextAuth secrets and rotating the session cookie (invalidate old tokens).
+3) Add a healthcheck for wallet config, and one for auth.
+4) Document what you changed in replit.md.
+
+CONSTRAINTS
+- Keep everything in English in code/comments.
+- Don’t expose any secret values in client code or logs.
+- Use environment: Replit “Secrets”.
+- Do NOT break existing USDC flow.
+
+SECRETS (create/update if missing)
+- NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID = "MISSING"   # placeholder. App must not crash when “MISSING”.
+- NEXTAUTH_SECRET  = strong random (>= 64 chars)
+- NEXTAUTH_URL     = current public URL (Replit run URL)
+- AUTH_TRUST_HOST  = true
+- SESSION_SECRET   = same as NEXTAUTH_SECRET (for libraries expecting SESSION_SECRET)
+
+CODE CHANGES
+
+A) lib/env.ts – add wallet & auth env with soft coercion
+-------------------------------------------------------
+1) Extend Zod schema with:
+   - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().default("MISSING")
+   - NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET too short")
+   - NEXTAUTH_URL: z.string().url().optional()
+   - AUTH_TRUST_HOST: z.coerce.boolean().default(true)
+2) Export helpers:
+   export function getWalletEnv() { return { projectId: env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }; }
+   export function getAuthEnv()   { return { secret: env.NEXTAUTH_SECRET, url: env.NEXTAUTH_URL, trust: env.AUTH_TRUST_HOST }; }
+3) Never throw for MISSING projectId; only log a server-side warning once.
+
+B) app/providers.tsx (or components/Providers.tsx) – guard RainbowKit
+----------------------------------------------------------------------
+1) Import getWalletEnv from @/lib/env.
+2) Read projectId on the client via process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (it’s public).
+3) Configure Wagmi + RainbowKit ONLY if projectId !== "MISSING".
+   - If MISSING: render children inside QueryClientProvider/WagmiProvider WITHOUT RainbowKitProvider and render a non-blocking top banner: “⚠ WalletConnect projectId is missing. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in Secrets and restart.”
+4) Remove any legacy getDefaultWallets / walletConnectProvider v1 code. Use current RainbowKit/Wagmi setup. Ensure there is a single provider tree app-wide.
+
+C) Wallet health route
+----------------------
+Create: app/api/health/wallet/route.ts
+- Return JSON: { ok: projectId !== "MISSING", projectIdPresent: Boolean(projectId), value: projectId !== "MISSING" ? "set" : "missing" }
+
+D) Fix “aes/gcm: invalid ghash tag” (session decryption)
+--------------------------------------------------------
+Cause: cookie tokens created with older/other secret. We will (1) stabilize secrets, (2) rotate cookie name to invalidate old tokens gracefully.
+
+1) lib/auth.ts (NextAuth config):
+   - Ensure secret: getAuthEnv().secret
+   - Set cookies.sessionToken.name = "sv.session.v2"  // NEW name to invalidate old cookies
+   - Keep same options you already have.
+2) app/api/health/auth/route.ts – new route returning:
+   { ok: true, cookieName: "sv.session.v2", hasSecret: true }
+3) Add a server-side log (once at boot) that prints “[auth] cookie rotated to sv.session.v2” but never logs the actual secret.
+4) IMPORTANT: Do not crash if NEXTAUTH_URL is empty on localhost.
+
+E) Minimal UI banner (non-blocking)
+-----------------------------------
+Add a small client component (components/WalletBanner.tsx):
+- If projectId === "MISSING", show a sticky top banner with instructions to set the secret. No console errors.
+
+F) Tests / Verification
+-----------------------
+1) Run typecheck & build.
+2) Call GET /api/health/wallet → expect { ok: false } when projectId is "MISSING".
+3) Call GET /api/health/auth   → expect { ok: true, cookieName: "sv.session.v2" }.
+4) Open app root; verify:
+   - No crash, banner visible if projectId missing.
+   - “aes/gcm: invalid ghash tag” no longer appears anywhere. If user still sees it, it must disappear after a hard refresh because cookie name changed.
+5) Document in replit.md:
+   - What secrets to set & where to get WalletConnect projectId (link text only, no raw URLs in code).
+   - How to rotate the session cookie again if needed.
+   - Healthcheck endpoints and expected JSON.
+
+G) Nice-to-have (if time permits)
+---------------------------------
+- Add a small “Wallet status” badge in the header reading “Wallet: OK” or “Wallet: Missing”.
+- Add an admin-only page snippet in /admin/system with links to both health endpoints.
+
+ACCEPTANCE
+- App never throws for missing WalletConnect projectId.
+- Auth works; login forms no longer produce aes/gcm errors.
+- Health endpoints return correct JSON.
+- Changes are committed, app restarted, and summary written to replit.md.
+
+Now implement.

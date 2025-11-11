@@ -68,7 +68,40 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **framer-motion**: Animations.
 -   **tailwindcss-animate**: Tailwind CSS animations.
 -   **@aws-sdk/client-s3**: S3 integration (optional).
+-   **WalletConnect Cloud**: RainbowKit v2 integration for wallet connections.
+
 ## Setup Instructions
+
+### Required Environment Secrets
+
+These secrets should be configured in Replit Secrets (🔒 icon) for production:
+
+#### Authentication (Required)
+```bash
+NEXTAUTH_SECRET=<64+ character random string>
+SESSION_SECRET=<same as NEXTAUTH_SECRET>
+NEXTAUTH_URL=<your Replit app URL>
+AUTH_TRUST_HOST=true
+DATABASE_URL=<PostgreSQL connection URL>
+```
+
+**Generate NEXTAUTH_SECRET:**
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+```
+
+#### WalletConnect (Optional)
+```bash
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=<your WalletConnect Cloud project ID>
+```
+
+**Get WalletConnect Project ID:**
+1. Visit: https://cloud.walletconnect.com
+2. Create a free account
+3. Create a new project
+4. Copy the "Project ID" (32-character hex string)
+
+**Note:** If not configured, the app will show a warning banner but remain functional. The "Connect Wallet" button will be disabled until a valid project ID is provided.
 
 ### Telegram Notifications (Optional)
 To enable real-time Telegram notifications for critical events:
@@ -139,7 +172,66 @@ Access the enhanced audit dashboard at `/admin/audit` (ADMIN role required). Fea
 - IP addresses and User-Agent strings are stored for audit purposes (consider GDPR/CCPA compliance)
 - Telegram credentials are optional; the system operates silently when not configured
 
+### Health Endpoints
+
+Two health check endpoints are available for monitoring:
+
+#### Wallet Health
+```bash
+GET /api/health/wallet
+```
+
+Response when WalletConnect is not configured:
+```json
+{
+  "ok": false,
+  "projectIdPresent": false,
+  "length": 0
+}
+```
+
+Response with valid projectId:
+```json
+{
+  "ok": true,
+  "projectIdPresent": true,
+  "length": 32
+}
+```
+
+#### Auth Health
+```bash
+GET /api/health/auth
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "cookieName": "sv.session.v2",
+  "hasSecret": true,
+  "trustHost": true
+}
+```
+
+### Session Cookie Rotation
+
+**November 2025**: Session cookie name changed from `next-auth.session-token` to `sv.session.v2` to prevent "aes/gcm: invalid ghash tag" errors caused by tokens encrypted with old secrets.
+
+**Effect:** All existing sessions are invalidated. Users must log in again after this change.
+
+**How to rotate again (if needed):**
+1. Update cookie name in `lib/auth.ts` (e.g., `sv.session.v3`)
+2. Generate new NEXTAUTH_SECRET
+3. Restart the application
+4. Users will need to log in again
+
 ### Recent Changes (November 2025)
+- ✅ Fixed WalletConnect v2 crash with graceful fallback and warning banner
+- ✅ Rotated session cookie to resolve "aes/gcm: invalid ghash tag" auth errors
+- ✅ Added health endpoints for wallet and auth monitoring
+- ✅ Enhanced auth environment validation with 64+ char secret requirement
+- ✅ Implemented crash-proof wallet connection with disabled state when not configured
 - ✅ Enhanced audit logging with IP tracking, transaction hashes, and USD amounts
 - ✅ Telegram notification system for real-time alerts
 - ✅ AI-style analytics dashboard with charts and anomaly detection

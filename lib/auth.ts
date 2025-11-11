@@ -7,6 +7,8 @@ import { writeAudit } from "./audit"
 import { maskEmail, normalizeEmail, logAuth, ReasonCode } from "./auth-diagnostics"
 import { getAuthEnv } from "./env"
 
+console.log('[auth] Cookie rotated to sv.session.v2 (invalidates old sessions)');
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -143,11 +145,11 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getAuthEnv().secret,
   debug: false,
   cookies: {
     sessionToken: {
-      name: `next-auth.session-token`,
+      name: `sv.session.v2`,
       options: {
         httpOnly: true,
         sameSite: 'lax',

@@ -24,13 +24,15 @@ const CronEnvSchema = z.object({
 });
 
 const AuthEnvSchema = z.object({
-  NEXTAUTH_SECRET: z.string().min(16, 'NEXTAUTH_SECRET must be at least 16 characters'),
-  NEXTAUTH_URL: z.string().url('NEXTAUTH_URL must be a valid URL'),
+  NEXTAUTH_SECRET: z.string().min(32, 'NEXTAUTH_SECRET too short (min 32 chars)'),
+  SESSION_SECRET: z.string().min(32).optional(),
+  NEXTAUTH_URL: z.string().url('NEXTAUTH_URL must be a valid URL').optional(),
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
+  AUTH_TRUST_HOST: z.coerce.boolean().default(true),
 });
 
 const WalletEnvSchema = z.object({
-  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional(),
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().default("MISSING"),
 });
 
 const ServerEnvSchema = PublicEnvSchema.merge(EmailEnvSchema).merge(TelegramEnvSchema).merge(CronEnvSchema);
@@ -146,22 +148,29 @@ export function getEnv() {
 export function getAuthEnv() {
   const parsed = AuthEnvSchema.safeParse({
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    SESSION_SECRET: process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     DATABASE_URL: process.env.DATABASE_URL,
+    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
   });
 
   if (!parsed.success) {
     console.error('[auth:env] Critical auth environment validation failed:', parsed.error.flatten().fieldErrors);
     return {
-      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || '',
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL || '',
+      secret: process.env.NEXTAUTH_SECRET || '',
+      url: process.env.NEXTAUTH_URL || '',
+      trust: process.env.AUTH_TRUST_HOST === 'true',
       DATABASE_URL: process.env.DATABASE_URL || '',
       isValid: false,
     };
   }
 
   return {
-    ...parsed.data,
+    secret: parsed.data.NEXTAUTH_SECRET,
+    sessionSecret: parsed.data.SESSION_SECRET || parsed.data.NEXTAUTH_SECRET,
+    url: parsed.data.NEXTAUTH_URL,
+    trust: parsed.data.AUTH_TRUST_HOST,
+    DATABASE_URL: parsed.data.DATABASE_URL,
     isValid: true,
   };
 }

@@ -3,6 +3,7 @@ import SessionProvider from "@/components/SessionProvider";
 import UserScopedWagmiProvider from "./providers/UserScopedWagmiProvider";
 import ClientInit from "@/components/ClientInit";
 import WalletGuard from "@/components/wallet/WalletGuard";
+import WalletBanner from "@/components/WalletBanner";
 import Splash from "@/components/Splash";
 import "./globals.css";
 import "@rainbow-me/rainbowkit/styles.css";
@@ -24,6 +25,7 @@ export default function RootLayout({
         <SessionProvider>
           <ClientInit />
           <UserScopedWagmiProvider>
+            <WalletBanner />
             <WalletGuard />
             {children}
           </UserScopedWagmiProvider>
