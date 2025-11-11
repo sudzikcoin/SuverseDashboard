@@ -1,0 +1,58 @@
+You are working in the SuVerse Dashboard Replit. Perform the Prisma migration for the new AuditLog model and verify it end-to-end.
+
+TASKS
+1) Install & generate
+- Run:
+  npm install
+  npx prisma generate
+
+2) Apply migration (dev)
+- Run:
+  npx prisma migrate dev --name add_audit_log
+  • If Prisma asks to create a migration, accept.
+  • If it complains about drift or needs a reset, run:
+    npx prisma migrate reset --force
+    and then run:
+    npx prisma migrate dev --name add_audit_log
+- After success, run:
+  npx prisma db pull
+  npx prisma generate
+
+3) Production command helper (prepare scripts)
+- In package.json ensure scripts include:
+  "db:migrate": "prisma migrate dev --name add_audit_log",
+  "db:deploy": "prisma migrate deploy"
+- Save package.json.
+
+4) Restart app
+- Stop → Run (ensure server restarts so Prisma client picks new types).
+
+5) Smoke test DB shape
+- Run a quick check in the Node REPL:
+  node -e "require('./node_modules/@prisma/client'); console.log('Prisma OK')"
+- Then query one row via API:
+  Create file app/api/audit/health/route.ts that returns { ok: true } and ensure it compiles.
+
+6) Functional verification of Audit Log
+- In browser:
+  • Go to /admin/audit-log — page must load without errors.
+  • Trigger a few actions to generate logs:
+    - Register a test user (or login/logout).
+    - Create and delete a test company.
+  • Refresh /admin/audit-log and confirm new rows appear with action, entityType, actorEmail, timestamp.
+
+7) If logs don’t show up
+- Confirm the logger is called (lib/audit.ts → logAction).
+- Tail server logs and confirm no Prisma errors.
+- If needed, run:
+  npx prisma studio
+  and check the AuditLog table directly.
+
+DELIVERABLES
+- Terminal transcript of the successful migration.
+- Screenshot or textual confirmation that /admin/audit-log shows new entries created after test actions.
+- Note any fixes applied (e.g., reset needed) so we can keep a clean runbook.
+
+IMPORTANT
+- This is Postgres; do NOT switch providers.
+- Never expose secrets in logs.
