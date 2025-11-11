@@ -19,15 +19,23 @@ enum AuditAction {
   DELETE
   LOGIN
   LOGOUT
+  REGISTER
   ARCHIVE_COMPANY
   UNARCHIVE_COMPANY
   BLOCK_COMPANY
   UNBLOCK_COMPANY
+  USER_BLOCK
+  USER_UNBLOCK
   RESET_PASSWORD
   PAYMENT_INITIATED
   PAYMENT_SUBMITTED
   PAYMENT_CONFIRMED
   PAYMENT_FAILED
+  TRANSACTION_CRYPTO
+  HOLD_CREATED
+  HOLD_RELEASED
+  DOCUMENT_UPLOAD
+  DOCUMENT_DELETE
 }
 
 enum AuditEntity {
@@ -189,6 +197,10 @@ model AuditLog {
   entityId    String?
   details     Json?
   companyId   String?
+  ip          String?
+  userAgent   String?
+  txHash      String?
+  amountUSD   Decimal?    @db.Decimal(18,4)
   actor       User?       @relation(fields: [actorId], references: [id])
   company     Company?    @relation(fields: [companyId], references: [id])
 
@@ -196,6 +208,7 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([companyId])
   @@index([actorId])
+  @@index([action])
 }
 
 model PaymentLog {
