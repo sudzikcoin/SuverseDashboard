@@ -23,6 +23,12 @@ const CronEnvSchema = z.object({
   CRON_SECRET: z.string().min(16).optional(),
 });
 
+const AuthEnvSchema = z.object({
+  NEXTAUTH_SECRET: z.string().min(16, 'NEXTAUTH_SECRET must be at least 16 characters'),
+  NEXTAUTH_URL: z.string().url('NEXTAUTH_URL must be a valid URL'),
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid URL'),
+});
+
 const ServerEnvSchema = PublicEnvSchema.merge(EmailEnvSchema).merge(TelegramEnvSchema).merge(CronEnvSchema);
 
 type PublicEnv = z.infer<typeof PublicEnvSchema>;
@@ -130,6 +136,29 @@ export function getEnv() {
     TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
     ENABLE_TELEGRAM: process.env.ENABLE_TELEGRAM === 'true' || process.env.ENABLE_TELEGRAM === '1',
     CRON_SECRET: process.env.CRON_SECRET,
+  };
+}
+
+export function getAuthEnv() {
+  const parsed = AuthEnvSchema.safeParse({
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+  });
+
+  if (!parsed.success) {
+    console.error('[auth:env] Critical auth environment validation failed:', parsed.error.flatten().fieldErrors);
+    return {
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || '',
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || '',
+      DATABASE_URL: process.env.DATABASE_URL || '',
+      isValid: false,
+    };
+  }
+
+  return {
+    ...parsed.data,
+    isValid: true,
   };
 }
 

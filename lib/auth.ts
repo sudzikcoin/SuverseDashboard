@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs"
 import { prisma } from "./db"
 import { sendWelcomeEmail } from "./email/send"
 import { writeAudit } from "./audit"
+import { maskEmail, normalizeEmail, logAuth, ReasonCode } from "./auth-diagnostics"
+import { getAuthEnv } from "./env"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,41 +16,101 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        const authEnv = getAuthEnv()
+        
+        if (!authEnv.isValid) {
+          logAuth('FAILED', {
+            stage: 'env_check',
+            emailMasked: '***',
+            reasonCode: 'ENV_INVALID',
+          })
+          return null
+        }
+
         if (!credentials?.email || !credentials?.password) {
+          logAuth('FAILED', {
+            stage: 'credential_validation',
+            emailMasked: credentials?.email ? maskEmail(credentials.email) : '***',
+            reasonCode: 'MISSING_CREDENTIALS',
+          })
           return null
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          include: { company: true }
-        })
+        const normalizedEmail = normalizeEmail(credentials.email)
+        const emailMasked = maskEmail(normalizedEmail)
 
-        if (!user || !user.hashedPassword) {
-          return null
-        }
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+            include: { company: true }
+          })
 
-        const isValid = await bcrypt.compare(
-          credentials.password,
-          user.hashedPassword
-        )
-
-        if (!isValid) {
-          return null
-        }
-
-        if (user.role === "COMPANY" && user.company) {
-          if (user.company.status === "ARCHIVED") {
-            throw new Error("Company is archived. Please contact info@suverse.io")
+          if (!user || !user.hashedPassword) {
+            logAuth('FAILED', {
+              stage: 'user_lookup',
+              emailMasked,
+              reasonCode: 'USER_NOT_FOUND',
+            })
+            return null
           }
-        }
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          companyId: user.companyId,
-          companyName: user.company?.legalName ?? null,
+          const hashPrefix = user.hashedPassword.substring(0, 4)
+          if (!hashPrefix.startsWith('$2')) {
+            logAuth('FAILED', {
+              stage: 'hash_check',
+              emailMasked,
+              reasonCode: 'HASH_MISMATCH',
+            })
+            console.warn(`[auth] User ${emailMasked} has non-bcrypt hash (prefix: ${hashPrefix})`)
+          }
+
+          const isValid = await bcrypt.compare(
+            credentials.password,
+            user.hashedPassword
+          )
+
+          if (!isValid) {
+            logAuth('FAILED', {
+              stage: 'password_verify',
+              emailMasked,
+              reasonCode: 'INVALID_PASSWORD',
+            })
+            return null
+          }
+
+          if (user.role === "COMPANY" && user.company) {
+            if (user.company.status === "ARCHIVED") {
+              logAuth('FAILED', {
+                stage: 'company_check',
+                emailMasked,
+                reasonCode: 'COMPANY_ARCHIVED',
+              })
+              throw new Error("Company is archived. Please contact info@suverse.io")
+            }
+          }
+
+          logAuth('SUCCESS', {
+            stage: 'complete',
+            emailMasked,
+            reasonCode: 'SUCCESS',
+          })
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            companyId: user.companyId,
+            companyName: user.company?.legalName ?? null,
+          }
+        } catch (error: any) {
+          logAuth('FAILED', {
+            stage: 'exception',
+            emailMasked,
+            reasonCode: 'DB_ERROR',
+          })
+          console.error('[auth] Exception during authorize:', error.message)
+          return null
         }
       }
     })
@@ -83,6 +145,17 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: false,
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+  },
   events: {
     async createUser({ user }) {
       try {

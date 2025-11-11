@@ -11,7 +11,10 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@suverse.io' },
-    update: {},
+    update: {
+      hashedPassword,
+      role: 'ADMIN',
+    },
     create: {
       email: 'admin@suverse.io',
       hashedPassword,
@@ -20,8 +23,9 @@ async function main() {
     },
   })
 
-  console.log('Created admin user:', admin.email)
-  console.log('Admin password:', adminPassword)
+  console.log('✅ Ensured admin user exists:', admin.email)
+  console.log('   Password:', adminPassword)
+  console.log('   Hash prefix:', hashedPassword.substring(0, 7))
 
   const accountantPassword = await bcrypt.hash('AccountTest123', 12)
   const accountant = await prisma.user.upsert({
