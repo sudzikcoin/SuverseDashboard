@@ -4,11 +4,18 @@ import { useState, useEffect } from "react"
 
 interface AuditLog {
   id: string
+  timestamp: string
   actorId: string | null
+  actorEmail: string | null
   action: string
   entity: string
   entityId: string | null
-  createdAt: string
+  details: any
+  companyId: string | null
+  ip: string | null
+  userAgent: string | null
+  txHash: string | null
+  amountUSD: string | null
 }
 
 export default function AuditLogPage() {
@@ -90,35 +97,80 @@ export default function AuditLogPage() {
           ) : (
             <div className="bg-[#0F172A] border border-white/5 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full text-sm">
                   <thead className="bg-white/5 sticky top-0">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Timestamp</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Action</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Entity</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Entity ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Actor ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Timestamp</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Actor</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Action</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Entity</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Amount</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">IP</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">TX Hash</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-200">Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredLogs.map((log, idx) => (
                       <tr key={log.id} className={idx % 2 === 0 ? "bg-white/5" : ""}>
-                        <td className="px-6 py-4 text-gray-100 text-sm">
-                          {new Date(log.createdAt).toLocaleString()}
+                        <td className="px-4 py-3 text-gray-100 text-xs">
+                          {new Date(log.timestamp).toLocaleString()}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                            log.action === "CREATE" ? "bg-green-500/20 text-green-400" :
+                        <td className="px-4 py-3">
+                          <div className="text-gray-100 text-xs">{log.actorEmail || "System"}</div>
+                          {log.actorEmail && (
+                            <div className="text-gray-500 text-xs font-mono mt-0.5">{log.actorId?.slice(0, 8)}...</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                            log.action === "CREATE" || log.action === "REGISTER" ? "bg-green-500/20 text-green-400" :
                             log.action === "UPDATE" ? "bg-blue-500/20 text-blue-400" :
-                            log.action === "DELETE" ? "bg-red-500/20 text-red-400" :
-                            "bg-gray-500/20 text-gray-400"
+                            log.action === "DELETE" || log.action === "ARCHIVE_COMPANY" ? "bg-red-500/20 text-red-400" :
+                            log.action.includes("PAYMENT") || log.action === "TRANSACTION_CRYPTO" ? "bg-emerald-500/20 text-emerald-400" :
+                            log.action === "LOGIN" ? "bg-purple-500/20 text-purple-400" :
+                            log.action === "LOGOUT" ? "bg-gray-500/20 text-gray-400" :
+                            "bg-orange-500/20 text-orange-400"
                           }`}>
                             {log.action}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-gray-100">{log.entity}</td>
-                        <td className="px-6 py-4 text-gray-100 font-mono text-sm">{log.entityId || "-"}</td>
-                        <td className="px-6 py-4 text-gray-100 font-mono text-sm">{log.actorId || "System"}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-gray-100 text-xs">{log.entity}</div>
+                          {log.entityId && (
+                            <div className="text-gray-500 text-xs font-mono mt-0.5">{log.entityId.slice(0, 8)}...</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-100 text-xs">
+                          {log.amountUSD ? `$${Number(log.amountUSD).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-gray-100 text-xs font-mono">{log.ip || "-"}</div>
+                          {log.userAgent && log.userAgent !== "unknown" && (
+                            <div className="text-gray-500 text-xs mt-0.5 max-w-[200px] truncate" title={log.userAgent}>
+                              {log.userAgent}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {log.txHash ? (
+                            <a
+                              href={`https://basescan.org/tx/${log.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-400 hover:text-emerald-300 text-xs font-mono underline"
+                            >
+                              {log.txHash.slice(0, 6)}...{log.txHash.slice(-4)}
+                            </a>
+                          ) : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs max-w-xs">
+                          {log.details ? (
+                            <div className="truncate" title={JSON.stringify(log.details)}>
+                              {JSON.stringify(log.details).slice(0, 80)}...
+                            </div>
+                          ) : "-"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
