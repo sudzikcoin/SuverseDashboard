@@ -10,74 +10,61 @@ I prefer clear and direct communication. I value iterative development and expec
 The application is built with a modern web stack, emphasizing a "Clario-style" dark theme and robust backend functionality.
 
 ### UI/UX Decisions
--   **Color Scheme**: `su-base` (#0B1220), `su-card` (#0F172A), `su-text` (#EAF2FB), `su-muted` (#AFC3D6), `su-emerald` (#34D399), `su-sky` (#38BDF8).
--   **Animations**: Utilizes `framer-motion` and `tailwindcss-animate` for smooth transitions and interactive elements.
+-   **Color Scheme**: Modern dark theme with `su-base`, `su-card`, `su-text`, `su-muted`, `su-emerald`, `su-sky`.
+-   **Animations**: Utilizes `framer-motion` and `tailwindcss-animate` for smooth transitions.
 -   **Design Elements**: Features glassmorphism, emerald glow shadows, and gradient halos.
--   **Components**: Reusable components like `Button.tsx`, `GradientBadge.tsx`, and `Section.tsx` for consistency.
+-   **Components**: Reusable components for consistency.
 -   **Responsiveness**: Mobile-first approach with adaptive grid layouts and responsive sidebar navigation.
--   **Navigation**: Responsive sidebar with fixed top bar and hamburger menu for mobile (<768px), persistent sidebar for desktop. The mobile menu slides over content from the left with a dimmed backdrop overlay, smooth animations, and auto-close on navigation. Z-index layering ensures proper stacking: top bar (z-30), overlay (z-40), sidebar (z-50).
+-   **Navigation**: Responsive sidebar with fixed top bar and hamburger menu for mobile, persistent sidebar for desktop.
 
 ### Technical Implementations
--   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS.
--   **Backend**: Next.js API Routes for server-side logic.
--   **Authentication**: NextAuth.js with three roles (Company, Accountant, Admin) and Role-Based Access Control (RBAC). JWT-based sessions with NEXTAUTH_SECRET encryption. Public paths (/, /login, /register, /api/auth, static assets) excluded from middleware checks.
--   **Wallet Connection**: User-scoped wallet state via UserScopedWagmiProvider. Each user gets isolated localStorage namespace (`suverse:wagmi:${userId}`) to prevent wallet persistence across platform users. Automatic disconnect on user switch or sign out. SignOutButton component disconnects wallet before NextAuth signOut. WalletGuard runtime check prevents cross-user wallet leakage. ClientInit one-time migration cleans old global wagmi keys.
--   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Schema includes `User`, `Company` (with CompanyStatus enum: ACTIVE/BLOCKED/ARCHIVED, archivedAt for soft-delete), `CreditInventory` (with brokerRef, source, importedAt fields for idempotent file imports), `Hold`, `PurchaseOrder`, `Document`, `AuditLog` (with AuditAction and AuditEntity enums for type-safe logging), `AccountantClient`, and `PaymentLog` (with PaymentStatus enum: PENDING/SUBMITTED/CONFIRMED/FAILED) models.
--   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects specific route prefixes (/dashboard, /clients, /marketplace, /company, /accountant, /admin, /pay) with JWT token validation.
+-   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Recharts.
+-   **Backend**: Next.js API Routes.
+-   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin), JWT-based sessions, and automatic LOGIN audit logging. Public paths are excluded from middleware checks.
+-   **Wallet Connection**: User-scoped Wagmi provider ensures isolated localStorage for wallet state, preventing cross-user persistence. Automatic disconnect on user switch or sign out.
+-   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Includes models for `User`, `Company`, `CreditInventory`, `Hold`, `PurchaseOrder`, `Document`, `AuditLog`, `AccountantClient`, and `PaymentLog`.
+-   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects sensitive routes with JWT validation.
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
--   **Email**: Resend for transactional emails with comprehensive logging, email masking for privacy, Zod validation for API keys, and crash-proof error handling. Welcome emails automatically sent on user registration with `[mail:welcome]` logging prefix.
--   **Audit Logging**: Comprehensive enum-based system using Prisma AuditAction and AuditEntity enums for type-safe audit trails. The `writeAudit()` helper (in `lib/audit.ts`) creates structured logs with actorId, actorEmail, action, entity, entityId, details, companyId, IP address, User-Agent, transaction hashes, and USD amounts. Automatic IP/UserAgent capture via `lib/reqctx.ts` extracts context from trusted headers (x-forwarded-for, cf-connecting-ip, etc). Enhanced schema includes 11 new action types (REGISTER, USER_BLOCK, USER_UNBLOCK, TRANSACTION_CRYPTO, HOLD_CREATED, HOLD_RELEASED, DOCUMENT_UPLOAD, DOCUMENT_DELETE) and 4 new fields (ip, userAgent, txHash, amountUSD). Admin audit viewer displays 500 logs with color-coded badges, clickable BaseScan links for transactions, and comprehensive filtering. Zero-value amounts preserved correctly. Legacy helpers (createAuditLog, logAudit) maintained for backward compatibility. Note: raw IP/UserAgent storage for compliance review; skipRequestContext flag available for background jobs.
--   **File Storage**: Private per-company document storage in `/uploads/{companyId}/` with RBAC-enforced access via API routes. Security includes path traversal protection (basename normalization), CRLF header injection prevention (control character filtering), and role-based access (ADMIN full, ACCOUNTANT via AccountantClient link, COMPANY self only).
+-   **Email**: Resend for transactional emails with comprehensive logging, masking, and error handling. Welcome emails are sent on registration.
+-   **Audit Logging**: Comprehensive enum-based system using Prisma for type-safe audit trails. Records actor, action, entity, details, and context (IP, User-Agent, transaction hashes, USD amounts). Integrated into key flows.
+-   **Telegram Notifications**: Real-time event notifications via Telegram Bot API for payments, user actions, and system events.
+-   **Analytics Dashboard**: AI-style audit analytics system providing statistical analysis (action distribution, hourly activity, top actors, payment totals, anomaly detection). Admin UI includes interactive charts, filtering, search, and CSV export.
+-   **Cron Jobs**: Daily summary endpoint for automated Telegram reports.
+-   **File Storage**: Private per-company document storage with RBAC-enforced access and security measures against traversal and injection.
 
 ### Feature Specifications
--   **User Management**: Registration with required Name field, login, and role-based access. User name displays throughout the dashboard. Admin restoration script (`npm run restore:admin`) available for recreating admin users after database wipes.
--   **Marketplace**: Browse, filter, reserve, and purchase tax credits. ACCOUNTANT users can select target company from their linked companies.
--   **Purchase Workflows**:
-    - **Stripe Checkout** (PurchaseOrder): Traditional Stripe-based purchase flow with checkout integration, admin approval, and automated PDF generation.
-    - **USDC Marketplace** (Purchase + Payment): Direct on-chain USDC purchases from marketplace. Purchase model tracks accountant, company, tax credit, and pricing. Payment model (1:1 with Purchase) stores on-chain tx hash, amounts, and fee. Enforces exact amount validation (±$0.01 tolerance). ADMIN purchases require linked accountant. Access control via AccountantClient links.
--   **USDC Payment Flow**: Enhanced payment UX with safe input validation and formatting. Uses lib/number.ts utilities (parseAmountInput, isPositiveMoney, fmtMoney, meetsMinimum) for crash-proof input handling. Accepts comma or dot decimal separators, validates pattern (up to 9 integer, 2 decimal digits), enforces minimum $0.01. Fee and total calculated in USD for display, converted to BigInt only for on-chain transfer. Modal shows amount, platform fee (configurable via PLATFORM_FEE_BPS), total, and BaseScan link after submission. Wagmi/Viem integration for on-chain USDC transfers on Base network (Native USDC 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913). PaymentLog model tracks all transactions with status (PENDING, SUBMITTED, CONFIRMED, FAILED). Safe non-throwing env validation via lib/env.ts with safeParse() and defaults prevents navigation crashes. Safe BigInt math in lib/payments/usdc.ts (usdToUnits, calcFeeBps, formatUnitsToUsd) prevents RangeError and precision loss. Comprehensive audit logging for payment lifecycle.
--   **Inventory Management**: Full-featured admin interface at /admin/inventory for CRUD operations on tax credit inventory. Server-rendered page with modal-based create/edit forms, inline delete with confirmation, and audit logging for all operations. Includes broker file upload system (CSV/XLSX) with idempotent imports using brokerRef for duplicate prevention, flexible column mapping, Zod validation, and automatic marketplace sync.
--   **Accountant Features**: 
-    - Zero-trust isolation: new accountants start with zero company access
-    - Admin-controlled linking via `/api/accountant/company/link` (POST/DELETE)
-    - Client management via `/clients` page showing only explicitly linked companies
-    - Per-company document upload/management through DocumentManager modal
-    - Marketplace actions (holds, purchases) restricted to linked companies only
-    - Documents stored in isolated company folders with RBAC access control enforced at the API level
-    - Auto-linking when accountant creates a new client company
--   **Admin Panel**: 
-    - Triple-layer security: middleware.ts guards all /admin routes, app/admin/layout.tsx performs server-side session check, API routes validate ADMIN role
-    - Dashboard at /admin showing stats (users, companies, credits, purchases, accountants) and recent activity (server-rendered with direct Prisma queries)
-    - Accountant management at /admin/accountants with search, view linked companies, and link/unlink functionality
-    - Company management at /admin/companies with clickable cards, company details page at /admin/companies/[id] with edit form, block/unblock actions, archive functionality, and linked accountant viewer
-    - Inventory management at /admin/inventory with full CRUD (create, edit, delete) for tax credits via modal interface
-    - Purchase order management and audit log viewer use shared server-side protected layout
-    - LinkManagementModal and CreditFormModal components for managing accountant-company links and tax credit inventory
-    - CompanyEditor component for editing company details with save, block/unblock, and archive actions
-    - Runtime host detection in server components for environment-agnostic API fetching
--   **Reporting**: CSV exports for inventory and purchases, and Admin audit log viewer.
--   **Tax Credit Calculator**: Interactive module calculating face value, costs, fees, savings, and effective discount.
+-   **User Management**: Registration, login, role-based access, and admin user restoration.
+-   **Marketplace**: Browse, filter, reserve, and purchase tax credits. Accountants can select target companies.
+-   **Purchase Workflows**: Supports Stripe Checkout and direct on-chain USDC purchases with exact amount validation.
+-   **USDC Payment Flow**: Enhanced UX with safe input validation, BigInt math for precision, and Wagmi/Viem integration for Base network USDC transfers. Tracks payments via `PaymentLog`.
+-   **Inventory Management**: Admin interface for CRUD operations on tax credit inventory, including broker file upload with idempotent imports and flexible column mapping.
+-   **Accountant Features**: Zero-trust isolation, admin-controlled linking to companies, client management, per-company document management, and marketplace actions restricted to linked companies.
+-   **Admin Panel**: Triple-layer security, dashboard with stats, user/company/accountant management, inventory management, purchase order management, and a comprehensive audit dashboard with analytics.
+-   **Reporting**: CSV exports for inventory, purchases, and audit logs.
+-   **Tax Credit Calculator**: Interactive module for calculating financial aspects of tax credits.
 
 ### System Design Choices
--   **Project Structure**: `app/` (App Router with route groups, API routes, pages, providers/UserScopedWagmiProvider for user-isolated wallet state), `components/` (including DashboardShell and responsive Sidebar, auth/SignOutButton, wallet/PayModal, wallet/USDCPay, wallet/WalletGuard, ClientInit for storage cleanup), `lib/` (utilities for auth, db, email with Resend integration, pdf, audit with writeAudit(), admin with requireAdminSession(), validations, storage, calculations, access-control, env validation with clientEnv and getEmailEnv(), number with parseAmountInput/isPositiveMoney/fmtMoney/meetsMinimum, safeNumber with guards for toFixed(), payments/usdc with BigInt helpers), `prisma/`, `types/`.
--   **Route Organization**: Uses Next.js route groups - `app/(dashboard)/` for authenticated pages with shared responsive sidebar layout. Admin routes at `app/admin/` with role-specific enforcement.
--   **Layout Pattern**: Shared `DashboardShell` component provides consistent navigation across all dashboard pages with server-side auth and role checking via `requireRole` (single) or `requireRoles` (array).
--   **Environment Variables**: Configurable via `.env`.
--   **Database Seeding**: Enhanced script for initial setup. Does NOT auto-link accountants - they start with zero companies.
--   **Admin Restoration**: `scripts/restoreAdmin.ts` provides one-command admin user creation/restoration via `npm run restore:admin`. Uses environment variables (ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME) with sensible defaults. Safely handles both new creation and updating existing users to ADMIN role.
+-   **Project Structure**: `app/` (App Router, route groups, API routes, pages, providers), `components/`, `lib/` (utilities for auth, db, email, pdf, audit, validations, storage, calculations, access-control, env, number, payments, reqctx, notifier, analytics), `prisma/`, `types/`, `scripts/`.
+-   **Route Organization**: Next.js route groups for authenticated pages and admin routes.
+-   **API Routes**: Dedicated routes for audit queries, summaries, daily cron, and notification testing.
+-   **Layout Pattern**: Shared `DashboardShell` component with server-side authentication and role checking.
+-   **Environment Variables**: Configurable via `.env` for API tokens, chat IDs, and cron secrets.
+-   **Database Seeding**: Enhanced script for initial setup.
+-   **Admin Restoration**: `scripts/restoreAdmin.ts` for creating/restoring admin users.
+-   **Testing Scripts**: `npm run test:notify` for Telegram notification tests.
 -   **Error Handling**: Integrated error handling and user-friendly alerts.
--   **Access Control**: `lib/access-control.ts` provides `hasCompanyAccess()` and `assertAccountantHasAccess()` for enforcing accountant isolation across all company-scoped operations.
+-   **Access Control**: `lib/access-control.ts` enforces accountant isolation for company-scoped operations.
 
 ## External Dependencies
--   **Stripe**: Payment processing and webhooks.
+-   **Stripe**: Payment processing.
 -   **Resend**: Transactional emails.
 -   **NextAuth.js**: Authentication and session management.
 -   **Prisma ORM**: Database interaction.
 -   **@react-pdf/renderer**: PDF document generation.
 -   **bcrypt**: Password hashing.
 -   **Zod**: Input validation.
--   **xlsx**: Excel/CSV file parsing for broker file uploads.
--   **lucide-react**: Icon library for UI elements (hamburger menu, etc.).
+-   **xlsx**: Excel/CSV file parsing.
+-   **lucide-react**: Icon library.
 -   **framer-motion**: Animations.
 -   **tailwindcss-animate**: Tailwind CSS animations.
--   **@aws-sdk/client-s3**: S3 integration (optional for production file storage).
+-   **@aws-sdk/client-s3**: S3 integration (optional).
