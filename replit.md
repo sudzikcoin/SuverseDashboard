@@ -24,6 +24,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **Wallet Connection**: User-scoped Wagmi provider ensures isolated localStorage for wallet state, preventing cross-user persistence. Automatic disconnect on user switch or sign out.
 -   **Database**: Prisma ORM with PostgreSQL (SQLite for development). Includes models for `User`, `Company`, `CreditInventory`, `Hold`, `PurchaseOrder`, `Document`, `AuditLog`, `AccountantClient`, and `PaymentLog`.
 -   **Security**: Bcrypt for password hashing, NextAuth session management, Zod for input validation, and Stripe webhook verification. Middleware protects sensitive routes with JWT validation.
+-   **Stability Shield**: Comprehensive health monitoring system with crash-proof error boundaries, admin diagnostics dashboard, secure health API endpoints, VERSION_HASH session invalidation, release checklist, and toast notifications. See `STABILITY_SHIELD_COMPLETE.md` for details.
 -   **PDF Generation**: `@react-pdf/renderer` for creating broker packages and closing certificates.
 -   **Email**: Resend for transactional emails with comprehensive logging, masking, and error handling. Welcome emails are sent on registration.
 -   **Audit Logging**: Comprehensive enum-based system using Prisma for type-safe audit trails. Records actor, action, entity, details, and context (IP, User-Agent, transaction hashes, USD amounts). Integrated into key flows.
@@ -39,7 +40,7 @@ The application is built with a modern web stack, emphasizing a "Clario-style" d
 -   **USDC Payment Flow**: Enhanced UX with safe input validation, BigInt math for precision, and Wagmi/Viem integration for Base network USDC transfers. Tracks payments via `PaymentLog`.
 -   **Inventory Management**: Admin interface for CRUD operations on tax credit inventory, including broker file upload with idempotent imports and flexible column mapping.
 -   **Accountant Features**: Zero-trust isolation, admin-controlled linking to companies, client management, per-company document management, and marketplace actions restricted to linked companies.
--   **Admin Panel**: Triple-layer security, dashboard with stats, user/company/accountant management, inventory management, purchase order management, and a comprehensive audit dashboard with analytics.
+-   **Admin Panel**: Triple-layer security, dashboard with stats, user/company/accountant management, inventory management, purchase order management, comprehensive audit dashboard with analytics, and diagnostics page for system health monitoring.
 -   **Reporting**: CSV exports for inventory, purchases, and audit logs.
 -   **Tax Credit Calculator**: Interactive module for calculating financial aspects of tax credits.
 
@@ -227,6 +228,14 @@ Response:
 4. Users will need to log in again
 
 ### Recent Changes (November 2025)
+- ✅ **STABILITY SHIELD** - Comprehensive health monitoring and diagnostics system
+  - GlobalErrorBoundary prevents app crashes and white screens
+  - Admin diagnostics page at `/admin/diagnostics` with real-time status
+  - Secure health API endpoints (ADMIN-only) for monitoring all systems
+  - VERSION_HASH session invalidation on config changes
+  - Release Checklist modal (Ctrl/Cmd+K) for pre-deploy validation
+  - Toast notification system for user feedback
+  - Edge-compatible version guard in middleware
 - ✅ Fixed WalletConnect v2 crash with graceful fallback and warning banner
 - ✅ Rotated session cookie to resolve "aes/gcm: invalid ghash tag" auth errors
 - ✅ Added health endpoints for wallet and auth monitoring
