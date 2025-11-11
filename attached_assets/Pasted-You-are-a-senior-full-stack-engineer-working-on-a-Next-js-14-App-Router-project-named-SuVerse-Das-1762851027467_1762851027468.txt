@@ -1,0 +1,199 @@
+You are a senior full-stack engineer working on a Next.js 14 (App Router) project named “SuVerse Dashboard”. Implement a Telegram notifier wired to our Audit Log, add lightweight AI-style analytics (summary + charts), and upgrade the /admin/audit UI. Make the changes, migrate DB if needed, self-test, and print concise instructions at the end. Follow this plan exactly.
+
+======================================================================
+1) ENV & Config
+======================================================================
+- Extend lib/env.ts with (Zod):
+  TELEGRAM_BOT_TOKEN: z.string().min(10).optional()
+  TELEGRAM_CHAT_ID: z.string().min(1).optional()
+  ENABLE_TELEGRAM: z.coerce.boolean().default(false)
+  CRON_SECRET: z.string().min(16).optional()
+- Never crash if any are missing; log a clear “[notifier] disabled: reason”.
+- Ensure existing env schema exports a single getEnv() you can import.
+
+======================================================================
+2) Audit Log wiring (assume Prisma + existing AuditLog)
+======================================================================
+- If model AuditLog exists: leave as-is.
+  (fields we expect: id, ts(DateTime), actorEmail, entityType, entityId, action, ip?, userAgent?, txHash?, amountUSD?, details(Json?)).
+- If there is a central logger (e.g., lib/audit.ts with logAction()), make it the single point of truth. If not, create:
+  File: lib/audit.ts
+  export type AuditInput = {
+    actorEmail?: string | null
+    entityType: string
+    entityId?: string | null
+    action: string
+    ip?: string | null
+    userAgent?: string | null
+    txHash?: string | null
+    amountUSD?: number | null
+    details?: Record<string, any> | null
+  }
+  export async function logAction(input: AuditInput) {
+    // write to Prisma.auditLog.create(...)
+    // after write, call notifyAudit(log)
+  }
+- Add a small helper to capture req context:
+  File: lib/reqctx.ts
+  export function getRequestContext(headers: Headers) { // Next headers()
+    // try x-forwarded-for, cf-connecting-ip, x-real-ip
+    // return { ip, userAgent: headers.get('user-agent') ?? undefined }
+  }
+
+======================================================================
+3) Telegram Notifier
+======================================================================
+- Create: lib/notifier/telegram.ts
+  - import getEnv()
+  - export async function notifyTelegram(text: string) { 
+      const { ENABLE_TELEGRAM, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = getEnv()
+      if (!ENABLE_TELEGRAM || !TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+        console.log('[notifier] disabled')
+        return { ok: false, skipped: true }
+      }
+      // POST https://api.telegram.org/bot<TOKEN>/sendMessage
+      // body: { chat_id, text, parse_mode: 'HTML', disable_web_page_preview: true }
+      // catch errors and console.warn('[notifier] fail', code, message)
+    }
+- Create: lib/notifier/index.ts
+  - export function formatAuditMessage(log: AuditLog): string {
+      // Map common actions to emojis:
+      // REGISTER_COMPANY -> 🟢 New Company Registered: {companyName} by {actorEmail}
+      // PAYMENT_USDC_CONFIRMED -> 💸 USDC Payment ${amountUSD.toFixed(2)} confirmed (tx {shortTx})
+      // USER_BLOCKED -> 🚫 User blocked: {targetEmail} by {actorEmail}
+      // PASSWORD_CHANGED -> 🔐 Password changed by {actorEmail}
+      // FALLBACK: 📘 {action} on {entityType} by {actorEmail}
+      // Use details JSON safely; shorten tx with 0x1234…abcd
+    }
+  - export async function notifyAudit(log: AuditLog) {
+      const text = formatAuditMessage(log)
+      return notifyTelegram(text)
+    }
+
+- In lib/audit.ts logAction(): after db create, call notifyAudit(created).
+
+- Add manual test endpoint:
+  File: app/api/notify-test/route.ts (POST)
+  - Body: { text?: string }
+  - If text provided -> notifyTelegram(text); else compose a fake message and send.
+  - Return { ok:true/false, info }
+
+======================================================================
+4) Emit audit events in key flows
+======================================================================
+- Ensure these places call logAction():
+  a) Registration success (after user/company create): action='REGISTER_COMPANY' entityType='Company' entityId=company.id actorEmail=user.email details:{companyName}
+  b) Login success/fail: action='LOGIN_SUCCESS'/'LOGIN_FAIL' entityType='User'
+  c) Block/Unblock user: action='USER_BLOCKED'/'USER_UNBLOCKED' details:{targetEmail}
+  d) Password/Email change: action='PASSWORD_CHANGED'/'EMAIL_CHANGED'
+  e) Credit purchase (off-chain order): action='CREDIT_PURCHASED' details:{creditId, qty, priceUSD}
+  f) USDC payment (on-chain) when confirmed: action='PAYMENT_USDC_CONFIRMED' amountUSD=..., txHash=...
+  g) Company delete: action='COMPANY_DELETED' entityType='Company'
+- When available, include ip/userAgent via getRequestContext(headers()).
+
+======================================================================
+5) /admin/audit UI upgrade (+ charts)
+======================================================================
+- Page: app/admin/audit/page.tsx
+  - Server component wrapper + a client child component <AuditDashboard />
+- Create: components/admin/AuditDashboard.tsx (client)
+  - Filters: date range (last 24h / 7d / 30d), action multi-select, entity multi-select, search by actorEmail.
+  - Table with virtualization for logs (ts, action (emoji+label), actorEmail, entityType, amountUSD, txHash(short), details popover).
+  - Charts (Recharts or Chart.js, no specific colors): 
+      * Events by day (bar)
+      * Top actions (pie or bar)
+      * Payments volume USD by day (line)
+  - Data API:
+    File: app/api/admin/audit/query/route.ts (POST)
+      input: { from?: string, to?: string, actions?: string[], entities?: string[], q?: string, limit?: number, cursor?: string }
+      returns: { items, nextCursor, aggregates: { byDay, byAction, paymentsByDay } }
+  - Add a sticky “Export CSV” button.
+
+======================================================================
+6) AI-style analytics summary (lightweight, no external dependency)
+======================================================================
+- Create: lib/analytics/summary.ts
+  export type Summary = {
+    timeWindow: { from: Date, to: Date }
+    totals: { events: number, companies: number, users: number, paymentsUSD: number }
+    topActions: Array<{ action: string, count: number }>
+    anomalies: string[] // simple heuristics: >3 login fails from same ip, payment spikes > 2x avg, deletes occurred, blocks, etc.
+    notes?: string
+  }
+  export async function buildSummary(from: Date, to: Date): Promise<Summary> {
+    // Query prisma.auditLog within [from,to]
+    // Compute totals, counts, sums(amountUSD), and simple anomaly rules
+  }
+- Expose endpoint:
+  File: app/api/admin/audit/summary/route.ts (GET)
+    - accepts ?from, ?to (ISO), defaults last 24h
+    - returns Summary JSON
+- In UI /admin/audit: add “Summary” panel (cards + bullet list of anomalies).
+
+- Optional cron (HTTP triggered):
+  File: app/api/cron/daily-summary/route.ts (POST)
+    - Header: x-cron-secret must match CRON_SECRET
+    - Build summary for last 24h and post a compact report to Telegram (if enabled)
+    - Message format:
+      📊 Daily Summary (UTC)
+      • Events: N  • Payments: $X
+      • Top: ACTION1 N1, ACTION2 N2, …
+      • Alerts: lines from anomalies[]
+  - Print in README section at bottom how to call it via any external pinger (UptimeRobot) once a day.
+
+======================================================================
+7) Security & DX
+======================================================================
+- Ensure all admin APIs check admin auth (reuse existing auth guard).
+- Mask emails in server logs (e.g., jd***@x.com) and never print secrets.
+- If Telegram is disabled, endpoints still respond with ok:true, skipped:true.
+
+======================================================================
+8) Testing checklist (automate quick checks)
+======================================================================
+- Create script: scripts/dev-notifier-test.ts that:
+  1) Calls /api/notify-test with a sample message.
+  2) Creates a fake audit record via logAction() with action='PAYMENT_USDC_CONFIRMED', amountUSD: 3.2, txHash:'0x1f71b4…8da', actorEmail:'john@demo.com', details:{companyName:'GreenHaul LLC'}; verify notifyAudit() called.
+  3) Prints results.
+
+- Add npm script in package.json:
+  "test:notifier": "tsx scripts/dev-notifier-test.ts"
+
+======================================================================
+9) Minimal code stubs (exact signatures)
+======================================================================
+- lib/notifier/telegram.ts
+  export async function notifyTelegram(text: string): Promise<{ok:boolean, skipped?:boolean, error?:string}>
+
+- lib/notifier/index.ts
+  export function formatAuditMessage(log: any): string
+  export async function notifyAudit(log: any): Promise<void>
+
+- lib/audit.ts
+  export type AuditInput { ... }
+  export async function logAction(input: AuditInput): Promise<void>
+
+- lib/reqctx.ts
+  export function getRequestContext(h: Headers): { ip?: string, userAgent?: string }
+
+- lib/analytics/summary.ts
+  export type Summary { ... }
+  export async function buildSummary(from: Date, to: Date): Promise<Summary>
+
+======================================================================
+10) Final steps to run
+======================================================================
+- Add secrets in Replit:
+  ENABLE_TELEGRAM=true
+  TELEGRAM_BOT_TOKEN=<paste bot token>
+  TELEGRAM_CHAT_ID=<your chat id>
+  CRON_SECRET=<random 32+ chars>
+- Restart project to load env.
+- Self-test:
+  1) POST /api/notify-test with { "text": "Hello from SuVerse Notifier" }
+  2) Trigger a real action (register company / do a USDC test payment) and confirm a message appears in Telegram.
+  3) Open /admin/audit → use filters, see charts and the Summary panel.
+  4) (Optional) Configure external daily ping:
+     POST https://<your-host>/api/cron/daily-summary  with header x-cron-secret: <CRON_SECRET>
+
+Print the URLs for the new endpoints and confirm success or any warnings. 

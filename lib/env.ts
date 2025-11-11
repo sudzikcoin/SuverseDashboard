@@ -13,6 +13,18 @@ const EmailEnvSchema = z.object({
   RESEND_FROM: z.string().email('RESEND_FROM must be a valid email').or(z.literal('onboarding@resend.dev')),
 });
 
+const TelegramEnvSchema = z.object({
+  TELEGRAM_BOT_TOKEN: z.string().min(10).optional(),
+  TELEGRAM_CHAT_ID: z.string().min(1).optional(),
+  ENABLE_TELEGRAM: z.coerce.boolean().default(false),
+});
+
+const CronEnvSchema = z.object({
+  CRON_SECRET: z.string().min(16).optional(),
+});
+
+const ServerEnvSchema = PublicEnvSchema.merge(EmailEnvSchema).merge(TelegramEnvSchema).merge(CronEnvSchema);
+
 type PublicEnv = z.infer<typeof PublicEnvSchema>;
 
 const DEFAULTS: PublicEnv = {
@@ -88,6 +100,36 @@ export function getEmailEnv() {
   return {
     ...parsed.data,
     isValid: true,
+  };
+}
+
+export function getEnv() {
+  const parsed = ServerEnvSchema.safeParse({
+    NEXT_PUBLIC_BASE_CHAIN_ID: process.env.NEXT_PUBLIC_BASE_CHAIN_ID,
+    NEXT_PUBLIC_USDC_ADDRESS: process.env.NEXT_PUBLIC_USDC_ADDRESS,
+    NEXT_PUBLIC_ESCROW_ADDRESS: process.env.NEXT_PUBLIC_ESCROW_ADDRESS,
+    NEXT_PUBLIC_PLATFORM_FEE_BPS: process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS,
+    NEXT_PUBLIC_USDC_DECIMALS: process.env.NEXT_PUBLIC_USDC_DECIMALS,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
+    ENABLE_TELEGRAM: process.env.ENABLE_TELEGRAM,
+    CRON_SECRET: process.env.CRON_SECRET,
+  });
+
+  if (!parsed.success) {
+    console.warn('[env] Validation warnings:', parsed.error.flatten().fieldErrors);
+  }
+
+  return {
+    ...DEFAULTS,
+    RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+    RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
+    ENABLE_TELEGRAM: process.env.ENABLE_TELEGRAM === 'true' || process.env.ENABLE_TELEGRAM === '1',
+    CRON_SECRET: process.env.CRON_SECRET,
   };
 }
 
