@@ -1,0 +1,158 @@
+You are a senior Next.js engineer. Our app shows sporadic “1 error” toasts and sometimes crashes with `aes/gcm: invalid ghash tag`. Fix session/crypto stability, add diagnostics, and reset broken sessions safely.
+
+OBJECTIVES
+1) Validate and normalize crypto env (SESSION_SECRET / NEXTAUTH_SECRET, etc.) with Zod. Enforce strong key length.
+2) Implement session “versioning” to invalidate stale cookies after secret rotation (fixes ghash tag errors).
+3) Add health endpoints for quick checks.
+4) Provide a safe admin-only button/route to purge sessions (bump version) without redeploy.
+5) Keep logs clean (mask emails; no secrets).
+
+A) ENV VALIDATION
+- File: lib/env.ts (or similar central env loader). Add:
+
+  import { z } from "zod";
+  export const CryptoEnv = z.object({
+    SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be >=32 chars"),
+    NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be >=32 chars"),
+    SESSION_VERSION: z.coerce.number().int().min(1).default(1),
+  });
+
+  export function getCryptoEnv() {
+    const parsed = CryptoEnv.safeParse({
+      SESSION_SECRET: process.env.SESSION_SECRET,
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+      SESSION_VERSION: process.env.SESSION_VERSION,
+    });
+    if (!parsed.success) {
+      console.error("[crypto:env] invalid", parsed.error.flatten().fieldErrors);
+      // still throw on server start to avoid undefined crypto
+      throw new Error("Invalid crypto env");
+    }
+    return parsed.data;
+  }
+
+- Ensure we use `getCryptoEnv()` wherever session/auth secrets are read.
+
+B) SESSION VERSIONING (middleware)
+- File: middleware.ts (create if missing; App Router compatible):
+
+  import { NextResponse } from "next/server";
+  import type { NextRequest } from "next/server";
+  import { getCryptoEnv } from "@/lib/env";
+
+  const SESSION_COOKIE = "next-auth.session-token"; // adjust if using iron-session or different names
+  const VERSION_COOKIE = "sv_session_ver";
+
+  export function middleware(req: NextRequest) {
+    const { SESSION_VERSION } = getCryptoEnv();
+    const res = NextResponse.next();
+
+    // If a session token exists but version cookie is missing or older, nuke session to prevent AES/GCM errors.
+    const ver = Number(req.cookies.get(VERSION_COOKIE)?.value ?? "0");
+    const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
+    if (hasSession && ver !== SESSION_VERSION) {
+      res.cookies.delete(SESSION_COOKIE);
+      // also delete JWT cookie name if using JWT strategy:
+      res.cookies.delete("next-auth.session-token.0"); // multi-cookie safari variants safe to ignore
+      res.cookies.set(VERSION_COOKIE, String(SESSION_VERSION));
+    } else if (ver !== SESSION_VERSION) {
+      res.cookies.set(VERSION_COOKIE, String(SESSION_VERSION));
+    }
+    return res;
+  }
+
+  export const config = {
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health).*)"],
+  };
+
+- If we use different cookie names (iron-session): replace with the correct cookie keys defined in our auth/session config.
+
+C) NEXTAUTH/SESSION CONFIG
+- Ensure NextAuth uses `getCryptoEnv().NEXTAUTH_SECRET` and iron-session (if present) uses `getCryptoEnv().SESSION_SECRET`. Do not derive keys from short strings.
+
+D) HEALTH ENDPOINTS
+- File: app/api/health/crypto/route.ts
+
+  import { NextResponse } from "next/server";
+  import { getCryptoEnv } from "@/lib/env";
+
+  export async function GET() {
+    try {
+      const { SESSION_VERSION, SESSION_SECRET, NEXTAUTH_SECRET } = getCryptoEnv();
+      return NextResponse.json({
+        ok: true,
+        sessionVersion: SESSION_VERSION,
+        secrets: {
+          sessionLen: SESSION_SECRET.length,
+          nextauthLen: NEXTAUTH_SECRET.length,
+          strong: SESSION_SECRET.length>=32 && NEXTAUTH_SECRET.length>=32,
+        },
+      });
+    } catch (e:any) {
+      return NextResponse.json({ ok:false, error:String(e?.message||e) }, { status:500 });
+    }
+  }
+
+- File: app/api/health/session/route.ts — returns whether request has a valid session (use our existing auth util to read session; do NOT expose PII; return {ok, hasSession:true/false}).
+
+E) ADMIN-ONLY “BUMP SESSION VERSION”
+- File: app/api/admin/session/bump/route.ts
+  - Protect with admin guard (reuse existing requireAdmin).
+  - On POST: read current SESSION_VERSION from env, then write a small server-side file flag to override version (or read from process.env first and add optional overlay from a JSON file).
+  - Simpler option: keep it env-only. Implement an in-memory bump won’t survive restart; so create `/.runtime/session-version.json`:
+
+    import { NextResponse } from "next/server";
+    import { requireAdmin } from "@/lib/auth"; // adapt
+    import fs from "node:fs";
+    import path from "node:path";
+    import { getCryptoEnv } from "@/lib/env";
+
+    const storePath = path.join(process.cwd(), ".runtime");
+    const filePath = path.join(storePath, "session-version.json");
+
+    function readOverlay() {
+      try { return JSON.parse(fs.readFileSync(filePath,"utf8")); } catch { return {}; }
+    }
+
+    function currentVersion() {
+      const base = getCryptoEnv().SESSION_VERSION;
+      const overlay = readOverlay()?.version ?? 0;
+      return Math.max(base, overlay);
+    }
+
+    export async function GET() {
+      return NextResponse.json({ ok:true, version: currentVersion() });
+    }
+
+    export async function POST() {
+      await requireAdmin();
+      fs.mkdirSync(storePath, { recursive: true });
+      const v = currentVersion() + 1;
+      fs.writeFileSync(filePath, JSON.stringify({ version: v }));
+      return NextResponse.json({ ok:true, bumpedTo: v });
+    }
+
+- Update middleware to use `currentVersion()` instead of env-only:
+  Import the helper or move both to a shared module `lib/sessionVersion.ts` used by middleware via relative import (must be edge-compatible; if not, keep env-only for middleware and accept that bump requires restart. If edge import blocks fs, keep ENV-only version and we’ll bump by redeploy/reset.)
+
+F) UI DIAGNOSTICS (admin only)
+- Add a small card under /admin/diagnostics showing:
+  - Crypto: GET /api/health/crypto → lengths and strong:true/false
+  - Session: GET /api/health/session → hasSession
+  - Buttons: “Bump Session Version (invalidate cookies)” → POST /api/admin/session/bump
+- Log outputs with prefixes [diag:*]; mask emails.
+
+G) ROTATE SECRETS NOW
+- Generate new strong secrets (>= 48 chars) and set in Replit Secrets:
+  SESSION_SECRET=<random 48-64 chars>
+  NEXTAUTH_SECRET=<random 48-64 chars>
+  SESSION_VERSION=1 (or keep existing)
+- Restart the app to load secrets.
+
+H) ACCEPTANCE
+- Try logging in/out multiple times and across tabs.
+- Old cookies must be auto-cleared by middleware, no `aes/gcm` crash.
+- Health endpoints return ok:true and strong:true.
+- The small red “1 error” toast must disappear (no unhandled promise rejections in console).
+
+Please implement, adapt cookie names to our auth library, and print a short summary: {envValidated, middlewareInstalled, healthEndpoints, adminBumpRoute, tested}.

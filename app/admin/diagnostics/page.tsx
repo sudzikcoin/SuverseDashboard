@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, XCircle, RefreshCw, Download, Server, Shield, Mail, Wallet, DollarSign, FileText } from 'lucide-react';
+import { CheckCircle2, XCircle, RefreshCw, Download, Server, Shield, Mail, Wallet, DollarSign, FileText, Key, LogOut } from 'lucide-react';
 
 interface HealthCheck {
   ok: boolean;
@@ -21,6 +21,9 @@ export default function DiagnosticsPage() {
   const [testResult, setTestResult] = useState<SelfTestResult | null>(null);
   const [healthData, setHealthData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cryptoHealth, setCryptoHealth] = useState<any>(null);
+  const [sessionVersion, setSessionVersion] = useState<any>(null);
+  const [bumping, setBumping] = useState(false);
 
   const runSelfTest = async () => {
     setLoading(true);
@@ -66,6 +69,58 @@ export default function DiagnosticsPage() {
     } else {
       const emoji = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
       console.log(`[shield] ${emoji} ${message}`);
+    }
+  };
+
+  const loadCryptoHealth = async () => {
+    try {
+      const response = await fetch('/api/health/crypto');
+      const data = await response.json();
+      if (data.ok) {
+        setCryptoHealth(data);
+      } else {
+        showToast('Failed to load crypto health: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      showToast('Failed to load crypto health', 'error');
+    }
+  };
+
+  const loadSessionVersion = async () => {
+    try {
+      const response = await fetch('/api/admin/session/bump');
+      const data = await response.json();
+      if (data.ok) {
+        setSessionVersion(data);
+      } else {
+        showToast('Failed to load session version: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      showToast('Failed to load session version', 'error');
+    }
+  };
+
+  const bumpSessionVersion = async () => {
+    if (!confirm('This will invalidate all existing sessions and log out all users. Continue?')) {
+      return;
+    }
+
+    setBumping(true);
+    try {
+      const response = await fetch('/api/admin/session/bump', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.ok) {
+        showToast(`Session version bumped to ${data.newVersion}. All users will be logged out.`, 'success');
+        setSessionVersion(data);
+        await loadSessionVersion();
+      } else {
+        showToast('Failed to bump version: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      showToast('Failed to bump session version', 'error');
+    } finally {
+      setBumping(false);
     }
   };
 
@@ -201,6 +256,98 @@ export default function DiagnosticsPage() {
             <strong>Error:</strong> {error}
           </div>
         )}
+
+        <div className="mb-8 bg-su-card border border-white/10 rounded-xl p-6 backdrop-blur-sm">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Key className="h-5 w-5 text-su-emerald" />
+            Session & Crypto Management
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <button
+              onClick={loadCryptoHealth}
+              className="px-4 py-2 bg-su-base border border-white/10 text-su-text rounded-lg hover:border-su-emerald/50 transition-all text-sm"
+            >
+              Check Crypto Health
+            </button>
+            
+            <button
+              onClick={loadSessionVersion}
+              className="px-4 py-2 bg-su-base border border-white/10 text-su-text rounded-lg hover:border-su-emerald/50 transition-all text-sm"
+            >
+              Check Session Version
+            </button>
+          </div>
+
+          {cryptoHealth && (
+            <div className="mb-4 p-4 bg-su-base rounded-lg border border-white/5">
+              <div className="text-sm font-semibold text-su-emerald mb-2">Crypto Health</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-su-muted">
+                <div className="flex justify-between">
+                  <span>Version Hash:</span>
+                  <span className="font-mono text-su-text">{cryptoHealth.versionHashPrefix}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Secrets Strong:</span>
+                  <span className={cryptoHealth.secrets.strong ? 'text-emerald-400' : 'text-amber-400'}>
+                    {cryptoHealth.secrets.strong ? '✅ Yes' : '⚠️  No'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Session Secret:</span>
+                  <span className="font-mono text-su-text">{cryptoHealth.secrets.sessionSecretLength} chars</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>NextAuth Secret:</span>
+                  <span className="font-mono text-su-text">{cryptoHealth.secrets.nextAuthSecretLength} chars</span>
+                </div>
+              </div>
+              {cryptoHealth.secrets.recommendation && (
+                <div className="mt-2 text-xs text-su-muted border-t border-white/5 pt-2">
+                  {cryptoHealth.secrets.recommendation}
+                </div>
+              )}
+            </div>
+          )}
+
+          {sessionVersion && (
+            <div className="mb-4 p-4 bg-su-base rounded-lg border border-white/5">
+              <div className="text-sm font-semibold text-su-emerald mb-2">Session Version</div>
+              <div className="text-xs text-su-muted">
+                <div className="flex justify-between mb-1">
+                  <span>Current Version:</span>
+                  <span className="font-mono text-su-text">{sessionVersion.currentVersion || sessionVersion.newVersion || 0}</span>
+                </div>
+                <div className="text-xs text-su-muted/70 mt-2">
+                  {sessionVersion.note || sessionVersion.message}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={bumpSessionVersion}
+            disabled={bumping}
+            className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {bumping ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Bumping Version...
+              </>
+            ) : (
+              <>
+                <LogOut className="h-4 w-4" />
+                Bump Session Version (Log Out All Users)
+              </>
+            )}
+          </button>
+          
+          <div className="mt-3 text-xs text-su-muted bg-amber-500/5 border border-amber-500/20 rounded p-3">
+            <strong className="text-amber-400">⚠️ Warning:</strong> Bumping the session version will invalidate all existing sessions 
+            and force all users to log in again. Use this to clear broken sessions after secret rotation or to force logout all users.
+          </div>
+        </div>
 
         {healthData?.checks && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
