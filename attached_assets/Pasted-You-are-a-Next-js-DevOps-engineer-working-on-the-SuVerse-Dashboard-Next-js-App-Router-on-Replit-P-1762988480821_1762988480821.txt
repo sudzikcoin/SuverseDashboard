@@ -1,0 +1,153 @@
+You are a Next.js/DevOps engineer working on the SuVerse Dashboard (Next.js App Router on Replit). Put the app into a stable, warning-free state. Do EVERYTHING below exactly, then restart the app.
+
+──────────────────────────────────────────────────────────────────────────────
+GOALS
+1) Remove the orange “WalletConnect is not configured” banner everywhere.
+2) Stop red runtime overlays: “aes/gcm: invalid ghash tag”, “HTTP status code: 403”
+   (from stale session), and “Connection interrupted while trying to subscribe”.
+3) Keep production-safe behavior: no secret leaks, real errors still go to console.
+──────────────────────────────────────────────────────────────────────────────
+
+A) ENV (Replit → Secrets)
+- Create/ensure these secrets (do not rotate them on each run):
+  • NEXTAUTH_SECRET = keep existing strong value (or generate once and keep)
+  • NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID = demo     ← placeholder (owner can later set a real one)
+  • ENCRYPTION_KEY (optional) = 32-byte base64 (only if your code expects it)
+- No code uses console to print secrets.
+
+B) Wallet provider (remove banner but keep wallets working)
+1. Create/replace file: lib/wallet/provider.tsx
+   ────────────────────────────────────────────────────────────────────────────
+   "use client";
+   import { ReactNode } from "react";
+   import { WagmiProvider } from "wagmi";
+   import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+   import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
+   import { config } from "./wagmi"; // adjust to your wagmi config path
+
+   const queryClient = new QueryClient();
+   const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo";
+
+   export function WalletRoot({ children }: { children: ReactNode }) {
+     // NOTE: We do not render any custom “missing projectId” warnings.
+     // Using "demo" keeps UI clean until a real ID is supplied.
+     return (
+       <WagmiProvider config={config}>
+         <QueryClientProvider client={queryClient}>
+           <RainbowKitProvider theme={darkTheme()}>{children}</RainbowKitProvider>
+         </QueryClientProvider>
+       </WagmiProvider>
+     );
+   }
+   ────────────────────────────────────────────────────────────────────────────
+2. Ensure this provider wraps the app ONCE (no duplicates):
+   • app/layout.tsx (or app/providers.tsx) should include:
+     ──────────────────────────────────────────────────────────────────────────
+     import { WalletRoot } from "@/lib/wallet/provider";
+     export default function RootLayout({ children }: { children: React.ReactNode }) {
+       return (
+         <html lang="en">
+           <body><WalletRoot>{children}</WalletRoot></body>
+         </html>
+       );
+     }
+     ──────────────────────────────────────────────────────────────────────────
+3. Delete/disable any previous custom banner/components that rendered the orange notice.
+
+C) Session self-healing (fix aes/gcm + 403 from stale cookies)
+1. Create/replace file: app/api/auth/repair/route.ts
+   ────────────────────────────────────────────────────────────────────────────
+   import { NextResponse } from "next/server";
+   export async function POST() {
+     const res = NextResponse.json({ ok: true, repaired: true });
+     res.cookies.delete("next-auth.session-token");
+     res.cookies.delete("__Secure-next-auth.session-token");
+     return res;
+   }
+   ────────────────────────────────────────────────────────────────────────────
+2. Create/replace file: app/error.tsx (global client error boundary)
+   ────────────────────────────────────────────────────────────────────────────
+   "use client";
+   import { useEffect } from "react";
+   export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
+     useEffect(() => {
+       const msg = (error?.message || "").toLowerCase();
+       if (msg.includes("aes/gcm") || msg.includes("ghash tag") || msg.includes("status code: 403")) {
+         fetch("/api/auth/repair", { method: "POST" }).finally(() => {
+           try { localStorage.clear(); sessionStorage.clear(); } catch {}
+           location.replace("/");
+         });
+       }
+     }, [error]);
+     return (
+       <html><body style={{background:"#0B1220",color:"#fff",padding:24}}>
+         <h2>Recovering session…</h2>
+       </body></html>
+     );
+   }
+   ────────────────────────────────────────────────────────────────────────────
+3. Create/replace file: middleware.ts
+   ────────────────────────────────────────────────────────────────────────────
+   import { NextResponse } from "next/server";
+   import type { NextRequest } from "next/server";
+   export function middleware(_req: NextRequest) { return NextResponse.next(); }
+   export const config = {
+     matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/public).*)"],
+   };
+   ────────────────────────────────────────────────────────────────────────────
+
+D) Quiet noisy overlays (but keep real errors)
+1. Create/replace file: lib/consoleFilter.ts
+   ────────────────────────────────────────────────────────────────────────────
+   if (typeof window !== "undefined") {
+     const origError = console.error;
+     console.error = (...args: any[]) => {
+       const t = (args?.[0]?.toString?.() || "").toLowerCase();
+       if (
+         t.includes("connection interrupted while trying to subscribe") ||
+         t.includes("walletconnect is not configured")
+       ) return; // swallow noise only
+       origError(...args);
+     };
+   }
+   ────────────────────────────────────────────────────────────────────────────
+2. Import once in the main client entry (top of app/layout.tsx or app/providers.tsx):
+   ────────────────────────────────────────────────────────────────────────────
+   "use client";
+   import "@/lib/consoleFilter";
+   ────────────────────────────────────────────────────────────────────────────
+
+E) Guard admin routes (avoid throwing raw 403)
+- Ensure admin pages redirect unauthenticated users instead of crashing:
+  ──────────────────────────────────────────────────────────────────────────────
+  // app/admin/page.tsx
+  import { auth } from "@/lib/auth";
+  import { redirect } from "next/navigation";
+  export default async function AdminPage() {
+    const session = await auth();
+    if (!session || session.user?.role !== "ADMIN") redirect("/login?reason=admin_required");
+    return <>…admin content…</>;
+  }
+  ──────────────────────────────────────────────────────────────────────────────
+
+F) Health (optional)
+- app/api/health/wallet/route.ts
+  ──────────────────────────────────────────────────────────────────────────────
+  import { NextResponse } from "next/server";
+  export async function GET() {
+    const pid = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo";
+    return NextResponse.json({ ok: pid !== "", projectId: pid });
+  }
+  ──────────────────────────────────────────────────────────────────────────────
+
+G) Restart & verify
+1. Stop → Run the Replit app (reload secrets).
+2. Hard refresh browser (or clear cookies if you previously saw red overlays).
+3. Expected:
+   • No orange WalletConnect banner.
+   • No “aes/gcm: invalid ghash tag”.
+   • No “HTTP status code: 403” overlay (bad sessions are auto-repaired).
+   • No “Connection interrupted…” overlay spam.
+   • Normal login and dashboard flow.
+
+END.
