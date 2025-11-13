@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { formatNumber } from "@/lib/format"
 import { formatDate } from "@/lib/date"
-import { EmailTestCard } from "@/components/admin/EmailTestCard"
 
 async function getStats() {
   const safeCount = async (fn: () => Promise<number>) => {
@@ -91,10 +90,6 @@ export default async function AdminDashboard() {
           icon="💵"
           valueClass="text-2xl"
         />
-      </div>
-
-      <div className="mb-8">
-        <EmailTestCard />
       </div>
 
       <div className="bg-su-card border border-white/10 rounded-2xl p-6">
