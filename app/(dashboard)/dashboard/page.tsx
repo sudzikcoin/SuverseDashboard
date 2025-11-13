@@ -6,6 +6,9 @@ import CalculatorCard from "@/components/CalculatorCard"
 import FileUpload from "@/components/FileUpload"
 import DocumentList from "@/components/DocumentList"
 import WalletConnectButton from "@/components/wallet/WalletConnectButton"
+import VerificationBadge from "@/components/VerificationBadge"
+import { prisma } from "@/lib/db"
+import { AlertCircle } from "lucide-react"
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -16,14 +19,54 @@ export default async function DashboardPage() {
 
   const userCompanyId = session.user.companyId
 
+  let companyData = null
+  if (session.user.role === "COMPANY" && userCompanyId) {
+    companyData = await prisma.company.findUnique({
+      where: { id: userCompanyId },
+      select: {
+        verificationStatus: true,
+        verificationNote: true,
+        legalName: true,
+      },
+    })
+  }
+
   return (
     <div className="p-4 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-100">
-            Welcome, {session.user.companyName || session.user.name || "Guest"}
-          </h1>
+          <div className="flex flex-col gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-100">
+              Welcome, {session.user.companyName || session.user.name || "Guest"}
+            </h1>
+            {companyData && (
+              <VerificationBadge 
+                status={companyData.verificationStatus as any}
+                note={companyData.verificationNote}
+              />
+            )}
+          </div>
           <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition w-fit" />
         </div>
+
+        {companyData && companyData.verificationStatus !== "VERIFIED" && (
+          <div className="mb-6 glass border-yellow-500/30 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-400 mb-1">
+                  {companyData.verificationStatus === "UNVERIFIED" 
+                    ? "Company Verification Pending" 
+                    : "Company Verification Required"}
+                </h3>
+                <p className="text-sm text-gray-300">
+                  {companyData.verificationStatus === "UNVERIFIED"
+                    ? "Your company is currently under review. You can browse the marketplace, but payment functions are restricted until verification is complete."
+                    : "Your company verification was not approved. Please contact support for assistance."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {session.user.role === "COMPANY" && (
           <div className="space-y-8">

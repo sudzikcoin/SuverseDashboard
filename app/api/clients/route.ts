@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       data: {
         actorId: session.user.id,
         action: "CREATE",
-        entity: "Company",
+        entity: "COMPANY",
         entityId: company.id,
       },
     })

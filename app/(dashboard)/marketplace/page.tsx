@@ -31,6 +31,8 @@ export default function MarketplacePage() {
   const [selectedCredit, setSelectedCredit] = useState<CreditInventory | null>(null)
   const [purchaseAmount, setPurchaseAmount] = useState("")
   const [companyId, setCompanyId] = useState<string | undefined>(undefined)
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null)
+  const [verificationNote, setVerificationNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -45,8 +47,22 @@ export default function MarketplacePage() {
   useEffect(() => {
     if (session?.user.role === "COMPANY" && session.user.companyId) {
       setCompanyId(session.user.companyId as string)
+      fetchCompanyVerification(session.user.companyId as string)
     }
   }, [session])
+
+  const fetchCompanyVerification = async (cId: string) => {
+    try {
+      const res = await fetch(`/api/companies/${cId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setVerificationStatus(data.verificationStatus)
+        setVerificationNote(data.verificationNote)
+      }
+    } catch (error) {
+      console.error("Failed to fetch verification status:", error)
+    }
+  }
 
   const fetchInventory = async () => {
     try {
@@ -65,6 +81,15 @@ export default function MarketplacePage() {
   const handleReserve = async (item: CreditInventory) => {
     if (!companyId) {
       alert("❌ Please select a company first.")
+      return
+    }
+
+    // Check verification status before allowing hold creation
+    if (session?.user.role === "COMPANY" && verificationStatus !== "VERIFIED") {
+      const message = verificationStatus === "REJECTED"
+        ? "❌ Your company verification was not approved. Hold creation is not available. Please contact support for assistance."
+        : "❌ Your company is currently under review. Hold creation is restricted until verification is complete."
+      alert(message)
       return
     }
     
@@ -102,6 +127,15 @@ export default function MarketplacePage() {
   const handlePurchase = async (item: CreditInventory) => {
     if (!companyId) {
       alert("❌ Please select a company first.")
+      return
+    }
+
+    // Check verification status before allowing purchase
+    if (session?.user.role === "COMPANY" && verificationStatus !== "VERIFIED") {
+      const message = verificationStatus === "REJECTED"
+        ? "❌ Your company verification was not approved. Payment functions are not available. Please contact support for assistance."
+        : "❌ Your company is currently under review. Payment functions are restricted until verification is complete."
+      alert(message)
       return
     }
     

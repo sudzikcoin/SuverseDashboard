@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check company verification status
+    if (purchase.company.verificationStatus !== "VERIFIED") {
+      const message = purchase.company.verificationStatus === "REJECTED"
+        ? "This company's verification was not approved. Please contact support for assistance."
+        : "This company is currently under review. Payment functions are restricted until verification is complete."
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
+
     if (user.role !== "ADMIN" && user.role !== "ACCOUNTANT") {
       return NextResponse.json(
         { error: "Only admins and accountants can submit payments" },

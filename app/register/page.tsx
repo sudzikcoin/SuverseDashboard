@@ -20,12 +20,27 @@ export default function RegisterPage() {
     targetCloseYear: "",
   })
   const [error, setError] = useState("")
+  const [einError, setEinError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  const validateEIN = (ein: string): boolean => {
+    if (!ein) return true // EIN is optional
+    const einRegex = /^\d{2}-\d{7}$/
+    return einRegex.test(ein)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setEinError("")
     setLoading(true)
+
+    // Validate EIN format before submission
+    if (formData.role === "COMPANY" && formData.ein && !validateEIN(formData.ein)) {
+      setEinError("EIN must be in format XX-XXXXXXX (e.g., 12-3456789)")
+      setLoading(false)
+      return
+    }
 
     try {
       const payload: any = {
@@ -179,12 +194,25 @@ export default function RegisterPage() {
                   <input
                     type="text"
                     value={formData.ein}
-                    onChange={(e) =>
-                      setFormData({ ...formData, ein: e.target.value })
-                    }
-                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setFormData({ ...formData, ein: value })
+                      if (value && !validateEIN(value)) {
+                        setEinError("Format: XX-XXXXXXX")
+                      } else {
+                        setEinError("")
+                      }
+                    }}
+                    className={`w-full px-4 py-2 bg-white/5 focus:bg-white/10 border ${
+                      einError ? "border-red-500/50" : "border-white/10"
+                    } rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400`}
                     placeholder="12-3456789"
+                    pattern="\d{2}-\d{7}"
+                    title="EIN must be in format XX-XXXXXXX (e.g., 12-3456789)"
                   />
+                  {einError && (
+                    <p className="mt-1 text-sm text-red-400">{einError}</p>
+                  )}
                 </div>
               </div>
 

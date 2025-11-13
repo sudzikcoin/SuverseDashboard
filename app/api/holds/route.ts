@@ -45,6 +45,14 @@ export async function POST(req: Request) {
     if (company.status !== "ACTIVE") {
       return NextResponse.json({ error: "Company is not active" }, { status: 403 })
     }
+    
+    // Check company verification status
+    if (company.verificationStatus !== "VERIFIED") {
+      const message = company.verificationStatus === "REJECTED"
+        ? "Your company verification was not approved. Hold creation is not available. Please contact support for assistance."
+        : "Your company is currently under review. Hold creation is restricted until verification is complete."
+      return NextResponse.json({ error: message }, { status: 403 })
+    }
 
     const inventory = await prisma.creditInventory.findUnique({
       where: { id: validated.inventoryId },

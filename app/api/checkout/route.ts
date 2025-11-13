@@ -60,6 +60,14 @@ export async function POST(req: Request) {
     if (company.status !== "ACTIVE") {
       return NextResponse.json({ error: "Company is not active" }, { status: 403 })
     }
+    
+    // Check company verification status
+    if (company.verificationStatus !== "VERIFIED") {
+      const message = company.verificationStatus === "REJECTED"
+        ? "Your company verification was not approved. Please contact support for assistance."
+        : "Your company is currently under review. Payment functions are restricted until verification is complete."
+      return NextResponse.json({ error: message }, { status: 403 })
+    }
 
     const inventory = await prisma.creditInventory.findUnique({
       where: { id: validated.inventoryId },
@@ -152,8 +160,8 @@ export async function POST(req: Request) {
         await tx.auditLog.create({
           data: {
             actorId: session.user.id || undefined,
-            action: "PURCHASE_TEST",
-            entity: "PurchaseOrder",
+            action: "CREATE",
+            entity: "PURCHASE",
             entityId: purchaseOrder.id,
           },
         })
