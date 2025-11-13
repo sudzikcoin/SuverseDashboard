@@ -72,6 +72,8 @@ export async function GET() {
       state: company.state,
       ein: company.ein,
       contactEmail: company.contactEmail,
+      verificationStatus: company.verificationStatus,
+      verificationNote: company.verificationNote,
       totalPurchases: company.purchases.length,
       totalValue: company.purchases.reduce(
         (sum: number, p: any) => sum + Number(p.totalUSD),
@@ -114,6 +116,7 @@ export async function POST(request: Request) {
         state,
         ein,
         contactEmail,
+        verificationStatus: "UNVERIFIED",
       },
     })
 

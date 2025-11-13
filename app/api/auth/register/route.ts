@@ -41,6 +41,7 @@ export async function POST(req: Request) {
           contactEmail: validated.email,
           taxLiability: validated.taxLiability,
           targetCloseYear: validated.targetCloseYear,
+          verificationStatus: "UNVERIFIED",
         },
       })
     }

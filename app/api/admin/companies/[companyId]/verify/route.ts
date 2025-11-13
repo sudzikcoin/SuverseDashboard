@@ -1,0 +1,69 @@
+import { NextResponse } from "next/server"
+import { prisma } from "@/lib/db"
+import { verifyCompanySchema } from "@/lib/validations"
+import { writeAudit } from "@/lib/audit"
+import { getRequestContext } from "@/lib/reqctx"
+import { safeGetServerSession } from "@/lib/session-safe"
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { companyId: string } }
+) {
+  const session = await safeGetServerSession()
+
+  if (!session || !["ADMIN"].includes(session.user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
+    const body = await request.json()
+    const validated = verifyCompanySchema.parse(body)
+
+    const company = await prisma.company.findUnique({
+      where: { id: params.companyId },
+    })
+
+    if (!company) {
+      return NextResponse.json(
+        { error: "Company not found" },
+        { status: 404 }
+      )
+    }
+
+    const previousStatus = company.verificationStatus
+
+    const updatedCompany = await prisma.company.update({
+      where: { id: params.companyId },
+      data: {
+        verificationStatus: validated.status,
+        verificationNote: validated.note || null,
+      },
+    })
+
+    const ctx = await getRequestContext()
+    await writeAudit({
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      action: validated.status === "VERIFIED" ? "VERIFY_COMPANY" : "REJECT_COMPANY",
+      entity: "COMPANY",
+      entityId: company.id,
+      companyId: company.id,
+      details: {
+        previousStatus,
+        newStatus: validated.status,
+        note: validated.note,
+        companyName: company.legalName,
+        ein: company.ein,
+      },
+      ...ctx,
+    })
+
+    return NextResponse.json({ company: updatedCompany })
+  } catch (error: any) {
+    console.error("Error verifying company:", error)
+    return NextResponse.json(
+      { error: error.message || "Failed to update verification status" },
+      { status: 500 }
+    )
+  }
+}

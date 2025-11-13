@@ -1,0 +1,167 @@
+You are working on the "SuVerse Tax Credit Dashboard" project (Next.js + TypeScript + Prisma + Postgres). 
+
+Goal: implement a simple manual company verification flow during registration, with EIN format validation on the frontend and manual verification by admin/broker in the admin panel. No external IRS/KYB APIs for now.
+
+Business requirements:
+- When a company registers, it must provide an EIN in the format `XX-XXXXXXX` (9 digits).
+- If EIN format is invalid, the UI should show a clear validation error and prevent form submission.
+- Every company has a `verificationStatus` field: `UNVERIFIED | VERIFIED | REJECTED`.
+- Newly registered companies are created with `verificationStatus = "UNVERIFIED"`.
+- Admin (or Broker with proper role) can:
+  - See a list of companies and their verification status.
+  - Open a company detail or row and click a button to mark it as `VERIFIED` or `REJECTED`.
+  - Optionally leave a short comment / note about verification.
+- While `UNVERIFIED`, the company:
+  - Can register and login.
+  - Can browse inventory and create draft purchase orders.
+  - CANNOT complete payment / final purchase.
+- When `VERIFIED`, the company can perform full operations (reserve + pay).
+- When `REJECTED`, the company cannot create new orders, and UI should show a red “Rejected – contact support” badge.
+- In the UI, show a green “Verified” badge when status is VERIFIED, and a yellow “Pending verification” badge when UNVERIFIED.
+
+Please implement everything step by step:
+
+1) Prisma schema update
+- Locate the Prisma schema (usually `prisma/schema.prisma`).
+- Find the `Company` model.
+- Add an enum and fields for verification:
+
+  - Add enum:
+    enum VerificationStatus {
+      UNVERIFIED
+      VERIFIED
+      REJECTED
+    }
+
+  - In the `Company` model, add:
+    - `verificationStatus VerificationStatus @default(UNVERIFIED)`
+    - `verificationNote String?`  // short internal note for admins, optional
+
+- Make sure there is no naming conflict with existing enums.
+- Run the migration and regenerate Prisma client:
+  - `npx prisma migrate dev -n "add_company_verification_status"`
+  - `npx prisma generate`
+
+2) Backend: update company creation (registration)
+- Find the API route or server action that creates companies when they register (for example something like `app/api/companies/route.ts` or a signup handler).
+- Ensure that when a new company is created:
+  - `verificationStatus` is explicitly set to `UNVERIFIED` (if Prisma default is configured, this is optional, but set it for clarity).
+  - `verificationNote` is left null/undefined.
+
+3) Backend: admin endpoints for verification
+- Create or update an admin API route to update verification status, for example:
+  - `app/api/admin/companies/[companyId]/verify/route.ts`
+- It should:
+  - Accept `PATCH` or `POST`.
+  - Only allow access for users with admin or broker role (re-use your existing auth/middleware).
+  - Receive JSON payload like:
+    - `{ "status": "VERIFIED" | "REJECTED", "note": "string optional" }`
+  - Validate:
+    - `status` must be one of the allowed enum values (VERIFIED or REJECTED).
+  - Update the corresponding Company record:
+    - `verificationStatus = status`
+    - `verificationNote = note ?? null`
+  - Return updated company JSON, including `verificationStatus`.
+
+4) Frontend: EIN format validation in registration form
+- Find the Company registration form (for company signup) in the app, most likely in something like `app/(public)/signup` or a Company registration page.
+- Add an EIN field if not already present:
+  - Label: “EIN”
+  - Placeholder: “12-3456789”
+- Implement client-side validation:
+  - Use a regex: `/^\d{2}-\d{7}$/`
+  - If the value does not match, show an inline validation error under the field, e.g.:
+    - “Please enter a valid EIN in the format 12-3456789.”
+  - Prevent form submission while EIN is invalid.
+- Also, ensure the backend side validates EIN format as a safety check; if invalid, return a 400 error with message.
+
+5) Frontend: show verification status badges
+- In the company dashboard header (company’s own area), display a small badge near the company name, based on `verificationStatus` from the logged-in company record:
+  - VERIFIED → green badge: `Verified`
+  - UNVERIFIED → yellow badge: `Pending verification`
+  - REJECTED → red badge: `Rejected – contact support`
+- Use existing design system / Tailwind classes consistent with current UI.
+- Make sure the company data returned to the frontend includes `verificationStatus`.
+
+6) Frontend: restrict operations for UNVERIFIED / REJECTED companies
+- Wherever the company can perform critical actions (reserve tax credit, proceed to payment, sign agreements, etc.), add checks for `verificationStatus`:
+  - If `UNVERIFIED`:
+    - Allow viewing inventory and creating draft orders (if that already exists).
+    - But disable / hide the final payment / “Confirm purchase” button.
+    - Show a tooltip or small text: “To complete purchases, your company must be verified. We’ll review your registration shortly.”
+  - If `REJECTED`:
+    - Do not allow creating new orders or payments.
+    - Show a clear message: “Your company could not be verified. Please contact support for details.”
+
+7) Admin panel UI for manual verification
+- In the admin dashboard, find the Companies list page (menu item “Companies” in the admin/burger menu).
+- In the table:
+  - Add a column “Verification” that shows a colored badge (same colors/text as above).
+- On each row, add a quick action (e.g. a dropdown or buttons “Verify” / “Reject”), or link to a company details page.
+- Company details view:
+  - Show the basic company info.
+  - Show current `verificationStatus` and `verificationNote`.
+  - Add a small “Verification” section, with:
+    - Buttons:
+      - “Mark as Verified”
+      - “Mark as Rejected”
+    - A textarea input “Verification note (internal)” for the admin to write something like “Matched EIN with CP575 document manually.”
+    - On submit:
+      - Call the admin verification API created above.
+      - Update the UI state optimistically.
+      - Show success/failure toast.
+- Ensure this admin UI is only accessible to users with admin/broker roles.
+
+8) Document upload (for later, but wire basic support now if easy)
+- If document upload already exists for companies (e.g. tax docs, SS-4, W-9), make sure:
+  - Admin can see the uploaded docs in the company details view, so they can manually verify the EIN and legal name.
+  - Otherwise: for now, just leave a placeholder text in the admin view “Uploaded IRS documents will appear here” and we’ll hook it up later.
+
+9) Logging / audit
+- For now, at minimum:
+  - Whenever a company verification status is changed via the admin API, log an audit event (if you already have AuditLog model).
+  - Include:
+    - actor (admin email/id),
+    - companyId,
+    - previousStatus → newStatus,
+    - note.
+- If you already implemented `AuditLog` model and helper, use it; otherwise add a simple server log.
+
+10) Clean up and consistency
+- Ensure that:
+  - No old or obsolete fields are used for verification (if there was something like `isVerified` boolean, either migrate it to the new enum or remove it).
+  - The company type in your TypeScript code (e.g. `Company` or `CompanyWithRelations`) includes the new fields.
+  - Types across frontend and backend are consistent.
+- Run TypeScript check and lint:
+  - `npm run lint`
+  - `npm run typecheck` (or the equivalent in this project).
+
+11) Testing scenarios
+Please test / simulate the following flows and fix any issues:
+
+A) New company registration:
+- Enter invalid EIN (e.g. `123456789`) → form shows error, cannot submit.
+- Enter valid EIN (e.g. `12-3456789`) → registration succeeds.
+- After signup, the company dashboard shows “Pending verification”.
+
+B) Admin verifies company:
+- As admin, open Companies → find the newly registered company.
+- Click “Mark as Verified”, add a note, save.
+- Check that:
+  - `verificationStatus` in DB becomes `VERIFIED`.
+  - Company dashboard refresh shows green “Verified” badge.
+  - Company can now complete a payment / final purchase.
+
+C) Admin rejects company:
+- As admin, mark a test company as `REJECTED`.
+- Confirm that:
+  - In company dashboard, a red “Rejected – contact support” badge appears.
+  - Buttons for new orders / payments are disabled or not visible.
+  - Any attempt to call a “purchase” API from that company is rejected on the backend.
+
+D) Regression:
+- Make sure existing flows (login, logout, admin dashboard navigation) still work.
+- Ensure there are no runtime errors on the dashboard after these changes.
+
+Focus on clean, well-typed TypeScript and minimal visual changes that fit the current SuVerse Tax Credit Dashboard design.
+Do not invent new complex flows; just implement the simple manual verification system as described above.

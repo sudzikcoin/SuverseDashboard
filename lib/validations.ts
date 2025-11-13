@@ -1,5 +1,8 @@
 import { z } from "zod"
 
+// EIN format: XX-XXXXXXX (9 digits with hyphen)
+const EIN_REGEX = /^\d{2}-\d{7}$/
+
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email(),
@@ -7,7 +10,10 @@ export const registerSchema = z.object({
   role: z.enum(["COMPANY", "ACCOUNTANT", "ADMIN"]),
   companyLegalName: z.string().optional(),
   state: z.string().optional(),
-  ein: z.string().optional(),
+  ein: z.string().optional().refine(
+    (val) => !val || EIN_REGEX.test(val),
+    { message: "EIN must be in format XX-XXXXXXX (e.g., 12-3456789)" }
+  ),
   taxLiability: z.number().optional(),
   targetCloseYear: z.number().optional(),
 })
@@ -29,6 +35,11 @@ export const createCheckoutSchema = z.object({
 
 export const updateBrokerStatusSchema = z.object({
   status: z.enum(["APPROVED", "NEEDS_INFO", "REJECTED"]),
+})
+
+export const verifyCompanySchema = z.object({
+  status: z.enum(["VERIFIED", "REJECTED"]),
+  note: z.string().optional(),
 })
 
 export const createInventorySchema = z.object({
