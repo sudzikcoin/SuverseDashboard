@@ -194,17 +194,13 @@ export function getWalletEnv() {
   });
 
   if (!walletParsed.success) {
-    console.warn("[walletenv] parse error", walletParsed.error?.flatten?.().fieldErrors);
-    return { projectId: null as string | null, isValid: false };
+    return { projectId: 'demo', isValid: false };
   }
 
   const pid = walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
   
-  const INVALID_VALUES = ['demo', 'MISSING', 'test', 'placeholder', ''];
-  
-  if (!pid || INVALID_VALUES.includes(pid.toLowerCase())) {
-    console.warn("[walletenv] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing or invalid (placeholder detected)");
-    return { projectId: null as string | null, isValid: false };
+  if (!pid || pid === '') {
+    return { projectId: 'demo', isValid: false };
   }
 
   return { projectId: pid, isValid: true };

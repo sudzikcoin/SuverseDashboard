@@ -5,6 +5,7 @@ import ClientInit from "@/components/ClientInit";
 import WalletGuard from "@/components/wallet/WalletGuard";
 import WalletBanner from "@/components/WalletBanner";
 import Splash from "@/components/Splash";
+import ConsoleFilter from "@/components/ConsoleFilter";
 import { GlobalErrorBoundary } from "@/components/ops/GlobalErrorBoundary";
 import { ReleaseChecklist } from "@/components/ops/ReleaseChecklist";
 import { ShieldToastSetup } from "@/components/ops/ShieldToastSetup";
@@ -27,6 +28,7 @@ export default function RootLayout({
         <Splash />
         <SessionProvider>
           <ClientInit />
+          <ConsoleFilter />
           <UserScopedWagmiProvider>
             <GlobalErrorBoundary>
               <ShieldToastSetup />

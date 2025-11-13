@@ -75,18 +75,6 @@ export default function UserScopedWagmiProvider({ children }: { children: ReactN
             borderRadius: 'large'
           })}
         >
-          {!projectId && (
-            <div style={{ 
-              background: '#1e293b', 
-              color: '#fbbf24', 
-              padding: '12px 16px', 
-              fontSize: '14px',
-              borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
-              textAlign: 'center'
-            }}>
-              ⚠️ WalletConnect projectId is missing. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in Replit Secrets and restart.
-            </div>
-          )}
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>
