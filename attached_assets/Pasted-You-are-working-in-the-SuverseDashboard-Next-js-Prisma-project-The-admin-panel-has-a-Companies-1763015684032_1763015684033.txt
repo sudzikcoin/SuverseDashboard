@@ -1,0 +1,88 @@
+You are working in the "SuverseDashboard" Next.js + Prisma project. The admin panel has a "Companies" page with "Verify" and "Reject" buttons. "Reject" already works, but "Verify" throws a Zod validation error:
+
+[ { code: "invalid_type", expected: "string", received: "null", path: ["note"], message: "Expected string, received null" } ]
+
+Goal: Fix the Verify flow so that it does NOT crash when the optional "note" is empty. The "note" field must be truly optional (string or null), both in the Zod schema and in the code that uses it.
+
+Please do the following steps:
+
+1) Locate the Verify company server action / API route:
+- Search the codebase for handlers related to verifying a company, using terms like:
+  - "verifyCompany"
+  - "companyVerify"
+  - "verifyCompanyAction"
+  - or the API path that Verify button calls (for example `/api/admin/companies`, `/api/admin/company/verify`, etc.).
+- This handler will likely:
+  - parse a request body with company id and optional note,
+  - run a Zod schema,
+  - update the company status to "Verified",
+  - and write an audit log entry.
+
+2) Make the Zod schema for Verify accept an optional note:
+- Find the Zod schema that validates the Verify payload (the one that currently requires `note: z.string()`).
+- Change it so that `note` becomes optional and nullable, for example:
+
+  - If the object looks like this now:
+    const verifyCompanySchema = z.object({
+      companyId: z.string().uuid(),
+      note: z.string(), // or similar
+    });
+
+  - Change it to something logically equivalent to:
+    const verifyCompanySchema = z.object({
+      companyId: z.string().uuid(),
+      note: z.string().optional().nullable().default(""),
+    });
+
+- The important part is:
+  - `note` MUST allow `undefined` and `null`,
+  - After parsing, your handler should get `note` as a string (empty string when nothing provided).
+
+3) Make sure the handler code works with optional note:
+- In the Verify handler / server action, after parsing the schema, normalize `note` to a string, e.g.:
+
+  const { companyId, note } = verifyCompanySchema.parse(body);
+  const safeNote = note ?? "";
+
+- Use `safeNote` when:
+  - writing the audit log,
+  - updating related records,
+  - or passing to Prisma.
+
+- If Prisma model (for audit log or company) stores a note:
+  - If the field is nullable: you can store `note || null`.
+  - If the field is NOT nullable: store `safeNote` (empty string is OK).
+- Make sure there is no direct use of `note` that assumes it is always a non-null string.
+
+4) Align Verify behavior with Reject:
+- Find the Reject flow (it already works without error).
+- Ensure Verify uses the same idea for `note`:
+  - optional in Zod,
+  - normalized before saving,
+  - no place where `null` is forced into a non-nullable string field.
+
+5) Remove any leftover hard-coded assumptions:
+- If somewhere in the Verify code there is a direct `z.string()` or a type annotation like `note: string` that conflicts with `null`, update it to allow optional note.
+- Ensure TypeScript types match the new behavior:
+  - The handler should treat `note` as `string | null | undefined` before normalization,
+  - and as pure `string` (or `string | null`) AFTER normalization.
+
+6) Run checks and tests:
+- Run `npm run lint` and `npm run build` (or the project’s default checks) to ensure there are no type errors.
+- Start the dev server.
+- In the admin panel:
+  - Open the Companies page.
+  - Click **Verify** on a company WITHOUT entering any note (empty note case).
+  - Confirm:
+    - No JSON Zod error popup appears.
+    - The company status is updated to "Verified" as expected.
+    - An audit log entry is written successfully (if audit log is enabled for this action).
+  - Optionally, test Verify again WITH some text in the note to confirm it also works.
+
+7) Summarize:
+- At the end, briefly summarize:
+  - Which file(s) were changed (paths),
+  - The final Zod schema definition for Verify,
+  - And how the handler now normalizes and uses `note`.
+
+Do not change other business logic (statuses, emails, etc.). Only fix the Verify flow so that the optional note no longer causes "Expected string, received null" errors.

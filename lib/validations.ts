@@ -39,7 +39,7 @@ export const updateBrokerStatusSchema = z.object({
 
 export const verifyCompanySchema = z.object({
   status: z.enum(["VERIFIED", "REJECTED"]),
-  note: z.string().optional(),
+  note: z.string().nullish(),
 })
 
 export const createInventorySchema = z.object({

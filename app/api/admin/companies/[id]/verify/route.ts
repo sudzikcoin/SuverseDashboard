@@ -18,6 +18,9 @@ export async function PATCH(
   try {
     const body = await request.json()
     const validated = verifyCompanySchema.parse(body)
+    
+    // Normalize note to handle null/undefined
+    const safeNote = validated.note ?? null
 
     const company = await prisma.company.findUnique({
       where: { id: params.id },
@@ -36,7 +39,7 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         verificationStatus: validated.status,
-        verificationNote: validated.note || null,
+        verificationNote: safeNote,
       },
     })
 
@@ -51,7 +54,7 @@ export async function PATCH(
       details: {
         previousStatus,
         newStatus: validated.status,
-        note: validated.note,
+        note: safeNote,
         companyName: company.legalName,
         ein: company.ein,
       },
