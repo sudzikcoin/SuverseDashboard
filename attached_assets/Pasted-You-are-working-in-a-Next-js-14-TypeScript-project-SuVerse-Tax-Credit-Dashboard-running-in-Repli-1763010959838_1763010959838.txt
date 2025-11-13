@@ -1,0 +1,42 @@
+You are working in a Next.js 14 + TypeScript project (SuVerse Tax Credit Dashboard) running in Replit. There is an intermittent red runtime overlay on the login page which shows: `Error: aes/gcm: invalid ghash tag`. This happens after we changed the session/crypto secret, because old encrypted cookies are still stored in the browser. I want you to fix this globally so that the app never crashes with this error again. Instead, any invalid AES-GCM session must be treated as an expired/invalid session: clear cookies, log the user out and return the login page without a red error overlay.
+
+Do the following changes step by step:
+
+1) Find the session / encryption utilities
+- Search the repo for any AES-GCM usage or Node crypto calls such as `createCipheriv`, `createDecipheriv`, `aes-256-gcm`, or code that decrypts auth/session tokens.
+- Identify the main decrypt function that reads the session cookie or token (for example something like `decryptSession`, `verifySession`, `decodeToken`, or similar) that ultimately leads to `aes/gcm: invalid ghash tag` when the cookie is stale.
+
+2) Wrap decryption in a safe try/catch
+- In that decrypt/verify function, implement a robust try/catch around the AES-GCM decrypt logic.
+- On successful decrypt, keep the current behaviour.
+- On ANY error related to AES/GCM (for example error message contains `aes/gcm`, `invalid ghash tag`, or decryption throws), DO NOT rethrow the error to the caller. Instead:
+  - Log it in the server console as a warning (e.g. "Invalid encrypted session detected, clearing cookies").
+  - Clear the corresponding session/auth cookie(s) by setting them to empty values with `maxAge: 0`.
+  - Return a safe "no session" value to the caller (for example `null` or `{ valid: false }`) so that the rest of the code path can treat it as a logged-out user.
+
+3) Update all places that consume the session
+- Find all API routes, server components, or middleware that call this decrypt/verify function.
+- Make sure they correctly handle the “no session” / `null` result:
+  - For protected admin pages, redirect to `/login` instead of throwing.
+  - For API calls, respond with HTTP 401/403 JSON (e.g. `{ error: "SESSION_INVALIDATED" }`) instead of letting the crypto error bubble up.
+- Ensure that no place still throws the raw AES/GCM error to the client.
+
+4) Optional client-side hardening (only if needed)
+- If there is any client-side code that directly calls the decrypt function or receives the AES/GCM error via `fetch`/`trpc` and rethrows it, catch this on the client:
+  - Detect errors whose message includes `aes/gcm` or `invalid ghash tag`.
+  - When such an error is detected, clear any client-side auth state (e.g. localStorage/sessionStorage flags) and programmatically redirect the user to `/login`.
+  - Do NOT rethrow, so Next.js error overlay does not appear.
+
+5) Clean up development-only overlay
+- Make sure there is no custom error boundary or debug helper that explicitly throws when the crypto error occurs. After the changes above, the app should gracefully treat the user as logged-out.
+
+6) Run and verify
+- Run the dev server, open the login page in the browser.
+- First, try to log in normally and ensure everything works.
+- Then, simulate the old-cookie situation: log in, stop the dev server, change the session/crypto secret (or restart with a different secret), and reload the page.
+- Confirm that:
+  - There is NO red Next.js "Unhandled Runtime Error" overlay.
+  - The user is simply redirected to `/login` or sees a clean login page.
+  - The console shows only a warning about invalid session, not a stack trace.
+
+Explain briefly in comments near the decrypt function what you changed (for example `// If decryption fails, treat as expired session and clear cookies instead of throwing`). When you are done, summarize the concrete files and functions you updated.

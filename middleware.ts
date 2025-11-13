@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
+import { safeGetToken } from "./lib/session-safe-edge"
 
 const PUBLIC_PATHS = [
   "/",
@@ -88,11 +88,18 @@ export async function middleware(req: NextRequest) {
   const needsAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
   if (!needsAuth) return response
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  // Use safe session helper to prevent "aes/gcm: invalid ghash tag" crashes
+  // If decryption fails (old cookie), treat as logged out and clear cookies
+  const token = await safeGetToken(req)
   if (!token) {
     const url = new URL("/login", req.url)
     url.searchParams.set("callbackUrl", pathname)
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    // Clear invalid session cookies
+    redirectResponse.cookies.delete("sv.session.v2")
+    redirectResponse.cookies.delete("next-auth.session-token")
+    redirectResponse.cookies.delete("__Secure-next-auth.session-token")
+    return redirectResponse
   }
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {

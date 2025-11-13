@@ -1,9 +1,10 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth';
 import { NextResponse } from 'next/server';
+import { safeGetServerSession } from '../session-safe';
 
 export async function requireAdmin() {
-  const session = await getServerSession(authOptions);
+  // Use safe session helper to prevent "aes/gcm: invalid ghash tag" crashes
+  // If decryption fails (old cookie), treat as logged out
+  const session = await safeGetServerSession();
   
   if (!session || !session.user) {
     return NextResponse.json(

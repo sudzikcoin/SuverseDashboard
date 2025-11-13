@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
-import { authOptions } from "@/lib/auth"
+import { safeGetServerSession } from "@/lib/session-safe"
 import Sidebar from "@/components/Sidebar"
 
 interface DashboardShellProps {
@@ -14,7 +13,9 @@ export default async function DashboardShell({
   requireRole,
   requireRoles,
 }: DashboardShellProps) {
-  const session = await getServerSession(authOptions)
+  // Use safe session helper to prevent "aes/gcm: invalid ghash tag" crashes
+  // If decryption fails (old cookie), treat as logged out
+  const session = await safeGetServerSession()
 
   if (!session) {
     redirect("/login")
