@@ -7,7 +7,7 @@ import { safeGetServerSession } from "@/lib/session-safe"
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { companyId: string } }
+  { params }: { params: { id: string } }
 ) {
   const session = await safeGetServerSession()
 
@@ -20,7 +20,7 @@ export async function PATCH(
     const validated = verifyCompanySchema.parse(body)
 
     const company = await prisma.company.findUnique({
-      where: { id: params.companyId },
+      where: { id: params.id },
     })
 
     if (!company) {
@@ -33,7 +33,7 @@ export async function PATCH(
     const previousStatus = company.verificationStatus
 
     const updatedCompany = await prisma.company.update({
-      where: { id: params.companyId },
+      where: { id: params.id },
       data: {
         verificationStatus: validated.status,
         verificationNote: validated.note || null,

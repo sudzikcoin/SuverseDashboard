@@ -1,0 +1,29 @@
+You are working on my SuVerse Tax Credit Dashboard project. After the last KYB/verification changes, the Preview page shows: “Hmm… We couldn't reach this app”. That means the Next.js app crashed or is not listening on the HTTP port.
+
+Your task: diagnose and fully recover the app so the Preview works again.
+
+1) Open the Shell/Console and:
+   - Run the current start command (for this Replit) manually, usually `npm run dev` or `npm run start`.
+   - Watch the output carefully and find any build/runtime errors (TypeScript, Prisma, imports, missing files, etc.).
+   - If the command is already running under Replit’s runner, inspect the Logs to see the crash stacktrace.
+
+2) Fix ALL errors you find:
+   - If there are TypeScript or runtime errors related to the new company verification / EIN / EmailTestCard or any other new code, correct the imports, exports, types, and JSX so that the app compiles.
+   - If Prisma complains about migrations or schema changes, run the correct commands:
+     - `npx prisma migrate dev` (or the command used in this project) and then `npx prisma generate`.
+   - Make sure there is no invalid `EmailTestCard` or similar component reference: either implement the component properly or remove/disable its usage so that the dashboard route renders without errors.
+
+3) Ensure the app is actually running:
+   - Confirm that the start script in package.json matches what Replit expects.
+   - Make sure the app listens on the correct port for Replit (usually `0.0.0.0` with the provided PORT env).
+   - Update `.replit` or the Run configuration if needed so that Replit starts the app correctly.
+
+4) When you are done:
+   - Start the app.
+   - Open the root route `/` and `/login` in Preview and confirm they load without “couldn’t reach this app” or red runtime overlays.
+   - Verify that the admin login still works and the main dashboard page renders successfully.
+
+Finally, write a short summary for me:
+- What was broken exactly,
+- What files you changed,
+- What command is now used to run the app.
