@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentBrokerOrThrow } from "@/lib/broker/currentBroker"
 
 export default async function InventoryPage() {
+  // Safe to call getCurrentBrokerOrThrow here because BrokerLayout now checks brokerId
   const broker = await getCurrentBrokerOrThrow()
 
   const pools = await prisma.brokerCreditPool.findMany({

@@ -18,6 +18,13 @@ export default async function BrokerLayout({
     redirect("/dashboard")
   }
 
+  // Additional check: Ensure broker has brokerId linked
+  if (!session.user.brokerId) {
+    // Broker user exists but not linked to broker record
+    // Redirect to setup or support page
+    redirect("/dashboard?error=broker_not_configured")
+  }
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-su-base">
       <BrokerSidebar />
