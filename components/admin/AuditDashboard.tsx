@@ -286,6 +286,8 @@ export default function AuditDashboard() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                        log.action === "VERIFY_COMPANY" ? "bg-green-500/20 text-green-400" :
+                        log.action === "REJECT_COMPANY" ? "bg-red-500/20 text-red-400" :
                         log.action === "CREATE" || log.action === "REGISTER" ? "bg-green-500/20 text-green-400" :
                         log.action === "UPDATE" ? "bg-blue-500/20 text-blue-400" :
                         log.action === "DELETE" || log.action === "ARCHIVE_COMPANY" ? "bg-red-500/20 text-red-400" :
