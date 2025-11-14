@@ -20,7 +20,7 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **Backend**: Next.js API Routes.
 -   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin, Broker), JWTs, and automatic audit logging.
 -   **Wallet Connection**: User-scoped Wagmi provider for isolated wallet state; automatic disconnect on user switch.
--   **Database**: Prisma ORM with PostgreSQL (SQLite for development) for models like `User`, `Company`, `CreditInventory`, `AuditLog`, etc.
+-   **Database**: Prisma ORM with PostgreSQL (SQLite for development) for models like `User`, `Company`, `CreditInventory`, `Broker`, `BrokerCreditPool`, `AuditLog`, etc.
 -   **Security**: Bcrypt for password hashing, NextAuth sessions, Zod for input validation, Stripe webhook verification, and JWT-validated middleware.
 -   **Stability Shield**: Health monitoring with error boundaries, admin diagnostics, secure health APIs, and session invalidation.
 -   **PDF Generation**: `@react-pdf/renderer` for broker packages and closing certificates.
@@ -39,15 +39,19 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **USDC Payment Flow**: Enhanced UX with input validation, BigInt math, and Wagmi/Viem integration for Base network transfers.
 -   **Inventory Management**: Admin CRUD for tax credit inventory, including broker file upload.
 -   **Accountant Features**: Zero-trust isolation, client management, per-company document management, and restricted marketplace actions.
--   **Broker Portal**: Comprehensive dashboard (`/broker/*`) with role-based access control including:
+-   **Broker Portal**: Comprehensive dashboard (`/broker/*`) with role-based access control and database integration:
     -   Dashboard with stats overview, recent orders, and payout summaries
-    -   Credit Pool Management: Add/edit/view credit pool inventory with multi-section forms
-    -   Order Tracking: View all orders with status filtering and detailed order pages
-    -   Payout Management: Upcoming/pending payouts, payout history with transaction tracking
-    -   Compliance: Broker profile, verification documents, and compliance tracking
-    -   API & Integrations: API key management, webhook configuration for third-party integrations
-    -   Settings: Profile management, payout methods, notification preferences
-    -   Support: Ticket creation and support history tracking
+    -   **Credit Pool Management (PRISMA-INTEGRATED)**: Real database CRUD for broker credit pools via `/api/broker/inventory`:
+        -   List view fetches pools from database with broker isolation
+        -   Add/edit forms with Zod validation for financial terms and program details
+        -   Secure API routes enforce broker ownership (findFirst with brokerId check)
+        -   Models: `Broker` (KYB fields), `BrokerCreditPool` (financial terms, program details, status)
+    -   Order Tracking: View all orders with status filtering and detailed order pages (mock data)
+    -   Payout Management: Upcoming/pending payouts, payout history with transaction tracking (mock data)
+    -   Compliance: Broker profile, verification documents, and compliance tracking (mock data)
+    -   API & Integrations: API key management, webhook configuration for third-party integrations (mock data)
+    -   Settings: Profile management, payout methods, notification preferences (mock data)
+    -   Support: Ticket creation and support history tracking (mock data)
 -   **Admin Panel**: Triple-layer security, dashboards for users, companies, inventory, purchases, company verification, audit logs, and diagnostics.
 -   **Reporting**: CSV exports for inventory, purchases, and audit logs.
 -   **Tax Credit Calculator**: Interactive module for financial calculations.
@@ -60,7 +64,8 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **Environment Variables**: Configurable via `.env`.
 -   **Database Seeding**: Enhanced script for initial setup.
 -   **Admin Restoration**: Script for creating/restoring admin users.
--   **Access Control**: `lib/access-control.ts` enforces accountant isolation.
+-   **Access Control**: `lib/access-control.ts` enforces accountant isolation; `lib/broker/currentBroker.ts` enforces broker isolation.
+-   **Input Validation**: Zod schemas in `lib/broker/validation.ts` for broker inventory operations.
 
 ## External Dependencies
 -   **Stripe**: Payment processing.

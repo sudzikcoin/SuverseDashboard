@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getCurrentBrokerOrThrow } from '@/lib/broker/currentBroker'
+import { createCreditPoolSchema } from '@/lib/broker/validation'
 
 export async function GET() {
   try {
@@ -29,45 +30,36 @@ export async function POST(request: NextRequest) {
     const broker = await getCurrentBrokerOrThrow()
     const body = await request.json()
 
-    // TODO: Add input validation using Zod
-    const {
-      programName,
-      creditYear,
-      creditType,
-      jurisdiction,
-      programCode,
-      registryId,
-      totalFaceValueUsd,
-      availableFaceValueUsd,
-      minBlockUsd,
-      pricePerDollar,
-      offerStartDate,
-      offerExpiryDate,
-      expectedSettlementDays,
-      visibility,
-      status,
-    } = body
+    // Validate input using Zod
+    const validationResult = createCreditPoolSchema.safeParse(body)
+    
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validationResult.error.errors },
+        { status: 400 }
+      )
+    }
+
+    const validatedData = validationResult.data
 
     const pool = await prisma.brokerCreditPool.create({
       data: {
         brokerId: broker.id,
-        programName,
-        creditYear: parseInt(creditYear),
-        creditType,
-        jurisdiction,
-        programCode,
-        registryId,
-        totalFaceValueUsd,
-        availableFaceValueUsd,
-        minBlockUsd,
-        pricePerDollar,
-        offerStartDate: offerStartDate ? new Date(offerStartDate) : null,
-        offerExpiryDate: offerExpiryDate ? new Date(offerExpiryDate) : null,
-        expectedSettlementDays: expectedSettlementDays
-          ? parseInt(expectedSettlementDays)
-          : null,
-        visibility: visibility || 'PUBLIC',
-        status: status || 'DRAFT',
+        programName: validatedData.programName,
+        creditYear: validatedData.creditYear,
+        creditType: validatedData.creditType,
+        jurisdiction: validatedData.jurisdiction,
+        programCode: validatedData.programCode || null,
+        registryId: validatedData.registryId || null,
+        totalFaceValueUsd: validatedData.totalFaceValueUsd,
+        availableFaceValueUsd: validatedData.availableFaceValueUsd,
+        minBlockUsd: validatedData.minBlockUsd,
+        pricePerDollar: validatedData.pricePerDollar,
+        offerStartDate: validatedData.offerStartDate ? new Date(validatedData.offerStartDate) : null,
+        offerExpiryDate: validatedData.offerExpiryDate ? new Date(validatedData.offerExpiryDate) : null,
+        expectedSettlementDays: validatedData.expectedSettlementDays || null,
+        visibility: validatedData.visibility,
+        status: validatedData.status,
       },
     })
 

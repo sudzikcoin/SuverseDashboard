@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getCurrentBrokerOrThrow } from '@/lib/broker/currentBroker'
+import { updateCreditPoolSchema } from '@/lib/broker/validation'
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +11,7 @@ export async function GET(
     const broker = await getCurrentBrokerOrThrow()
     const { poolId } = params
 
-    const pool = await prisma.brokerCreditPool.findUnique({
+    const pool = await prisma.brokerCreditPool.findFirst({
       where: {
         id: poolId,
         brokerId: broker.id,
@@ -44,7 +45,7 @@ export async function PATCH(
     const body = await request.json()
 
     // Verify the pool belongs to this broker
-    const existingPool = await prisma.brokerCreditPool.findUnique({
+    const existingPool = await prisma.brokerCreditPool.findFirst({
       where: {
         id: poolId,
         brokerId: broker.id,
@@ -55,39 +56,41 @@ export async function PATCH(
       return NextResponse.json({ error: 'Pool not found' }, { status: 404 })
     }
 
-    // TODO: Add input validation using Zod
+    // Validate input using Zod
+    const validationResult = updateCreditPoolSchema.safeParse(body)
+    
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validationResult.error.errors },
+        { status: 400 }
+      )
+    }
+
+    const validatedData = validationResult.data
     const updateData: any = {}
 
     // Only update provided fields
-    if (body.programName !== undefined) updateData.programName = body.programName
-    if (body.creditYear !== undefined)
-      updateData.creditYear = parseInt(body.creditYear)
-    if (body.creditType !== undefined) updateData.creditType = body.creditType
-    if (body.jurisdiction !== undefined)
-      updateData.jurisdiction = body.jurisdiction
-    if (body.programCode !== undefined) updateData.programCode = body.programCode
-    if (body.registryId !== undefined) updateData.registryId = body.registryId
-    if (body.totalFaceValueUsd !== undefined)
-      updateData.totalFaceValueUsd = body.totalFaceValueUsd
-    if (body.availableFaceValueUsd !== undefined)
-      updateData.availableFaceValueUsd = body.availableFaceValueUsd
-    if (body.minBlockUsd !== undefined) updateData.minBlockUsd = body.minBlockUsd
-    if (body.pricePerDollar !== undefined)
-      updateData.pricePerDollar = body.pricePerDollar
-    if (body.offerStartDate !== undefined)
-      updateData.offerStartDate = body.offerStartDate
-        ? new Date(body.offerStartDate)
-        : null
-    if (body.offerExpiryDate !== undefined)
-      updateData.offerExpiryDate = body.offerExpiryDate
-        ? new Date(body.offerExpiryDate)
-        : null
-    if (body.expectedSettlementDays !== undefined)
-      updateData.expectedSettlementDays = body.expectedSettlementDays
-        ? parseInt(body.expectedSettlementDays)
-        : null
-    if (body.visibility !== undefined) updateData.visibility = body.visibility
-    if (body.status !== undefined) updateData.status = body.status
+    if (validatedData.programName !== undefined) updateData.programName = validatedData.programName
+    if (validatedData.creditYear !== undefined) updateData.creditYear = validatedData.creditYear
+    if (validatedData.creditType !== undefined) updateData.creditType = validatedData.creditType
+    if (validatedData.jurisdiction !== undefined) updateData.jurisdiction = validatedData.jurisdiction
+    if (validatedData.programCode !== undefined) updateData.programCode = validatedData.programCode
+    if (validatedData.registryId !== undefined) updateData.registryId = validatedData.registryId
+    if (validatedData.totalFaceValueUsd !== undefined) updateData.totalFaceValueUsd = validatedData.totalFaceValueUsd
+    if (validatedData.availableFaceValueUsd !== undefined) updateData.availableFaceValueUsd = validatedData.availableFaceValueUsd
+    if (validatedData.minBlockUsd !== undefined) updateData.minBlockUsd = validatedData.minBlockUsd
+    if (validatedData.pricePerDollar !== undefined) updateData.pricePerDollar = validatedData.pricePerDollar
+    if (validatedData.offerStartDate !== undefined) {
+      updateData.offerStartDate = validatedData.offerStartDate ? new Date(validatedData.offerStartDate) : null
+    }
+    if (validatedData.offerExpiryDate !== undefined) {
+      updateData.offerExpiryDate = validatedData.offerExpiryDate ? new Date(validatedData.offerExpiryDate) : null
+    }
+    if (validatedData.expectedSettlementDays !== undefined) {
+      updateData.expectedSettlementDays = validatedData.expectedSettlementDays || null
+    }
+    if (validatedData.visibility !== undefined) updateData.visibility = validatedData.visibility
+    if (validatedData.status !== undefined) updateData.status = validatedData.status
 
     const updatedPool = await prisma.brokerCreditPool.update({
       where: { id: poolId },
