@@ -18,7 +18,7 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 ### Technical Implementations
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Recharts.
 -   **Backend**: Next.js API Routes.
--   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin), JWTs, and automatic audit logging.
+-   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin, Broker), JWTs, and automatic audit logging.
 -   **Wallet Connection**: User-scoped Wagmi provider for isolated wallet state; automatic disconnect on user switch.
 -   **Database**: Prisma ORM with PostgreSQL (SQLite for development) for models like `User`, `Company`, `CreditInventory`, `AuditLog`, etc.
 -   **Security**: Bcrypt for password hashing, NextAuth sessions, Zod for input validation, Stripe webhook verification, and JWT-validated middleware.
@@ -39,6 +39,15 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **USDC Payment Flow**: Enhanced UX with input validation, BigInt math, and Wagmi/Viem integration for Base network transfers.
 -   **Inventory Management**: Admin CRUD for tax credit inventory, including broker file upload.
 -   **Accountant Features**: Zero-trust isolation, client management, per-company document management, and restricted marketplace actions.
+-   **Broker Portal**: Comprehensive dashboard (`/broker/*`) with role-based access control including:
+    -   Dashboard with stats overview, recent orders, and payout summaries
+    -   Credit Pool Management: Add/edit/view credit pool inventory with multi-section forms
+    -   Order Tracking: View all orders with status filtering and detailed order pages
+    -   Payout Management: Upcoming/pending payouts, payout history with transaction tracking
+    -   Compliance: Broker profile, verification documents, and compliance tracking
+    -   API & Integrations: API key management, webhook configuration for third-party integrations
+    -   Settings: Profile management, payout methods, notification preferences
+    -   Support: Ticket creation and support history tracking
 -   **Admin Panel**: Triple-layer security, dashboards for users, companies, inventory, purchases, company verification, audit logs, and diagnostics.
 -   **Reporting**: CSV exports for inventory, purchases, and audit logs.
 -   **Tax Credit Calculator**: Interactive module for financial calculations.
