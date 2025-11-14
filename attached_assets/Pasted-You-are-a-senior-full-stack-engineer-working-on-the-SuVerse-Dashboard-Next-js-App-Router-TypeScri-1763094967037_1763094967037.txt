@@ -1,0 +1,107 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js App Router + TypeScript + Tailwind + Prisma).
+
+Problem
+	•	On the ACCOUNTANT side:
+	•	The accountant selects a client company and buys a tax credit from the marketplace.
+	•	The modal shows: “✅ Order created in demo mode (no payment required)”.
+	•	However, on the Clients page (accountant cabinet) the row for that company still shows:
+	•	Purchases: 0
+	•	Total Value: $0.
+
+So, orders created in demo mode are not reflected in the client summary.
+
+Goal
+
+When an order is created from the marketplace (including demo mode), the company’s stats on the Clients page must update:
+	•	Purchases = number of completed orders for that company.
+	•	Total Value = sum of the face value of those orders (e.g. purchaseAmount in USD).
+
+For now, treat demo mode orders as completed orders for the purpose of these stats.
+
+────────────────────────
+	1.	Persist demo orders correctly
+────────────────────────
+	2.	Locate the backend handler that returns
+“Order created in demo mode (no payment required)”.
+This is the endpoint hit when clicking “Purchase Now” in the marketplace, e.g.:
+	•	app/api/marketplace/purchase/route.ts
+	•	or similar.
+	3.	Make sure this endpoint always writes an Order record to the database, even in demo mode.
+	•	If there is an orders (or creditOrders, taxCreditOrders) table in Prisma, use it.
+	•	For demo mode orders:
+	•	companyId = the acting company (selected in the dropdown or the current company for COMPANY role).
+	•	offerId / creditId = the current marketplace offer.
+	•	faceValue or amount = the face value USD from the request.
+	•	status = 'DEMO_COMPLETED' or 'COMPLETED' (pick one, but be consistent).
+	•	Optionally isDemo: true boolean flag so we can distinguish demo records later.
+Example (pseudo-code):
+const order = await prisma.order.create({
+  data: {
+    companyId: actingCompanyId,
+    offerId: body.offerId,
+    faceValueUsd: body.amount,
+    status: demo ? 'DEMO_COMPLETED' : 'COMPLETED',
+    isDemo: demo,
+  },
+});
+4.	In non-demo mode, keep the existing behaviour (payment checks etc.), but still ensure a corresponding Order with proper status is created when the purchase is successful.
+	5.	Return the created order in the response:
+return NextResponse.json({
+  ok: true,
+  demoMode: demo,
+  order,
+  message: demo
+    ? 'Order created in demo mode (no payment required)'
+    : 'Order created successfully',
+});
+────────────────────────
+2. Make the Clients page aggregate from orders
+────────────────────────
+	1.	Locate the component / API used for the Clients page in the accountant cabinet.
+This is the page that renders:
+	•	Company Name | State | EIN | Contact Email | Purchases | Total Value | Docs
+	2.	Find how Purchases and Total Value are currently calculated.
+If they are hard-coded to 0 or based only on company fields, change it to use orders.
+	3.	Implement server-side logic (e.g. in a GET /api/accountant/clients endpoint or a server component loader) that:
+	•	Fetches all companies linked to the current accountant.
+	•	For each company, queries the orders table:
+const completedStatuses = ['COMPLETED', 'DEMO_COMPLETED'];
+
+const orders = await prisma.order.findMany({
+  where: {
+    companyId: company.id,
+    status: { in: completedStatuses },
+  },
+});
+
+const purchasesCount = orders.length;
+const totalValue = orders.reduce(
+  (sum, o) => sum + (o.faceValueUsd ?? 0),
+  0,
+);
+Attach purchasesCount and totalValue to the DTO the frontend uses.
+
+	4.	On the React side of the Clients table:
+	•	Use these computed fields to render:
+	•	Purchases = purchasesCount.
+	•	Total Value = formatted totalValue (e.g. $44,500).
+	•	Keep the rest of the table unchanged.
+
+────────────────────────
+3. Behaviour rules
+────────────────────────
+	•	In demo environments:
+	•	The purchase from the marketplace should:
+	•	Create an order with status = 'DEMO_COMPLETED' (or similar).
+	•	Immediately be counted on the Clients page.
+	•	In future production:
+	•	You can still keep isDemo / status separation:
+	•	Real completed orders use 'COMPLETED' and isDemo = false.
+	•	Demo orders use 'DEMO_COMPLETED' and isDemo = true.
+	•	The Clients page can either:
+	•	show both, or
+	•	filter to isDemo = false depending on business rules.
+
+For now, to make the current demo meaningful, include demo orders in the Clients stats by treating 'DEMO_COMPLETED' the same as 'COMPLETED' in the aggregation logic.
+
+Do not change any other parts of the dashboard. Only ensure that orders created from the marketplace are persisted (even in demo mode) and that the accountant’s Clients page reads real data from these order records for Purchases and Total Value

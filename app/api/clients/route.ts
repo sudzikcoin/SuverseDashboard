@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { COMPLETED_PURCHASE_STATUSES } from "@/lib/purchase-statuses"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -24,10 +25,17 @@ export async function GET() {
               email: true,
             },
           },
-          purchases: {
+          purchaseOrders: {
+            where: {
+              status: {
+                in: [...COMPLETED_PURCHASE_STATUSES],
+              },
+            },
             select: {
               id: true,
+              amountUSD: true,
               totalUSD: true,
+              status: true,
             },
           },
         },
@@ -46,10 +54,17 @@ export async function GET() {
                   email: true,
                 },
               },
-              purchases: {
+              purchaseOrders: {
+                where: {
+                  status: {
+                    in: [...COMPLETED_PURCHASE_STATUSES],
+                  },
+                },
                 select: {
                   id: true,
+                  amountUSD: true,
                   totalUSD: true,
+                  status: true,
                 },
               },
             },
@@ -74,9 +89,12 @@ export async function GET() {
       contactEmail: company.contactEmail,
       verificationStatus: company.verificationStatus,
       verificationNote: company.verificationNote,
-      totalPurchases: company.purchases.length,
-      totalValue: company.purchases.reduce(
-        (sum: number, p: any) => sum + Number(p.totalUSD),
+      totalPurchases: company.purchaseOrders.length,
+      totalValue: company.purchaseOrders.reduce(
+        (sum: number, p: any) => {
+          const value = p.amountUSD ? Number(p.amountUSD) : (p.totalUSD ? Number(p.totalUSD) : 0)
+          return sum + (isNaN(value) ? 0 : value)
+        },
         0
       ),
       createdAt: company.createdAt,
