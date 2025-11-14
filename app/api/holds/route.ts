@@ -48,9 +48,12 @@ export async function POST(req: Request) {
     
     // Check company verification status
     if (company.verificationStatus !== "VERIFIED") {
+      const companyLabel = session.user.role === "ACCOUNTANT" 
+        ? "The selected company" 
+        : "Your company"
       const message = company.verificationStatus === "REJECTED"
-        ? "Your company verification was not approved. Hold creation is not available. Please contact support for assistance."
-        : "Your company is currently under review. Hold creation is restricted until verification is complete."
+        ? `${companyLabel} verification was not approved. Hold creation is not available. Please contact support for assistance.`
+        : `${companyLabel} is currently under review. Hold creation is restricted until verification is complete.`
       return NextResponse.json({ error: message }, { status: 403 })
     }
 

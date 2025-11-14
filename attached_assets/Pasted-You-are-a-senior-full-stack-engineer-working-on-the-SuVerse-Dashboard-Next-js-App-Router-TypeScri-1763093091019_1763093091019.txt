@@ -1,0 +1,106 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js App Router + TypeScript + Tailwind, API routes on the backend).
+
+Context:
+	•	There are three main roles: ADMIN, ACCOUNTANT, COMPANY.
+	•	On the “Tax Credit Marketplace” page in the ACCOUNTANT cabinet, the accountant can:
+	•	See a list of credit offers (C48E 2025, C48C 2025, etc.).
+	•	Open a credit card modal with:
+	•	credit info (Available, Min Block, Price, Discount),
+	•	a Company select dropdown,
+	•	an input “Purchase Amount (Face Value USD)”,
+	•	buttons “Reserve (72h Hold)” and “Purchase Now”.
+	•	This is intended behaviour: an accountant must be able to select one of his client companies and reserve / purchase a credit on behalf of that selected company.
+	•	Right now, when the accountant clicks “Reserve (72h Hold)” or “Purchase Now”, an error modal appears:
+	•	“Error: Your company is currently under review. Hold creation is restricted until verification is complete.”
+	•	or
+	•	“Error: Your company is currently under review. Payment functions are restricted until verification is complete.”
+even though the accountant actually selected a client company in the dropdown.
+
+Goal:
+Fix the marketplace so that, in the ACCOUNTANT cabinet, holds and payments are created for the selected client company, not for the accountant’s own firm. The “company under review” restriction must be applied to the selected company, not to the accountant record itself.
+
+Important: ignore or revert any previous instructions that made the accountant marketplace “view-only”. The accountant should be able to create holds and payments for their clients, as long as the selected client company is verified.
+
+────────────────────────
+	1.	Backend – act on behalf of selected company
+────────────────────────
+	2.	Locate the API routes used by the marketplace credit modal, for example:
+	•	/api/marketplace/reserve, /api/holds, /api/payments, or similar.
+	•	These endpoints are currently using the “current company” from session/auth (e.g. currentCompanyId tied to the logged-in user).
+	3.	Modify these endpoints to support an “acting-as company” for accountants:
+	•	In the request body, accept a companyId (or targetCompanyId) field which represents the company chosen in the dropdown on the accountant UI.
+	•	Pseudocode for validation:
+	•	Read the current user from session (e.g. getCurrentUser()).
+	•	If user.role === 'ACCOUNTANT':
+	•	Require body.companyId to be present.
+	•	Verify that this company is actually one of the accountant’s clients (use existing relation, e.g. AccountantCompany, CompanyAccountant or similar join table).
+	•	If the accountant is not linked to that company → return 403.
+	•	Use body.companyId as the companyId for:
+	•	the “company under review / verified” status check,
+	•	the hold/payment creation.
+	•	If user.role === 'COMPANY':
+	•	Ignore any external companyId coming from the body.
+	•	Use the company that belongs to this user (currentCompanyId from session).
+	•	If user.role === 'ADMIN':
+	•	Either behave like ACCOUNTANT (allow explicit companyId) or keep existing behaviour, whichever is simpler, but make sure it is consistent.
+	4.	The “under review” check:
+	•	Find the logic that currently throws/returns something like company_under_review or equivalent when a company is not yet verified.
+	•	Right now it probably uses the “default company” of the logged-in user. Change this so that:
+	•	For accountants, the check is performed against the selected client company (body.companyId after validation).
+	•	For company users, the check remains against their own company as before.
+	5.	Hold / payment creation:
+	•	When creating a hold or a payment record, always set the companyId to the validated target company:
+	•	For accountants: companyId = selectedCompanyIdFromBody.
+	•	For company users: companyId = currentCompanyIdFromSession.
+	•	Make sure any ledger / reservation / transaction tables also use this companyId.
+
+────────────────────────
+2. Frontend – pass selected company to backend
+────────────────────────
+	1.	Locate the marketplace credit card modal component used in the ACCOUNTANT cabinet (for example CreditOfferModal, TaxCreditModal, etc.).
+	2.	Ensure the modal state includes:
+	•	selectedCompanyId from the dropdown.
+	•	purchaseAmount (face value in USD).
+	•	Possibly noteId / offerId.
+	3.	When the accountant presses:
+	•	“Reserve (72h Hold)” → call the reserve/hold endpoint and send the selectedCompanyId in the request body.
+	•	“Purchase Now” → call the payment endpoint and send the same selectedCompanyId.
+Example shape of the request body (adapt to the current API):
+{
+offerId: …,
+companyId: selectedCompanyId,
+amount: purchaseAmount
+}
+	4.	UX safeguards:
+	•	Keep the buttons disabled until:
+	•	a company is selected,
+	•	purchase amount is valid and satisfies the Min Block.
+	•	This seems already partially implemented (buttons are greyed out until a company is selected); keep or improve this behaviour.
+
+────────────────────────
+3. Error handling in the accountant flow
+────────────────────────
+	1.	When the backend returns an error indicating the selected company is under review (for example an error code like COMPANY_UNDER_REVIEW):
+	•	Show a modal to the accountant with text such as:
+“Error: The selected company is currently under review. Reservation and payment functions are restricted until verification is complete.”
+	•	Make it clear that this refers to the selected company, not to the accountant firm.
+	2.	For other errors, use the existing generic error handler, but ensure they are mapped correctly based on the error code returned by the updated API.
+	3.	Very important: after this fix, in the ACCOUNTANT cabinet:
+	•	Selecting a verified company + valid amount should successfully create a demo hold/payment (or go through whatever demo mode flow already exists).
+	•	The “Your company is currently under review” modal must not be shown because of the accountant’s own company status; only the selected client company’s status should matter.
+
+────────────────────────
+4. TypeScript and tests
+────────────────────────
+	1.	Update DTOs / types for the API routes to include the new companyId / targetCompanyId parameter.
+	2.	If there is a shared helper for “getCurrentCompanyForUser”, consider refactoring so that:
+	•	It accepts an optional override companyId for accountants.
+	•	It enforces the accountant–company relationship check.
+	3.	Add at least minimal tests (or manual test notes) for:
+	•	Accountant, linked to Company A:
+	•	Company A is verified → reserve and purchase succeed in demo mode.
+	•	Company A is under review → accountant sees a clear error about Company A being under review.
+	•	Accountant, not linked to Company B → API returns 403 and frontend shows a “not allowed” error.
+	•	Company user (non-accountant) → marketplace behaviour unchanged.
+
+Keep everything else in the dashboard intact; only adjust the marketplace flows so that accountants correctly act on behalf of the selected company when creating holds and payments.

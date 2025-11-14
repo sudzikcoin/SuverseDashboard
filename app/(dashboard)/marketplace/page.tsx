@@ -51,6 +51,12 @@ export default function MarketplacePage() {
     }
   }, [session])
 
+  useEffect(() => {
+    if (companyId && session?.user.role === "ACCOUNTANT") {
+      fetchCompanyVerification(companyId)
+    }
+  }, [companyId, session])
+
   const fetchCompanyVerification = async (cId: string) => {
     try {
       const res = await fetch(`/api/companies/${cId}`)
@@ -85,10 +91,13 @@ export default function MarketplacePage() {
     }
 
     // Check verification status before allowing hold creation
-    if (session?.user.role === "COMPANY" && verificationStatus !== "VERIFIED") {
+    if (verificationStatus && verificationStatus !== "VERIFIED") {
+      const companyLabel = session?.user.role === "ACCOUNTANT" 
+        ? "The selected company" 
+        : "Your company"
       const message = verificationStatus === "REJECTED"
-        ? "❌ Your company verification was not approved. Hold creation is not available. Please contact support for assistance."
-        : "❌ Your company is currently under review. Hold creation is restricted until verification is complete."
+        ? `❌ ${companyLabel} verification was not approved. Hold creation is not available. Please contact support for assistance.`
+        : `❌ ${companyLabel} is currently under review. Hold creation is restricted until verification is complete.`
       alert(message)
       return
     }
@@ -131,10 +140,13 @@ export default function MarketplacePage() {
     }
 
     // Check verification status before allowing purchase
-    if (session?.user.role === "COMPANY" && verificationStatus !== "VERIFIED") {
+    if (verificationStatus && verificationStatus !== "VERIFIED") {
+      const companyLabel = session?.user.role === "ACCOUNTANT" 
+        ? "The selected company" 
+        : "Your company"
       const message = verificationStatus === "REJECTED"
-        ? "❌ Your company verification was not approved. Payment functions are not available. Please contact support for assistance."
-        : "❌ Your company is currently under review. Payment functions are restricted until verification is complete."
+        ? `❌ ${companyLabel} verification was not approved. Payment functions are not available. Please contact support for assistance.`
+        : `❌ ${companyLabel} is currently under review. Payment functions are restricted until verification is complete.`
       alert(message)
       return
     }
