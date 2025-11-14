@@ -32,8 +32,11 @@ export async function ensureDemoBrokerUser(
     let broker = user?.broker
 
     if (!broker) {
-      broker = await prisma.broker.create({
-        data: {
+      // Use upsert for atomic broker creation (email is @unique in schema)
+      // Type assertion needed until LSP picks up regenerated Prisma types
+      broker = await prisma.broker.upsert({
+        where: { email } as any,
+        create: {
           name: 'Demo Broker',
           legalName: 'Demo Broker LLC',
           email,
@@ -41,8 +44,11 @@ export async function ensureDemoBrokerUser(
           state: 'Delaware',
           country: 'USA',
         },
+        update: {},
       })
-      actions.push('Created Broker record')
+      
+      const wasCreated = !user || user.brokerId !== broker.id
+      actions.push(wasCreated ? 'Created Broker record' : 'Reused existing Broker record')
     }
 
     if (!user) {
