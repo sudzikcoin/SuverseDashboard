@@ -99,11 +99,11 @@ export default async function USDCPaymentPage() {
           <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-lg">
             <h2 className="text-xl font-semibold text-gray-100 mb-3">How it works</h2>
             <div className="space-y-2 text-gray-200">
-              <p>1. Connect your Web3 wallet using the button above</p>
-              <p>2. Ensure you have sufficient USDC balance on Base network</p>
-              <p>3. Enter the payment amount and click "Open in wallet"</p>
-              <p>4. Confirm the transaction in your wallet</p>
-              <p>5. Our team will verify the on-chain transaction and process your order</p>
+              <p>1. Enter the USDC amount you want to pay and review the total.</p>
+              <p>2. Click "Pay".</p>
+              <p>3. Your connected wallet will open with a prepared USDC transaction on the Base network.</p>
+              <p>4. Review the details and confirm the transaction in your wallet.</p>
+              <p>5. After the transaction is confirmed on-chain, we automatically match the payment to your order and update its status in your dashboard.</p>
             </div>
           </div>
         </div>
