@@ -9,7 +9,7 @@ interface WalletConnectButtonProps {
 }
 
 export default function WalletConnectButton({ className = '' }: WalletConnectButtonProps) {
-  const { projectId } = getWalletEnv();
+  const walletEnv = getWalletEnv();
 
   useEffect(() => {
     const patchButtonLabels = () => {
@@ -32,7 +32,8 @@ export default function WalletConnectButton({ className = '' }: WalletConnectBut
     return () => observer.disconnect();
   }, []);
 
-  if (!projectId) {
+  // Check if projectId is valid (32 hex chars)
+  if (!walletEnv.isValid || !walletEnv.projectId) {
     return (
       <div className={className}>
         <button

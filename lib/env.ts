@@ -39,7 +39,10 @@ const AuthEnvSchema = z.object({
 });
 
 const WalletEnvSchema = z.object({
-  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().default("MISSING"),
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z
+    .string()
+    .length(32, 'WalletConnect projectId must be exactly 32 characters')
+    .regex(/^[a-fA-F0-9]{32}$/, 'WalletConnect projectId must be 32 hex characters'),
 });
 
 const UsdcEnvSchema = z.object({
@@ -189,21 +192,28 @@ export function getAuthEnv() {
 }
 
 export function getWalletEnv() {
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  
+  // Check if projectId exists and has valid format (32 hex chars)
+  if (!projectId || projectId === 'MISSING') {
+    if (typeof window !== 'undefined') {
+      console.warn('[env] WalletConnect projectId not configured');
+    }
+    return { projectId: '', isValid: false };
+  }
+
   const walletParsed = WalletEnvSchema.safeParse({
-    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: projectId,
   });
 
   if (!walletParsed.success) {
-    return { projectId: 'demo', isValid: false };
+    if (typeof window !== 'undefined') {
+      console.warn('[env] WalletConnect projectId validation failed:', walletParsed.error.flatten().fieldErrors);
+    }
+    return { projectId: projectId, isValid: false };
   }
 
-  const pid = walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-  
-  if (!pid || pid === '') {
-    return { projectId: 'demo', isValid: false };
-  }
-
-  return { projectId: pid, isValid: true };
+  return { projectId: walletParsed.data.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID, isValid: true };
 }
 
 export function getUsdcEnv() {

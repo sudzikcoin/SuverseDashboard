@@ -1,0 +1,58 @@
+You are working on my SuVerse Tax Credit Dashboard project (Next.js + App Router + WalletConnect / Reown AppKit).
+
+Goal: replace the temporary "demo" WalletConnect projectId with my REAL one and fully fix WalletConnect config so there are no warnings or format errors anywhere (including the Diagnostics page).
+
+My real WalletConnect / Reown projectId is:
+
+dbf430b2322a29addf78d5b0235a9492
+
+Follow these steps:
+
+1) Secrets: set correct env var
+- Open the project’s Secrets in Replit.
+- Find or create the key:
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+- Set its value EXACTLY to:
+  dbf430b2322a29addf78d5b0235a9492
+- Remove any old placeholder values like "demo" or "test".
+- Save the secret.
+
+2) Ensure the app uses this env var
+- Search the codebase for:
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+  and for "projectId" inside WalletConnect / AppKit config.
+- Make sure the WalletConnect / AppKit config uses:
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!;
+- Do NOT hardcode "demo" or any other string. Only use the env var.
+- If there is any custom “warning” banner in the UI that complains about missing/invalid WalletConnect projectId, update its validation logic so it accepts a 32-character hex string and reads from NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID. It must consider the value
+  dbf430b2322a29addf78d5b0235a9492
+  as valid and therefore NOT show any warning.
+
+3) Diagnostics page integration
+- Open the System Diagnostics / Release Checklist / WalletConnect section in the code.
+- Update its validation to:
+  - Check that the env var exists.
+  - Check that its length === 32.
+  - Optionally, check that all chars are valid hex.
+- After you wire the real projectId, the Diagnostics page must show WalletConnect as passing (green / OK) and no longer show messages like:
+  “WalletConnect projectId has invalid format (expected 32 hex chars)”.
+
+4) Clean up old hacks / placeholders
+- Remove or disable any previous “temporary fix” that:
+  - forced a fake projectId like "demo";
+  - bypassed WalletConnect initialization;
+  - or rendered a persistent orange warning banner at the top of the app.
+- The app should now initialize WalletConnect / AppKit normally with the real projectId and without any custom error overlays.
+
+5) Test
+- Run the app in Replit.
+- Open the Diagnostics / System Health page and verify:
+  - No WalletConnect format warning.
+  - WalletConnect / AppKit passes all checks.
+- Also test the normal user/admin flow:
+  - Open the landing page.
+  - Login as admin.
+  - Confirm there is NO orange WalletConnect banner and NO red WalletConnect error popup.
+
+6) Summary
+- When you are done, summarize EXACTLY which files were changed and what was modified in each file (only WalletConnect / AppKit / Diagnostics related changes and secrets usage).

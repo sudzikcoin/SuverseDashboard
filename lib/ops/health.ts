@@ -128,30 +128,34 @@ export async function checkWallet(): Promise<HealthCheckResult> {
     const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
     const info: any = {
-      hasProjectId: !!projectId && projectId !== 'MISSING',
+      hasProjectId: !!projectId && projectId !== 'MISSING' && projectId !== '',
       projectIdLength: projectId?.length || 0,
       projectIdPrefix: maskKey(projectId, 6),
     };
 
-    if (!walletEnv.isValid || !walletEnv.projectId) {
+    // If no projectId is set at all
+    if (!projectId || projectId === 'MISSING' || projectId === '') {
       return {
         ok: false,
-        error: 'WalletConnect projectId missing or invalid (placeholder detected)',
+        error: 'WalletConnect projectId not configured',
         info,
       };
     }
 
-    if (projectId && projectId.length === 32 && /^[a-fA-F0-9]{32}$/.test(projectId)) {
+    // Check if projectId has valid format (32 hex chars)
+    if (projectId.length === 32 && /^[a-fA-F0-9]{32}$/.test(projectId)) {
       info.validFormat = true;
+      info.isValid = walletEnv.isValid;
       return {
         ok: true,
         info,
       };
     }
 
+    // Invalid format
     return {
       ok: false,
-      error: 'WalletConnect projectId has invalid format (expected 32 hex chars)',
+      error: `WalletConnect projectId has invalid format (expected 32 hex chars, got ${projectId.length} chars)`,
       info,
     };
   } catch (error) {

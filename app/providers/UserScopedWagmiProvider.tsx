@@ -37,20 +37,23 @@ const queryClient = new QueryClient();
 
 export default function UserScopedWagmiProvider({ children }: { children: ReactNode }) {
   const { data } = useSession();
-  const { projectId } = getWalletEnv();
+  const walletEnv = getWalletEnv();
   
   const uid = (data?.user as any)?.id || data?.user?.email || "guest";
   const storageKey = useMemo(() => `suverse:wagmi:${uid}`, [uid]);
 
   const config = useMemo(() => {
+    // Use the validated projectId from env, or throw error if not configured
+    const projectId = walletEnv.projectId || process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+    
     return getDefaultConfig({
       appName: 'SuVerse Tax Credit Dashboard',
-      projectId: projectId || "demo",
+      projectId: projectId,
       chains: [base],
       ssr: true,
       storage: createUserStorage(storageKey),
     });
-  }, [storageKey, projectId]);
+  }, [storageKey, walletEnv.projectId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
