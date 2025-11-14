@@ -66,6 +66,7 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **Admin Restoration**: Script for creating/restoring admin users.
 -   **Access Control**: `lib/access-control.ts` enforces accountant isolation; `lib/broker/currentBroker.ts` enforces broker isolation.
 -   **Input Validation**: Zod schemas in `lib/broker/validation.ts` for broker inventory operations.
+-   **Demo Accounts**: Dev-only broker demo account system via `lib/dev/seed-demo-broker.ts` and `/api/dev/seed-demo-broker` endpoint.
 
 ## External Dependencies
 -   **Stripe**: Payment processing.
@@ -81,3 +82,67 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **tailwindcss-animate**: Tailwind CSS animations.
 -   **@aws-sdk/client-s3**: S3 integration (optional).
 -   **WalletConnect Cloud**: RainbowKit v2 for wallet connections.
+
+## Demo Broker Account Setup
+
+### Overview
+A permanent demo broker account is available for testing the Broker Portal without requiring full registration. This is a development-only feature and should be removed or protected before production deployment.
+
+### Quick Start
+
+**1. Seed the Demo Broker Account:**
+```bash
+curl -X POST http://localhost:5000/api/dev/seed-demo-broker \
+  -H "Content-Type: application/json" \
+  -d '{"seedCreditPools": true}'
+```
+
+**2. Login Credentials:**
+- **Email:** `broker.demo@suverse.io`
+- **Password:** `demoBroker123`
+
+**3. Access Broker Portal:**
+After logging in at `/login`, navigate to `/broker/dashboard` to access the full Broker Portal.
+
+### What Gets Created
+
+The seed endpoint creates:
+- **Broker record** with realistic KYB data (Demo Broker LLC, Delaware, USA)
+- **User record** with BROKER role linked to the broker
+- **3 demo credit pools** (optional, if `seedCreditPools: true`):
+  - Solar Investment Tax Credit (ITC) - $5M @ 92%
+  - Production Tax Credit - Wind (PTC) - $3M @ 89%
+  - Carbon Capture Credit (45Q) - $2M @ 85%
+
+### Optional: Show Demo Credentials on Login Page
+
+To display demo credentials hint on the login page, add to `.env.local`:
+```
+NEXT_PUBLIC_SHOW_DEMO_HINT=true
+```
+
+Then restart the dev server. The login page will show a dashed-border hint with the demo credentials.
+
+### Implementation Details
+
+**Files:**
+- `lib/dev/seed-demo-broker.ts` - Idempotent seed helper function
+- `app/api/dev/seed-demo-broker/route.ts` - Protected dev-only API endpoint
+- `app/login/page.tsx` - Conditional demo credentials hint
+
+**Security:**
+- Endpoint is blocked in production (`NODE_ENV === "production"` check)
+- All dev-only code marked with `// TODO(dev-demo): remove before production`
+- Seed function is idempotent (safe to run multiple times)
+
+**Options:**
+- `POST /api/dev/seed-demo-broker` with body `{"seedCreditPools": true}` to include demo credit pools
+- `GET /api/dev/seed-demo-broker` to view endpoint documentation
+
+### Production Checklist
+
+Before deploying to production:
+1. ❌ Remove or protect `/api/dev/seed-demo-broker` endpoint
+2. ❌ Remove `lib/dev/seed-demo-broker.ts` helper
+3. ❌ Set `NEXT_PUBLIC_SHOW_DEMO_HINT=false` or remove the env var
+4. ❌ Search codebase for `TODO(dev-demo)` comments and address them
