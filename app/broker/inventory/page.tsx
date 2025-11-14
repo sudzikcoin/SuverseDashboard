@@ -1,53 +1,15 @@
 import Link from "next/link"
 import { Plus } from "lucide-react"
+import { prisma } from "@/lib/db"
+import { getCurrentBrokerOrThrow } from "@/lib/broker/currentBroker"
 
-export default function InventoryPage() {
-  const pools = [
-    {
-      id: "POOL-001",
-      program: "C48E 2025",
-      year: 2025,
-      state: "CA",
-      available: 5000000,
-      minBlock: 100000,
-      pricePerDollar: 0.92,
-      discount: 8,
-      status: "ACTIVE",
-    },
-    {
-      id: "POOL-002",
-      program: "ITC Solar",
-      year: 2024,
-      state: "TX",
-      available: 3500000,
-      minBlock: 250000,
-      pricePerDollar: 0.88,
-      discount: 12,
-      status: "ACTIVE",
-    },
-    {
-      id: "POOL-003",
-      program: "PTC Wind",
-      year: 2024,
-      state: "NY",
-      available: 0,
-      minBlock: 500000,
-      pricePerDollar: 0.90,
-      discount: 10,
-      status: "CLOSED",
-    },
-    {
-      id: "POOL-004",
-      program: "45Q Carbon",
-      year: 2025,
-      state: "IL",
-      available: 2000000,
-      minBlock: 150000,
-      pricePerDollar: 0.85,
-      discount: 15,
-      status: "PAUSED",
-    },
-  ]
+export default async function InventoryPage() {
+  const broker = await getCurrentBrokerOrThrow()
+
+  const pools = await prisma.brokerCreditPool.findMany({
+    where: { brokerId: broker.id },
+    orderBy: { createdAt: "desc" },
+  })
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -108,38 +70,41 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {pools.map((pool) => (
-                <tr key={pool.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition">
-                  <td className="py-4 text-sm text-su-text font-medium">{pool.program}</td>
-                  <td className="py-4 text-sm text-su-muted text-center">{pool.year}</td>
-                  <td className="py-4 text-sm text-su-muted text-center">{pool.state}</td>
-                  <td className="py-4 text-sm text-su-text text-right font-medium">
-                    {formatCurrency(pool.available)}
-                  </td>
-                  <td className="py-4 text-sm text-su-muted text-right">
-                    {formatCurrency(pool.minBlock)}
-                  </td>
-                  <td className="py-4 text-sm text-su-text text-right">${pool.pricePerDollar.toFixed(2)}</td>
-                  <td className="py-4 text-sm text-su-emerald text-right font-medium">{pool.discount}%</td>
-                  <td className="py-4">
-                    <div className="flex justify-center">
-                      <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${getStatusColor(pool.status)}`}>
-                        {pool.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-4">
-                    <div className="flex justify-center gap-2">
-                      <Link
-                        href={`/broker/inventory/${pool.id}`}
-                        className="px-3 py-1 text-xs glass hover:text-su-emerald rounded-lg transition"
-                      >
-                        Edit
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {pools.map((pool) => {
+                const discount = (1 - Number(pool.pricePerDollar)) * 100
+                return (
+                  <tr key={pool.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition">
+                    <td className="py-4 text-sm text-su-text font-medium">{pool.programName}</td>
+                    <td className="py-4 text-sm text-su-muted text-center">{pool.creditYear}</td>
+                    <td className="py-4 text-sm text-su-muted text-center">{pool.jurisdiction}</td>
+                    <td className="py-4 text-sm text-su-text text-right font-medium">
+                      {formatCurrency(Number(pool.availableFaceValueUsd))}
+                    </td>
+                    <td className="py-4 text-sm text-su-muted text-right">
+                      {formatCurrency(Number(pool.minBlockUsd))}
+                    </td>
+                    <td className="py-4 text-sm text-su-text text-right">${Number(pool.pricePerDollar).toFixed(2)}</td>
+                    <td className="py-4 text-sm text-su-emerald text-right font-medium">{discount.toFixed(1)}%</td>
+                    <td className="py-4">
+                      <div className="flex justify-center">
+                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold ${getStatusColor(pool.status)}`}>
+                          {pool.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4">
+                      <div className="flex justify-center gap-2">
+                        <Link
+                          href={`/broker/inventory/${pool.id}`}
+                          className="px-3 py-1 text-xs glass hover:text-su-emerald rounded-lg transition"
+                        >
+                          Edit
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
