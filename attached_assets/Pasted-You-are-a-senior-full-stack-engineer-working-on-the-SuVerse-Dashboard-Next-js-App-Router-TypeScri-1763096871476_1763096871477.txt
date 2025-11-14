@@ -1,0 +1,121 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js App Router + TypeScript + Tailwind + Prisma).
+
+Bug description
+
+In the Accountant dashboard:
+	1.	On the Clients list page, the row for a company shows correct aggregates, e.g.:
+	•	Purchases: 3
+	•	Total Value: $105 000
+	2.	When I click that company and open the company detail page:
+	•	On the Purchases tab, the cards show:
+	•	Total Purchases: 0
+	•	Total Value: $0.00
+	•	Completed: 0
+	•	And the text: “No purchase orders yet”.
+
+So the company-level Purchases tab is not using the same order data as the Clients list.
+
+Goal
+
+Make the Purchases tab inside the company detail page use the same order source and filters as the Clients list, so the numbers and list of orders match.
+
+────────────────────────
+	1.	Reuse the same query / aggregation logic
+────────────────────────
+	2.	Find where the Clients list gets its data in the accountant cabinet, e.g.:
+	•	An API route like GET /api/accountant/clients
+	•	or a server component loader such as getAccountantClients().
+	3.	Identify how Purchases and Total Value are currently computed.
+It should be based on an Order (or similar) table in Prisma, something like:
+const completedStatuses = ['COMPLETED', 'DEMO_COMPLETED'];
+
+const orders = await prisma.order.findMany({
+  where: {
+    companyId: company.id,
+    status: { in: completedStatuses },
+  },
+});
+
+const purchasesCount = orders.length;
+const totalValue = orders.reduce(
+  (sum, o) => sum + (o.faceValueUsd ?? 0),
+  0,
+);
+4.	Extract this logic into a shared helper, for example in lib/purchases.ts:
+export const COMPLETED_ORDER_STATUSES = ['COMPLETED', 'DEMO_COMPLETED'] as const;
+
+export async function getCompanyPurchaseStats(companyId: string) {
+  const orders = await prisma.order.findMany({
+    where: {
+      companyId,
+      status: { in: COMPLETED_ORDER_STATUSES },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const totalCount = orders.length;
+  const totalValue = orders.reduce(
+    (sum, o) => sum + (o.faceValueUsd ?? 0),
+    0,
+  );
+
+  return { orders, totalCount, totalValue };
+}
+5.	Refactor the Clients list data loader to use this helper so that the logic is centralized.
+
+────────────────────────
+2. Wire the company Purchases tab to the same helper
+────────────────────────
+	1.	Locate the React page / server component for the company detail in the accountant cabinet, for example:
+	•	app/(accountant)/clients/[companyId]/page.tsx
+	•	or a nested route for the Purchases tab.
+	2.	In the code that renders the Purchases tab:
+	•	Call getCompanyPurchaseStats(companyId) on the server side (or via an API route that uses this helper).
+Use the returned values:
+const { orders, totalCount, totalValue } = await getCompanyPurchaseStats(companyId);
+Bind them to the UI:
+	•	Total Purchases → totalCount
+	•	Total Value → formatted totalValue
+	•	Completed → totalCount (for now, we treat all included statuses as completed)
+
+	3.	Replace the hard-coded “No purchase orders yet” condition with:
+	•	If orders.length === 0 → show the empty state.
+	•	Otherwise → render a list/table of orders for this company.
+Example:
+{orders.length === 0 ? (
+  <p className="mt-4 text-sm text-slate-400">No purchase orders yet</p>
+) : (
+  <div className="mt-4 space-y-2">
+    {orders.map(order => (
+      <div key={order.id} className="rounded-lg bg-slate-900/60 px-4 py-3">
+        <div className="flex justify-between text-sm">
+          <span>Order #{order.id.slice(-6)}</span>
+          <span className="font-medium">
+            ${order.faceValueUsd?.toLocaleString() ?? '0'}
+          </span>
+        </div>
+        <div className="mt-1 text-xs text-slate-400">
+          {order.status} • {order.createdAt.toLocaleString()}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+4.	Ensure that the filters in the company Purchases tab use the same status set as the Clients list:
+	•	status in ['COMPLETED', 'DEMO_COMPLETED']
+	•	If we also count reserved orders on the Clients list, add the same statuses here.
+
+────────────────────────
+3. Consistency checks
+────────────────────────
+
+After changes:
+	1.	Create a few demo orders for a company via the marketplace.
+	2.	On the Clients list:
+	•	Purchases and Total Value should reflect all those orders.
+	3.	Click the company → open Purchases tab:
+	•	Total Purchases and Total Value must match the values from the Clients list.
+	•	The orders list should show every order used in the aggregate.
+	4.	If there are truly no orders for a company, both the Clients list and the company Purchases tab must show zeros and the “No purchase orders yet” message.
+
+Do not modify any other behaviour in the dashboard. Only ensure the company-level Purchases tab and the Clients list use the same underlying order data and aggregation logic
