@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/db"
 import { COMPLETED_PURCHASE_STATUSES } from "@/lib/purchase-statuses"
+import { Decimal } from "@prisma/client/runtime/library"
 
 export interface PurchaseOrder {
   id: string
-  amountUSD: number | null
-  totalUSD: number | null
+  amountUSD: Decimal | null
+  totalUSD: Decimal | null
   status: string
-  pricePerDollar: number | null
+  pricePerDollar: Decimal | null
   createdAt: Date
   inventory: {
     id: string

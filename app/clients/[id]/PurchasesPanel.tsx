@@ -7,7 +7,7 @@ interface PurchasesPanelProps {
 }
 
 export default function PurchasesPanel({ company }: PurchasesPanelProps) {
-  const purchases = company.purchases || []
+  const purchases = company.purchaseOrders || []
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -18,11 +18,14 @@ export default function PurchasesPanel({ company }: PurchasesPanelProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "COMPLETED":
+      case "PAID":
+      case "PAID_TEST":
         return "bg-emerald-500/20 text-emerald-400"
       case "PENDING_PAYMENT":
+      case "PROCESSING":
         return "bg-yellow-500/20 text-yellow-400"
-      case "CANCELLED":
+      case "CANCELED":
+      case "FAILED":
         return "bg-red-500/20 text-red-400"
       default:
         return "bg-gray-500/20 text-gray-400"
@@ -42,14 +45,17 @@ export default function PurchasesPanel({ company }: PurchasesPanelProps) {
             <p className="text-gray-400 text-sm">Total Value</p>
             <p className="text-2xl font-bold text-gray-100 mt-1">
               {formatCurrency(
-                purchases.reduce((sum: number, p: any) => sum + parseFloat(p.totalUSD), 0)
+                purchases.reduce((sum: number, p: any) => {
+                  const value = p.amountUSD ? parseFloat(p.amountUSD.toString()) : (p.totalUSD ? parseFloat(p.totalUSD.toString()) : 0)
+                  return sum + (isNaN(value) ? 0 : value)
+                }, 0)
               )}
             </p>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <p className="text-gray-400 text-sm">Completed</p>
             <p className="text-2xl font-bold text-gray-100 mt-1">
-              {purchases.filter((p: any) => p.status === "COMPLETED").length}
+              {purchases.filter((p: any) => p.status === "PAID" || p.status === "PAID_TEST").length}
             </p>
           </div>
         </div>
@@ -84,19 +90,19 @@ export default function PurchasesPanel({ company }: PurchasesPanelProps) {
                 <div>
                   <p className="text-gray-400">Face Value</p>
                   <p className="text-gray-100 font-semibold mt-1">
-                    {formatCurrency(parseFloat(purchase.amountUSD))}
+                    {formatCurrency(purchase.amountUSD ? parseFloat(purchase.amountUSD.toString()) : 0)}
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400">Price/Dollar</p>
                   <p className="text-gray-100 font-semibold mt-1">
-                    ${parseFloat(purchase.pricePerDollar).toFixed(2)}
+                    ${purchase.pricePerDollar ? parseFloat(purchase.pricePerDollar.toString()).toFixed(2) : "0.00"}
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400">Total Cost</p>
                   <p className="text-gray-100 font-semibold mt-1">
-                    {formatCurrency(parseFloat(purchase.totalUSD))}
+                    {formatCurrency(purchase.totalUSD ? parseFloat(purchase.totalUSD.toString()) : 0)}
                   </p>
                 </div>
                 <div>

@@ -42,9 +42,21 @@ export default async function CompanyDetailsPage({ params }: { params: { id: str
       documents: {
         orderBy: { createdAt: "desc" },
       },
-      purchases: {
+      purchaseOrders: {
+        where: {
+          status: {
+            in: ["PAID", "PAID_TEST"],
+          },
+        },
         include: {
-          inventory: true,
+          inventory: {
+            select: {
+              id: true,
+              creditType: true,
+              taxYear: true,
+              brokerName: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
       },
