@@ -14,6 +14,10 @@ export default async function BrokerLayout({
     redirect("/login")
   }
 
+  if (session.user.role !== "BROKER") {
+    redirect("/dashboard")
+  }
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-su-base">
       <BrokerSidebar />
