@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 interface CreditPoolFormProps {
@@ -11,6 +11,8 @@ interface CreditPoolFormProps {
 export default function CreditPoolForm({ mode, poolId }: CreditPoolFormProps) {
   const router = useRouter()
   const [showToast, setShowToast] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     programName: "",
@@ -34,18 +36,104 @@ export default function CreditPoolForm({ mode, poolId }: CreditPoolFormProps) {
     status: "DRAFT",
   })
 
+  // Fetch pool data for edit mode
+  useEffect(() => {
+    if (mode === "edit" && poolId) {
+      setLoading(true)
+      fetch(`/api/broker/inventory/${poolId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch pool")
+          return res.json()
+        })
+        .then((pool) => {
+          setFormData({
+            programName: pool.programName || "",
+            creditYear: pool.creditYear?.toString() || "2025",
+            creditType: pool.creditType || "ITC",
+            state: pool.jurisdiction || "CA",
+            programCode: pool.programCode || "",
+            registryId: pool.registryId || "",
+            totalFaceValue: pool.totalFaceValueUsd?.toString() || "",
+            faceValueAvailable: pool.availableFaceValueUsd?.toString() || "",
+            minBlock: pool.minBlockUsd?.toString() || "",
+            pricePerDollar: pool.pricePerDollar?.toString() || "",
+            maxOrderSize: "",
+            eligibleIndustries: [],
+            specialConditions: "",
+            requiresPreApproval: false,
+            offerStartDate: pool.offerStartDate
+              ? new Date(pool.offerStartDate).toISOString().split("T")[0]
+              : "",
+            offerExpiryDate: pool.offerExpiryDate
+              ? new Date(pool.offerExpiryDate).toISOString().split("T")[0]
+              : "",
+            settlementTime: pool.expectedSettlementDays?.toString() || "7",
+            visibility: pool.visibility || "PUBLIC",
+            status: pool.status || "DRAFT",
+          })
+          setLoading(false)
+        })
+        .catch((err) => {
+          setError(err.message)
+          setLoading(false)
+        })
+    }
+  }, [mode, poolId])
+
   const calculateDiscount = () => {
     const price = parseFloat(formData.pricePerDollar)
     if (isNaN(price) || price <= 0) return "0.00"
     return ((1 - price) * 100).toFixed(2)
   }
 
-  const handleSubmit = (action: "draft" | "publish") => {
-    setShowToast(true)
-    setTimeout(() => {
-      setShowToast(false)
-      router.push("/broker/inventory")
-    }, 2000)
+  const handleSubmit = async (action: "draft" | "publish") => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      // TODO: Add input validation using Zod
+      const payload = {
+        programName: formData.programName,
+        creditYear: formData.creditYear,
+        creditType: formData.creditType,
+        jurisdiction: formData.state,
+        programCode: formData.programCode,
+        registryId: formData.registryId,
+        totalFaceValueUsd: parseFloat(formData.totalFaceValue),
+        availableFaceValueUsd: parseFloat(formData.faceValueAvailable),
+        minBlockUsd: parseFloat(formData.minBlock),
+        pricePerDollar: parseFloat(formData.pricePerDollar),
+        offerStartDate: formData.offerStartDate || null,
+        offerExpiryDate: formData.offerExpiryDate || null,
+        expectedSettlementDays: parseInt(formData.settlementTime),
+        visibility: formData.visibility,
+        status: action === "draft" ? "DRAFT" : "ACTIVE",
+      }
+
+      const url =
+        mode === "create"
+          ? "/api/broker/inventory"
+          : `/api/broker/inventory/${poolId}`
+      const method = mode === "create" ? "POST" : "PATCH"
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save pool")
+      }
+
+      setShowToast(true)
+      setTimeout(() => {
+        router.push("/broker/inventory")
+      }, 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred")
+      setLoading(false)
+    }
   }
 
   const industries = [
@@ -66,13 +154,27 @@ export default function CreditPoolForm({ mode, poolId }: CreditPoolFormProps) {
     }))
   }
 
+  if (loading && mode === "edit" && !formData.programName) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-su-muted">Loading pool data...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {showToast && (
         <div className="fixed top-4 right-4 z-50 glass border-emerald-500/30 rounded-xl p-4 animate-in slide-in-from-top">
           <p className="text-emerald-400 font-medium">
-            ✓ Pool {mode === "create" ? "created" : "updated"} successfully (mock)
+            ✓ Pool {mode === "create" ? "created" : "updated"} successfully
           </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="glass border-red-500/30 rounded-xl p-4">
+          <p className="text-red-400 font-medium">Error: {error}</p>
         </div>
       )}
 
@@ -380,21 +482,24 @@ export default function CreditPoolForm({ mode, poolId }: CreditPoolFormProps) {
       <div className="flex flex-col md:flex-row gap-4 justify-end">
         <button
           onClick={() => router.push("/broker/inventory")}
-          className="px-6 py-3 glass hover:bg-white/10 text-su-text rounded-xl transition font-medium"
+          disabled={loading}
+          className="px-6 py-3 glass hover:bg-white/10 text-su-text rounded-xl transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
         <button
           onClick={() => handleSubmit("draft")}
-          className="px-6 py-3 glass hover:bg-white/10 text-su-text rounded-xl transition font-medium"
+          disabled={loading}
+          className="px-6 py-3 glass hover:bg-white/10 text-su-text rounded-xl transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Save as Draft
+          {loading ? "Saving..." : "Save as Draft"}
         </button>
         <button
           onClick={() => handleSubmit("publish")}
-          className="px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-white rounded-xl transition font-medium"
+          disabled={loading}
+          className="px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-white rounded-xl transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Publish
+          {loading ? "Publishing..." : "Publish"}
         </button>
       </div>
     </div>
