@@ -1,0 +1,62 @@
+You are a senior Next.js 14 + TypeScript + Tailwind frontend engineer working on the SuVerse Tax Credit Dashboard project in this Replit.
+
+Goal:
+Re-enable the "Connect Wallet" button on the admin dashboard now that a real WalletConnect projectId is configured. The button currently shows "Connect Wallet (disabled)" and cannot be clicked. I want it to be an active button that opens the existing wallet connect flow.
+
+Very important:
+- Do NOT touch any database, auth, or diagnostics logic.
+- Do NOT change any secrets or env variables.
+- Only update the frontend React/Next.js code that renders this button.
+- Keep all existing styling (colors, rounded borders, etc.) as close as possible.
+
+Steps:
+
+1. Locate the component that renders the admin welcome section.
+   - It contains the text: "Welcome, Admin User".
+   - It also renders a button with label "Connect Wallet (disabled)".
+   - This is likely in a file such as:
+     - `app/admin/page.tsx`
+     - `app/(dashboard)/admin/page.tsx`
+     - or a component like `AdminHeader.tsx`, `AdminHero.tsx`, etc.
+   - Use project search to find the string `Connect Wallet (disabled)`.
+
+2. Inspect the JSX for that button.
+   - It will currently look roughly like:
+     - `disabled`
+     - and the button text string contains `(disabled)`.
+
+3. Update the button so it is enabled and clickable:
+   - Remove the `disabled` attribute (or any `disabled={true}` / `aria-disabled` logic) so the button is no longer forced into a disabled state.
+   - Change the label from `"Connect Wallet (disabled)"` to just `"Connect Wallet"`.
+   - If there is already an `onClick` handler that opens a wallet modal (for example using `useAppKit` or `useAppKitModal` from `@reown/appkit/react` or any RainbowKit/Wagmi hook), keep that handler exactly as is.
+   - If there is no `onClick` yet, implement one that calls the existing wallet connect hook:
+     - At the top of the file (in a client component with `"use client"`), import:
+       - `import { useAppKit } from "@reown/appkit/react";` (or the existing wallet hook used in this project).
+     - Inside the component, initialize:
+       - `const { open } = useAppKit();`
+     - Add:
+       - `const handleConnectWallet = () => { open(); };`
+     - Attach it to the button:
+       - `onClick={handleConnectWallet}`.
+
+4. Preserve styling:
+   - Keep the same Tailwind classes that style the button (outline, border, font, colors).
+   - If the classes include any "disabled" variants like `opacity-50 cursor-not-allowed`, remove or conditionally skip them so the button looks active.
+   - The final button should visually appear as a normal primary action button.
+
+5. Do NOT add any new validation checking the diagnostics result.
+   - Assume WalletConnect is correctly configured.
+   - The button should always be clickable for the admin user once the page is loaded.
+
+6. After you update the code:
+   - Run the app in Replit.
+   - Navigate to the admin dashboard (`/admin` or the existing admin route).
+   - Confirm:
+     - The header still says "Welcome, Admin User".
+     - The button text is now "Connect Wallet" (without "(disabled)").
+     - The button is clickable and triggers the wallet connect modal, with no red runtime errors in the browser.
+
+7. When finished, summarize:
+   - Which file(s) you changed (with paths).
+   - The exact JSX for the final "Connect Wallet" button.
+   - Any imports that were added or cleaned up.
