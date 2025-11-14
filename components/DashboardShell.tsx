@@ -4,8 +4,8 @@ import Sidebar from "@/components/Sidebar"
 
 interface DashboardShellProps {
   children: React.ReactNode
-  requireRole?: "ADMIN" | "ACCOUNTANT" | "COMPANY"
-  requireRoles?: ("ADMIN" | "ACCOUNTANT" | "COMPANY")[]
+  requireRole?: "ADMIN" | "ACCOUNTANT" | "COMPANY" | "BROKER"
+  requireRoles?: ("ADMIN" | "ACCOUNTANT" | "COMPANY" | "BROKER")[]
 }
 
 export default async function DashboardShell({

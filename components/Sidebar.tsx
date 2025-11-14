@@ -37,11 +37,24 @@ export default function Sidebar({ role }: SidebarProps) {
     { href: "/admin/audit", label: "Audit Log" },
   ]
 
+  const brokerLinks = [
+    { href: "/broker/dashboard", label: "Dashboard" },
+    { href: "/broker/inventory", label: "Inventory" },
+    { href: "/broker/orders", label: "Orders" },
+    { href: "/broker/payouts", label: "Payouts" },
+    { href: "/broker/compliance", label: "Compliance" },
+    { href: "/broker/integrations", label: "Integrations" },
+    { href: "/broker/settings", label: "Settings" },
+    { href: "/broker/support", label: "Support" },
+  ]
+
   const links =
     role === "ADMIN"
       ? adminLinks
       : role === "ACCOUNTANT"
       ? accountantLinks
+      : role === "BROKER"
+      ? brokerLinks
       : companyLinks
 
   useEffect(() => {
