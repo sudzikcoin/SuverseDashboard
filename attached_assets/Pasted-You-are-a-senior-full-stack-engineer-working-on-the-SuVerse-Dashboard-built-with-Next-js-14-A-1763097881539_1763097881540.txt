@@ -1,0 +1,302 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard, built with:
+	•	Next.js 14 – App Router
+	•	TypeScript
+	•	Tailwind CSS
+	•	Prisma on the backend (but for this task you can mock data where necessary)
+
+We already have role-based “cabinets” for Admin, Accountant, and Company.
+Now we want to add a new cabinet: the Broker Portal (Broker Dashboard).
+
+Your task:
+Create a new Broker Portal section with its own layout, sidebar navigation, and placeholder pages for all key broker workflows.
+Focus on front-end structure and UX; it’s OK to use mocked data and TODO comments for real API integration.
+
+────────────────────────────────
+0) General requirements
+────────────────────────────────
+	1.	Use TypeScript and functional React components everywhere.
+	2.	Use Tailwind CSS, following the existing design system:
+	•	Dark background like the accountant dashboard
+	•	Same typography and card styles (rounded corners, subtle borders, gradients if available).
+	3.	Use the App Router under a dedicated segment, for example:
+	•	app/(broker)/layout.tsx
+	•	app/(broker)/dashboard/page.tsx
+	•	etc.
+If there is already a routing convention for different roles (e.g. (accountant), (company)), follow that pattern.
+	4.	If there is an existing shared dashboard shell (for example DashboardShell, MainLayout, SidebarLayout), reuse it.
+If not, create a clean broker-specific layout with:
+	•	left sidebar
+	•	top header with broker name + profile menu.
+	5.	For now, you can mock all data in the UI using hard-coded arrays/objects.
+Add clear // TODO: wire to real API comments where backend integration should go later.
+	6.	Do not break existing dashboards; everything must be additive.
+
+────────────────────────────────
+	1.	Broker role & access (minimal wiring)
+────────────────────────────────
+
+	1.	If there is a UserRole or similar enum/type (e.g. 'ADMIN' | 'ACCOUNTANT' | 'COMPANY'), extend it with:
+export type UserRole = 'ADMIN' | 'ACCOUNTANT' | 'COMPANY' | 'BROKER';
+2.	If there is a helper like getCurrentUser() or getCurrentRole(), make sure it can return 'BROKER'.
+	3.	For this task you can temporarily assume a broker user by:
+	•	hard-coding currentUser.role = 'BROKER' inside the broker layout, or
+	•	using a simple guard component that redirects non-broker roles away.
+Add a clear // TODO: replace with real auth/role check comment.
+
+────────────────────────────────
+2) Broker layout & navigation
+────────────────────────────────
+
+Create a dedicated broker layout at app/(broker)/layout.tsx (or similar) with:
+	•	Left sidebar containing navigation items:
+	1.	Dashboard
+	2.	Inventory
+	3.	Orders
+	4.	Payouts
+	5.	Documents & Compliance
+	6.	API & Integrations
+	7.	Settings
+	8.	Support
+	•	Top header showing:
+	•	“SuVerse” logo/wordmark on the left,
+	•	current broker name (mocked, e.g. “SuVerse Capital”) in the center/left,
+	•	on the right: notification bell icon + profile dropdown (mock UI only).
+
+UI details:
+	•	Sidebar uses a vertical nav list, one item per page.
+	•	The active page should be visually highlighted (e.g. different background, left border, or accent color).
+	•	Use icons if you already have an icon set; otherwise use simple text.
+
+Create a small BrokerNavItem component to keep sidebar clean.
+
+────────────────────────────────
+3) Pages to implement (structure + mock content)
+────────────────────────────────
+
+Create the following pages under app/(broker):
+	1.	Dashboard
+	•	Route: app/(broker)/dashboard/page.tsx
+	•	Sidebar label: Dashboard
+	•	Content blocks:
+	•	“At a glance” stats (mocked):
+	•	Active Pools
+	•	Available Face Value
+	•	Reserved (72h)
+	•	Completed Sales (YTD)
+	•	“Recent Orders” (table with ~3 mock rows)
+	•	Date, Company, Face Value, Status
+	•	“Payout Summary”
+	•	Pending Payout
+	•	Next Payout Date
+	•	Last Payout
+	2.	Inventory
+	•	Route: app/(broker)/inventory/page.tsx
+	•	Sidebar label: Inventory
+	•	Content:
+	•	Page header with title “Inventory” and description “Manage your credit pools”.
+	•	Primary button in header: “Add Credit Pool”.
+	•	Navigates to /broker/inventory/new (or the appropriate path under (broker)).
+	•	Table with mock rows:
+	•	Program (e.g. “C48E 2025”)
+	•	Year
+	•	State
+	•	Available
+	•	Min Block
+	•	Price per $1
+	•	Discount
+	•	Status (Draft / Active / Paused / Closed)
+	•	“View” / “Edit” action button.
+	3.	Add / Edit Credit Pool
+	•	Route (new): app/(broker)/inventory/new/page.tsx
+	•	Route (edit placeholder): app/(broker)/inventory/[poolId]/page.tsx
+	•	Both pages can reuse the same form component BrokerCreditPoolForm with props like mode: 'create' | 'edit'.
+	•	Form sections (use cards with titles):
+Program Details
+	•	Program Name (input)
+	•	Credit Year (select with mock options)
+	•	Credit Type (select)
+	•	Jurisdiction / State (select)
+	•	Program Code / Reference (input)
+	•	Registry / Tracking ID (optional input)
+Financial Terms
+	•	Total Face Value (USD, number input)
+	•	Face Value Available (USD, number)
+	•	Minimum Block (USD, number)
+	•	Price per $1 (number, step 0.01)
+	•	Read-only Effective Discount % (compute from price)
+	•	Maximum Order Size (optional number)
+Eligibility & Restrictions
+	•	Eligible Industries (multi-select; for now use checkboxes)
+	•	Special Conditions (textarea)
+	•	Requires Pre-Approval (checkbox)
+Timing
+	•	Offer Start Date (date input)
+	•	Offer Expiry Date (date input)
+	•	Expected Settlement Time (select: 3 days / 7 days / 14 days)
+Visibility & Status
+	•	Visibility (radio: Public / Private)
+	•	Status (select: Draft / Active / Paused / Closed)
+Buttons
+	•	“Save as Draft”
+	•	“Publish”
+	•	“Cancel”
+	•	For now, just keep form state in React useState, show a toast/banner “Saved (mock)” on submit, and add // TODO: connect to backend API comments.
+	4.	Orders
+	•	Route: app/(broker)/orders/page.tsx
+	•	Table with mock data:
+	•	Order ID
+	•	Date
+	•	Company
+	•	Program
+	•	Face Value
+	•	Price per $1
+	•	Status (Reserved / Payment Pending / Paid / Settled / Cancelled)
+	•	“View” button linking to /broker/orders/[orderId].
+	•	Add filters at the top (UI only for now):
+	•	Status dropdown
+	•	Date range (From / To)
+	5.	Order Detail
+	•	Route: app/(broker)/orders/[orderId]/page.tsx
+	•	Split page into several cards:
+Order Summary
+	•	Order ID
+	•	Date
+	•	Program / Pool
+	•	Face Value
+	•	Price per $1
+	•	Discount %
+	•	Total Purchase Price
+Buyer Information
+	•	Company Name
+	•	EIN
+	•	State
+	•	Contact Email
+	•	Accountant Name
+Status & Timeline
+	•	Reservation created
+	•	Payment confirmed
+	•	Settlement date
+	•	Current status badge
+Payment & Settlement
+	•	Payment method
+	•	On-chain Tx hash (mock)
+	•	Platform fee
+	•	Net amount to broker
+	•	Payout batch ID (mock link to Payouts)
+Documents
+	•	List of mock docs with “Download” buttons (no actual download yet).
+	6.	Payouts
+	•	Route: app/(broker)/payouts/page.tsx
+	•	Content:
+Payout Summary
+	•	Pending Payout
+	•	Next Scheduled Payout
+	•	Last Payout (date + amount)
+Upcoming / Pending Payouts (table)
+	•	Payout Batch ID
+	•	Period
+	•	Included Orders (count)
+	•	Amount
+	•	Status
+Payout History (table)
+	•	Payout Batch ID
+	•	Date Sent
+	•	Amount
+	•	Method (USDC / Wire)
+	•	Reference / Tx hash
+	7.	Documents & Compliance
+	•	Route: app/(broker)/compliance/page.tsx (or /documents)
+	•	Tabs or sections:
+Broker Profile & KYB
+	•	Legal Entity Name
+	•	EIN / Tax ID
+	•	Entity Type
+	•	Registered Address
+	•	Contact Person (fields; read-only or editable)
+Verification Status
+	•	Status badge: Pending / Under Review / Approved / Rejected (mock)
+	•	Notes placeholder.
+Program Documents
+	•	Table of credit pools with a “Manage Documents” action.
+	•	For each pool, a simple list of mock file names with “Upload” / “Replace” buttons (no real upload yet, just UI).
+	8.	API & Integrations
+	•	Route: app/(broker)/integrations/page.tsx
+	•	Two sections:
+API Keys
+	•	Mock list of keys (name, created at, last used, status).
+	•	Buttons: “Create API Key”, “Revoke” (UI only).
+Webhooks
+	•	Simple form with:
+	•	Endpoint URL
+	•	Events multi-select (order.created, order.paid, order.settled)
+	•	Secret token (readonly placeholder)
+	•	Save button.
+	9.	Settings
+	•	Route: app/(broker)/settings/page.tsx
+	•	Sections:
+Profile
+	•	Name
+	•	Email
+	•	Timezone
+Payout Settings (short version)
+	•	Preferred Payout Method (select: USDC / Wire / ACH)
+	•	For USDC: wallet address input
+	•	For Wire: a couple of mock bank fields
+	•	Save button.
+Notifications
+	•	Checkboxes:
+	•	New order notifications
+	•	Payment received
+	•	Payout sent
+	•	Compliance updates
+	10.	Support
+	•	Route: app/(broker)/support/page.tsx
+	•	Sections:
+Create Ticket
+	•	Category (select)
+	•	Subject
+	•	Description (textarea)
+	•	Attachments (mock file input)
+	•	Submit button → show toast “Ticket created (mock)”.
+My Tickets
+	•	Table with mock tickets:
+	•	Ticket ID
+	•	Subject
+	•	Status
+	•	Last updated
+	•	Priority
+
+────────────────────────────────
+4) UX & styling details
+────────────────────────────────
+	1.	Cards:
+	•	Use the same card styling as in accountant/company dashboard: dark background, subtle border, rounded corners, padding.
+	2.	Typography:
+	•	Page titles like text-2xl font-semibold tracking-tight.
+	•	Section subtitles in muted color (text-slate-400 or similar).
+	3.	Responsive:
+	•	Ensure layouts work on mobile:
+	•	Sidebar collapses into a top hamburger menu OR use a simple top navigation for small screens.
+	•	Tables should scroll horizontally on very small screens.
+	4.	Empty states:
+	•	For Inventory, Orders, Payouts, and Tickets, if arrays are empty, show a friendly message like:
+	•	“No orders yet. Orders will appear here once companies start buying credits.”
+
+────────────────────────────────
+5) Code organization
+────────────────────────────────
+	1.	Create reusable components where appropriate:
+	•	BrokerLayout (used by (broker)/layout.tsx)
+	•	BrokerSidebar
+	•	BrokerHeader
+	•	StatCard for summary metrics
+	•	DataTable wrapper if helpful.
+	2.	Place shared broker components under something like app/(broker)/components or components/broker.
+	3.	Add clear // TODO markers where backend and real data will need to be wired later.
+
+────────────────────────────────
+
+When you finish, the Broker Portal should be fully navigable:
+	•	Visiting the broker root route (e.g. /broker or /broker/dashboard) shows the new dashboard with sidebar.
+	•	All menu items open their respective pages with the described placeholder content.
+	•	No runtime TypeScript errors, and styling is consistent with the rest of SuVerse Dashboard
