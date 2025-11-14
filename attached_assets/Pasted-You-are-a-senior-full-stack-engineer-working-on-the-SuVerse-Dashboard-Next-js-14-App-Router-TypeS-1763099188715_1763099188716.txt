@@ -1,0 +1,226 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js 14 App Router + TypeScript + Tailwind + Prisma).
+
+The Broker Portal UI has been created under the (broker) segment, but all data is still mocked.
+Your task now: introduce real database models for brokers and their credit pools, basic CRUD API for inventory, and wire the Broker “Inventory” pages to Prisma instead of mock data.
+
+Focus only on Broker + CreditPool + Inventory list / new / edit.
+Do not change the accountant/company/admin dashboards in this step.
+
+────────────────────────
+	1.	Prisma models
+────────────────────────
+
+Update schema.prisma to add models for brokers and their credit pools.
+	1.	If there is already a User model, add a relation to broker:
+model Broker {
+  id           String          @id @default(cuid())
+  name         String
+  legalName    String?
+  email        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Optional basic KYB fields
+  taxId        String?
+  state        String?
+  country      String?
+
+  users        User[]          // broker team members
+  creditPools  BrokerCreditPool[]
+}
+
+model BrokerCreditPool {
+  id                 String   @id @default(cuid())
+  brokerId           String
+  broker             Broker   @relation(fields: [brokerId], references: [id])
+
+  programName        String
+  creditYear         Int
+  creditType         String
+  jurisdiction       String   // state / region
+  programCode        String?
+  registryId         String?
+
+  totalFaceValueUsd  Decimal  @db.Decimal(18,2)
+  availableFaceValueUsd Decimal @db.Decimal(18,2)
+  minBlockUsd        Decimal  @db.Decimal(18,2)
+  pricePerDollar     Decimal  @db.Decimal(6,4) // e.g. 0.8900
+
+  visibility         CreditPoolVisibility @default(PUBLIC)
+  status             CreditPoolStatus     @default(DRAFT)
+
+  offerStartDate     DateTime?
+  offerExpiryDate    DateTime?
+  expectedSettlementDays Int? // 3 / 7 / 14 etc.
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+enum CreditPoolStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum CreditPoolVisibility {
+  PUBLIC
+  PRIVATE
+}
+2.	If User does not yet have a broker relation, add:
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(COMPANY)
+
+  brokerId  String?
+  broker    Broker?  @relation(fields: [brokerId], references: [id])
+
+  // ...other fields
+}
+3.	Run the migration (in your environment) after updating the schema.
+Add a // TODO: run prisma migrate comment where appropriate.
+
+────────────────────────
+2) Minimal broker identity helper
+────────────────────────
+
+Create a helper to get the current broker for the logged-in broker user, e.g. in lib/broker/currentBroker.ts:
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth'; // or existing helper
+
+export async function getCurrentBrokerOrThrow() {
+  const user = await getCurrentUser(); // must return the logged-in user
+
+  if (!user || user.role !== 'BROKER' || !user.brokerId) {
+    throw new Error('Broker access only');
+  }
+
+  const broker = await prisma.broker.findUnique({
+    where: { id: user.brokerId },
+  });
+
+  if (!broker) {
+    throw new Error('Broker not found');
+  }
+
+  return broker;
+}
+Add // TODO: replace getCurrentUser import with the real auth helper used in the project if the exact path differs.
+
+────────────────────────
+3) Broker inventory API
+────────────────────────
+
+Create an API route for broker inventory, for example under:
+	•	app/api/broker/inventory/route.ts (list + create)
+	•	app/api/broker/inventory/[poolId]/route.ts (get + update)
+
+Implement as follows:
+
+GET /api/broker/inventory
+	•	Use getCurrentBrokerOrThrow() to get broker.
+	•	Return all pools for that broker, ordered by createdAt desc.
+
+POST /api/broker/inventory
+	•	Use getCurrentBrokerOrThrow().
+	•	Parse JSON body with the fields you need from the BrokerCreditPool model.
+	•	Create a new pool with brokerId = broker.id.
+	•	Default status = 'DRAFT' if not provided.
+	•	Return the created record.
+
+GET /api/broker/inventory/[poolId]
+	•	Use getCurrentBrokerOrThrow().
+	•	Ensure the pool belongs to this broker (where: { id: poolId, brokerId: broker.id }).
+	•	Return the pool.
+
+PATCH /api/broker/inventory/[poolId]
+	•	Same broker check as above.
+	•	Update mutable fields (availableFaceValueUsd, minBlockUsd, pricePerDollar, status, etc.).
+	•	Return the updated pool.
+
+Use NextResponse.json() and proper status codes (404 when pool not found, 401/403 when access is invalid).
+
+Add // TODO: add input validation comments where body is used.
+
+────────────────────────
+4) Wire Broker Inventory list page to Prisma
+────────────────────────
+
+Update app/(broker)/inventory/page.tsx:
+	1.	Convert it to a server component if it isn’t already.
+	2.	In this page, fetch data from the new API (or directly from Prisma) using the current broker:
+import { prisma } from '@/lib/prisma';
+import { getCurrentBrokerOrThrow } from '@/lib/broker/currentBroker';
+
+export default async function BrokerInventoryPage() {
+  const broker = await getCurrentBrokerOrThrow();
+
+  const pools = await prisma.brokerCreditPool.findMany({
+    where: { brokerId: broker.id },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // render table using `pools`
+}
+3.	Replace any mocked data array with pools.
+	4.	Keep the UI exactly the same (columns: Program, Year, State, Available, Min Block, Price per $1, Discount, Status, etc.), but use real values from the model.
+
+Compute the discount in the component if needed:
+const discount = 1 - Number(pool.pricePerDollar);
+────────────────────────
+5) Wire “Add Credit Pool” form to API
+────────────────────────
+
+Update the BrokerCreditPoolForm used by inventory/new:
+	1.	Instead of only keeping local state and showing a mock toast, on submit:
+
+	•	Send a POST request to /api/broker/inventory.
+	•	Body should map form fields to:
+	•	programName
+	•	creditYear
+	•	creditType
+	•	jurisdiction
+	•	programCode
+	•	registryId
+	•	totalFaceValueUsd
+	•	availableFaceValueUsd
+	•	minBlockUsd
+	•	pricePerDollar
+	•	offerStartDate
+	•	offerExpiryDate
+	•	expectedSettlementDays
+	•	visibility
+	•	status (e.g. 'DRAFT' or 'ACTIVE')
+
+	2.	On success:
+
+	•	Redirect to /broker/inventory (or the appropriate route) using router.push.
+	•	Show a success toast or banner (if you have a toast system in place).
+
+	3.	For the edit page [poolId]:
+
+	•	Fetch the pool on the server side (using Prisma and getCurrentBrokerOrThrow) and pass it as props to BrokerCreditPoolForm.
+	•	Inside the form, initialize state from existing pool.
+	•	On submit, send PATCH to /api/broker/inventory/[poolId].
+
+Add // TODO: input validation & error handling near the fetch/submit logic.
+
+────────────────────────
+6) Quick sanity checks
+────────────────────────
+
+After implementing:
+	1.	Log in as a broker user (or temporarily force role = 'BROKER' and assign brokerId).
+	2.	Go to Broker → Inventory:
+	•	Initially the list should be empty.
+	3.	Click “Add Credit Pool”, fill the form, and submit:
+	•	You should be redirected back to Inventory.
+	•	Newly created pool appears in the table with correct values.
+	4.	Click to edit the pool:
+	•	The form is pre-filled.
+	•	Changing price or min block and saving updates the table.
+
+Do not yet change the public Tax Credit Marketplace in this step; we will link marketplace listings to BrokerCreditPool in a separate iteration

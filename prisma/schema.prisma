@@ -70,6 +70,18 @@ enum PurchaseStatus {
   CANCELED
 }
 
+enum CreditPoolStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum CreditPoolVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 model User {
   id             String              @id @default(cuid())
   email          String              @unique
@@ -80,6 +92,8 @@ model User {
   updatedAt      DateTime            @updatedAt
   companyId      String?
   company        Company?            @relation(fields: [companyId], references: [id])
+  brokerId       String?
+  broker         Broker?             @relation(fields: [brokerId], references: [id])
   accountantClients AccountantClient[]
   uploadedDocuments Document[]
   auditLogs      AuditLog[]
@@ -275,3 +289,42 @@ model Payment {
   status      PaymentStatus @default(SUBMITTED)
   purchase    Purchase      @relation(fields: [purchaseId], references: [id])
 }
+
+model Broker {
+  id          String             @id @default(cuid())
+  name        String
+  legalName   String?
+  email       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  taxId       String?
+  state       String?
+  country     String?
+  users       User[]
+  creditPools BrokerCreditPool[]
+}
+
+model BrokerCreditPool {
+  id                     String               @id @default(cuid())
+  brokerId               String
+  broker                 Broker               @relation(fields: [brokerId], references: [id])
+  programName            String
+  creditYear             Int
+  creditType             String
+  jurisdiction           String
+  programCode            String?
+  registryId             String?
+  totalFaceValueUsd      Decimal              @db.Decimal(18,2)
+  availableFaceValueUsd  Decimal              @db.Decimal(18,2)
+  minBlockUsd            Decimal              @db.Decimal(18,2)
+  pricePerDollar         Decimal              @db.Decimal(6,4)
+  visibility             CreditPoolVisibility @default(PUBLIC)
+  status                 CreditPoolStatus     @default(DRAFT)
+  offerStartDate         DateTime?
+  offerExpiryDate        DateTime?
+  expectedSettlementDays Int?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+}
+
+// TODO: Run `npm run db:push` to apply schema changes to the database
