@@ -114,6 +114,22 @@ export default function LoginPage() {
             Sign up
           </Link>
         </p>
+
+        {process.env.NEXT_PUBLIC_SHOW_DEMO_HINT === "true" && (
+          <div className="mt-6 rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-4 text-xs text-slate-400">
+            <p className="font-medium text-slate-200 mb-2">Demo Broker Account</p>
+            <p>
+              Email: <span className="font-mono text-emerald-400">broker.demo@suverse.io</span>
+            </p>
+            <p>
+              Password: <span className="font-mono text-emerald-400">demoBroker123</span>
+            </p>
+            <p className="mt-2 text-slate-500">
+              Use this account to explore the Broker Portal at{" "}
+              <span className="font-mono text-slate-400">/broker/dashboard</span>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

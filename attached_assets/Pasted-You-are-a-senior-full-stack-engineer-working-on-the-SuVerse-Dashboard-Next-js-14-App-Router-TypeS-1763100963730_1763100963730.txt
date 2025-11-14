@@ -1,0 +1,126 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js 14 App Router + TypeScript + Tailwind + Prisma + existing auth).
+
+We already have a Broker Portal under /broker/... which is protected by role-based access control (user.role === 'BROKER').
+For demo purposes I want a simple way to log in as a broker without changing the guard logic.
+
+Goal:
+Create a permanent demo broker account that I can use via the normal login form:
+	•	Email: broker.demo@suverse.io
+	•	Password: demoBroker123
+	•	Role: BROKER
+
+So that I can go to /broker/dashboard after logging in with these credentials.
+
+────────────────────────
+	1.	Create or reuse demo broker user in Prisma
+────────────────────────
+
+	1.	Locate the Prisma User model and the UserRole enum/type.
+Make sure UserRole already includes 'BROKER'. If not, add it.
+	2.	Implement a small helper seed function that ensures a demo broker user exists.
+For example in scripts/seedDemoBroker.ts or in a dev-only helper under lib/dev/demoBroker.ts.
+The logic should:
+	•	Look up a user by email = 'broker.demo@suverse.io'.
+	•	If found:
+	•	Ensure role is 'BROKER' and that brokerId is set (if a Broker relation exists).
+	•	If not found:
+	•	Create a Broker record if your schema has it (e.g. name = "Demo Broker", legalName = "Demo Broker LLC").
+	•	Create a User:
+	•	email = 'broker.demo@suverse.io'
+	•	name = 'Demo Broker'
+	•	role = 'BROKER'
+	•	brokerId = createdBroker.id (if applicable)
+	•	password hashed using the same method as your existing credential auth (e.g. bcrypt).
+Pseudo-code:
+import { prisma } from '@/lib/prisma';
+import { hash } from 'bcryptjs'; // or whatever you use
+
+export async function ensureDemoBrokerUser() {
+  const email = 'broker.demo@suverse.io';
+
+  let user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) {
+    const broker = await prisma.broker.create({
+      data: {
+        name: 'Demo Broker',
+        legalName: 'Demo Broker LLC',
+        email,
+      },
+    });
+
+    const passwordHash = await hash('demoBroker123', 10);
+
+    user = await prisma.user.create({
+      data: {
+        email,
+        name: 'Demo Broker',
+        role: 'BROKER',
+        brokerId: broker.id,
+        passwordHash, // adapt to your schema (password, hashedPassword, etc.)
+      },
+    });
+  } else if (user.role !== 'BROKER') {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { role: 'BROKER' },
+    });
+  }
+
+  return user;
+}
+Add a clear // TODO: dev/demo only – remove or protect before production comment.
+
+	3.	Call ensureDemoBrokerUser() once at startup in dev mode or via a simple API route:
+	•	Option A (preferred for dev): create app/api/dev/seed-demo-broker/route.ts that calls ensureDemoBrokerUser() and returns JSON { ok: true }. You can hit this endpoint manually once from the browser or Replit.
+	•	Option B: call it from an existing global seed script, if you have one.
+Make sure this dev endpoint is guarded by environment, e.g.:
+if (process.env.NODE_ENV === 'production') {
+  return NextResponse.json({ error: 'Not allowed in production' }, { status: 403 });
+}
+────────────────────────
+2) Ensure the login flow accepts this user
+────────────────────────
+	1.	Identify the current auth mechanism (likely credentials-based with email + password).
+Confirm that User has a password/hash field (e.g. passwordHash).
+	2.	Make sure the login logic (e.g. in your credentials provider or custom /api/auth/login route) uses:
+	•	email to find the user,
+	•	compares the plain password (demoBroker123) with the stored hash.
+	3.	Test manually (after seeding demo broker):
+	•	Open /login.
+	•	Enter:
+	•	Email: broker.demo@suverse.io
+	•	Password: demoBroker123
+	•	Submit and verify you are authenticated.
+	4.	After successful login, go directly to /broker/dashboard and confirm the Broker Portal loads without redirecting you away.
+
+────────────────────────
+3) Optional: show demo credentials hint on login page
+────────────────────────
+
+On the login page component, add a small “Demo Accounts” section at the bottom that shows the broker demo credentials so I don’t forget them.
+For example:
+<div className="mt-6 rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-4 text-xs text-slate-400">
+  <p className="font-medium text-slate-200 mb-1">Demo broker login</p>
+  <p>Email: <span className="font-mono">broker.demo@suverse.io</span></p>
+  <p>Password: <span className="font-mono">demoBroker123</span></p>
+  <p className="mt-2">Use this account to explore the Broker Portal at <span className="font-mono">/broker/dashboard</span>.</p>
+</div>
+Add a comment // TODO: remove demo credentials hint before production.
+
+────────────────────────
+4) Do NOT relax broker guards
+────────────────────────
+	•	Keep the existing role-based guard for broker routes intact:
+	•	Unauthenticated → redirect to /login
+	•	Authenticated but not BROKER → redirect to /dashboard
+	•	The only new capability is: now there is a real BROKER user I can log in as using the normal login form.
+
+────────────────────────
+
+When finished, I should be able to:
+	1.	Hit /api/dev/seed-demo-broker once (in dev) to create the demo broker.
+	2.	Visit /login and log in as:
+	•	Email: broker.demo@suverse.io
+	•	Password: demoBroker123
+	3.	Navigate to /broker/dashboard and see the Broker Portal
