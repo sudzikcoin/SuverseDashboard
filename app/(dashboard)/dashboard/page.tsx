@@ -6,6 +6,7 @@ import CalculatorCard from "@/components/CalculatorCard"
 import FileUpload from "@/components/FileUpload"
 import DocumentList from "@/components/DocumentList"
 import WalletConnectButton from "@/components/wallet/WalletConnectButton"
+import CompanyWalletButton from "@/components/wallet/CompanyWalletButton"
 import VerificationBadge from "@/components/VerificationBadge"
 import { prisma } from "@/lib/db"
 import { AlertCircle } from "lucide-react"
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
         verificationStatus: true,
         verificationNote: true,
         legalName: true,
+        walletAddress: true,
       },
     })
   }
@@ -45,7 +47,15 @@ export default async function DashboardPage() {
               />
             )}
           </div>
-          <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition w-fit" />
+          {session.user.role === "COMPANY" && companyData ? (
+            <CompanyWalletButton 
+              companyName={companyData.legalName}
+              companyWalletAddress={companyData.walletAddress}
+              className="w-fit"
+            />
+          ) : (
+            <WalletConnectButton className="rounded-full px-4 py-2 border border-emerald-400/40 hover:border-emerald-400/70 bg-transparent backdrop-blur-sm transition w-fit" />
+          )}
         </div>
 
         {companyData && companyData.verificationStatus !== "VERIFIED" && (
