@@ -109,6 +109,7 @@ model Company {
   taxLiability       Decimal?
   targetCloseYear    Int?
   ownerId            String?
+  walletAddress      String?
   status             CompanyStatus      @default(ACTIVE)
   verificationStatus VerificationStatus @default(UNVERIFIED)
   verificationNote   String?

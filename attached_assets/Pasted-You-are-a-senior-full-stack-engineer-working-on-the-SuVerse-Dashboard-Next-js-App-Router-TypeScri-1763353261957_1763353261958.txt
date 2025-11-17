@@ -1,0 +1,156 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js App Router + TypeScript + Tailwind + wagmi/RainbowKit for wallet connections).
+
+Problem:
+In the Company dashboard, when I create a brand new company and open its dashboard for the first time, the header sometimes already shows a connected wallet (for example “Base 0xA1…BA99”). This happens because I previously connected a wallet for another company on the same device, and wagmi/RainbowKit keeps the connection in browser storage. For a new company with no wallet saved in the database, it is confusing and unsafe to show an old wallet as if it already belonged to this company.
+
+Goal:
+Implement clear logic that separates:
+1) The browser wallet connection (wagmi useAccount).
+2) The company’s linked wallet stored in the database (company.walletAddress or similar).
+
+Rules:
+- If the company has NO linked wallet in DB -> automatically disconnect any existing browser wallet and show “Connect Wallet” state.
+- If the company HAS a linked wallet:
+  - If the connected wallet address is different from company.walletAddress -> show a warning / mismatch state (do NOT silently treat the browser wallet as the company wallet).
+  - If they match -> show normal “connected” state.
+This logic should apply only in the Company dashboard header (company role). Do NOT change accountant or broker wallet behaviour.
+
+------------------------------------------------
+1) Locate the company dashboard header component
+------------------------------------------------
+1. Find the React component that renders the company dashboard header where the wallet chip is shown, for example:
+   - CompanyDashboardHeader
+   - CompanyLayoutHeader
+   - or a similar component under app/(company) or components/company.
+2. Make sure this header component is a client component (it must start with "use client"; at the top if it uses wagmi hooks). If not, convert it to a client component.
+3. Ensure this component receives the current company data from the server, including its linked wallet address from DB. Add a prop like:
+   - companyWalletAddress: string | null
+and pass it from the server-side company page/layout where the company object is loaded.
+
+----------------------------------------------
+2) Use wagmi hooks to read connection state
+----------------------------------------------
+Inside the company header component:
+
+1. Import the necessary wagmi hooks:
+   - import { useAccount, useDisconnect } from "wagmi";
+
+2. Use them in the component:
+   - const { address, isConnected } = useAccount();
+   - const { disconnect } = useDisconnect();
+
+3. Accept the company’s linked wallet from props:
+   - type Props = { companyName: string; companyWalletAddress: string | null; ... };
+
+--------------------------------
+3) Implement the safety logic
+--------------------------------
+Inside the same component:
+
+1. Normalize addresses and compute helper flags:
+
+   const normalizedCompanyWallet = companyWalletAddress ? companyWalletAddress.toLowerCase() : null;
+   const normalizedConnected = address ? address.toLowerCase() : null;
+
+   const hasLinkedWallet = !!normalizedCompanyWallet;
+   const hasConnectedWallet = isConnected && !!normalizedConnected;
+
+   const isSameWallet =
+     hasLinkedWallet &&
+     hasConnectedWallet &&
+     normalizedCompanyWallet === normalizedConnected;
+
+   const hasMismatch =
+     hasLinkedWallet &&
+     hasConnectedWallet &&
+     !isSameWallet;
+
+2. Add a useEffect that enforces the main rule for new companies:
+
+   useEffect(() => {
+     // If the company does NOT have a linked wallet in DB,
+     // but there is a wallet connected in the browser,
+     // disconnect it so a new company never starts with someone else's wallet.
+     if (!companyWalletAddress && isConnected) {
+       disconnect();
+       return;
+     }
+     // If the company has a linked wallet and the browser has a different wallet connected,
+     // we do nothing here; we will show a mismatch warning in the UI instead.
+   }, [companyWalletAddress, isConnected, disconnect]);
+
+Add a comment above this effect:
+// TODO: This auto-disconnect is for company dashboards only, to avoid leaking wallet from another company on the same device.
+
+------------------------------
+4) Render clear UI states
+------------------------------
+Update the header rendering so that it has three distinct visual states: (A) no linked wallet, (B) linked wallet matches connected wallet, (C) mismatch.
+
+A) No linked wallet (new company)
+Condition: !hasLinkedWallet
+
+- Show a pill or badge like:
+  - “Wallet not linked • Connect to begin”
+- Show a “Connect Wallet” button that opens the normal wagmi / RainbowKit connect modal.
+- Do NOT show any address as belonging to this company yet.
+- On successful connection you can either:
+  - Immediately call an API to link this wallet to the company in DB, or
+  - Open a confirmation dialog “Link this wallet to CompanyName?” and then call the API.
+For now, at least leave a clear TODO in the connect handler:
+// TODO: call backend to save address as company.walletAddress when linking the wallet for this company.
+
+B) Linked wallet matches connected wallet
+Condition: hasLinkedWallet && isSameWallet
+
+- Show the current “connected” style, for example:
+  - Badge with network “Base” and short address (e.g. 0xA1…BA99).
+- You can implement a helper shortAddress(addr: string) that returns something like:
+  - `${addr.slice(0, 6)}…${addr.slice(-4)}`
+- Optionally display small text “Linked wallet” or “Linked to {companyName}”.
+
+C) Mismatch: connected wallet != linked company wallet
+Condition: hasMismatch
+
+- Show a warning banner under the header, for example:
+  - Title: “Wallet mismatch”
+  - Text: “This company is linked to wallet 0xABCD…1234, but your browser is currently connected as 0x9999…0000. Please switch to the linked wallet in your wallet app or disconnect and link a new wallet for this company.”
+- Add two small buttons:
+  - “Disconnect wallet” -> calls disconnect().
+  - “Use current wallet instead” -> future flow to update company.walletAddress to the connected wallet via API. For now, keep this button but have it call a stub function with a TODO comment:
+// TODO: implement endpoint to relink company wallet to the currently connected address (with confirmation & audit).
+
+-------------------------------
+5) Do NOT change other roles
+-------------------------------
+- Apply this logic only in the Company dashboard header component.
+- Do NOT modify wallet behaviour for:
+  - Accountant dashboard
+  - Broker portal
+They can keep using the current wagmi behaviour (i.e. they may reuse existing browser connection without auto-disconnect).
+
+-------------------------
+6) Verification checklist
+-------------------------
+After implementation, verify the following flows:
+
+1. New company (no wallet in DB):
+   - Log in as Company A and connect a wallet (e.g. 0xA1…BA99). Then log out.
+   - Create Company B (brand-new, walletAddress is null in DB). Log in to B’s dashboard on the same device.
+   - The company header should NOT show “Base 0xA1…BA99” as if it belonged to B.
+   - Any prior wallet connection should be automatically disconnected by the useEffect, and you should see the “Wallet not linked / Connect Wallet” state.
+
+2. Linking a wallet:
+   - For Company B, click “Connect Wallet” and connect 0xA1…BA99.
+   - After your future linking API is called, company.walletAddress should be set in DB and the header should now show the connected wallet as the linked wallet.
+
+3. Mismatch:
+   - With Company B linked to 0xA1…BA99, manually connect a different wallet in the browser (for example 0xCCCC…DDDD).
+   - Reload the Company B dashboard.
+   - The header should show a visible “Wallet mismatch” warning, indicating both addresses and offering a “Disconnect wallet” action.
+   - Clicking “Disconnect wallet” must call wagmi’s disconnect() and clear the connection.
+
+4. Other roles:
+   - Login as accountant or broker and confirm their dashboards still behave as before. No automatic disconnect should happen there.
+
+By the end, a brand new company will never erroneously reuse a wallet connection from another company’s session on the same device, and mismatches between the browser wallet and the company’s stored wallet will be clearly visible to the user instead of being silently accepted.
