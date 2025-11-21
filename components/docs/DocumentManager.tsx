@@ -3,11 +3,28 @@
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
 
+// Safely format document dates, avoiding "Invalid time value" when timestamps are missing or malformed.
+function formatDocDate(
+  value?: string | Date | null,
+  fallbackLabel: string = "—"
+): string {
+  if (!value) return fallbackLabel
+
+  const date = value instanceof Date ? value : new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return fallbackLabel
+  }
+
+  return format(date, "MMM d, yyyy")
+}
+
 interface DocumentFile {
   name: string
   url: string
   size: number
-  updatedAt: string
+  updatedAt?: string | Date | null
+  createdAt?: string | Date | null
 }
 
 interface DocumentManagerProps {
@@ -255,7 +272,7 @@ export default function DocumentManager({
                             </p>
                             <p className="text-slate-400 text-sm">
                               {formatBytes(doc.size)} •{" "}
-                              {format(new Date(doc.updatedAt), "MMM d, yyyy")}
+                              {formatDocDate(doc.updatedAt ?? doc.createdAt)}
                             </p>
                           </div>
                         </div>

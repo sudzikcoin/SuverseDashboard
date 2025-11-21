@@ -1,0 +1,124 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard (Next.js 14 + TypeScript + Tailwind + Prisma).
+
+Bug description:
+In the ACCOUNTANT portal, when I register a new client and then try to upload a document, the app crashes with:
+
+RangeError: Invalid time value
+
+The error comes from:
+- components/docs/DocumentManager.tsx
+around a line like:
+  {format(new Date(doc.updatedAt), "MMM d, yyyy")}
+
+This happens when `doc.updatedAt` is `null`, `undefined`, or otherwise not a valid date string for `new Date(...)` (for example, when a document object is created on the client before the backend sets timestamps).
+
+Goal:
+Make the Document Manager robust so it never throws `RangeError: Invalid time value` when rendering document dates. If `updatedAt` is missing or invalid, we should gracefully fall back to `createdAt` or show a placeholder like "—" / "Just now".
+
+Do NOT change the general UI design, only make the date handling safe.
+
+────────────────────────
+1) Update Document type (optional but recommended)
+────────────────────────
+1. Locate the TypeScript type/interface used for documents in the Document Manager, e.g.:
+
+- `type DocumentItem = { ... }`
+- or the type imported from your API/types.
+
+2. Ensure that date fields reflect reality:
+
+- `updatedAt?: string | Date | null;`
+- `createdAt?: string | Date | null;`
+
+Add `?`/`null` if they are not guaranteed to be present client-side.
+
+────────────────────────
+2) Add a safe date formatting helper
+────────────────────────
+In `components/docs/DocumentManager.tsx` (or in a nearby utils file used only by this component), create a small helper that safely formats a date-like value.
+
+For example, near the top of the file:
+
+```ts
+import { format } from 'date-fns';
+// ...other imports
+
+function formatDocDate(
+  value?: string | Date | null,
+  fallbackLabel: string = '—',
+) {
+  if (!value) return fallbackLabel;
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return fallbackLabel;
+  }
+
+  return format(date, 'MMM d, yyyy');
+}
+Add a comment above it like:
+// Safely format document dates, avoiding "Invalid time value" when timestamps are missing or malformed.
+
+────────────────────────
+3) Use the safe helper in the DocumentManager UI
+────────────────────────
+Find the JSX where the document metadata is rendered, currently something like:
+
+tsx
+Copy code
+<p className="text-slate-400 text-sm">
+  {formatBytes(doc.size)} ·{' '}
+  {format(new Date(doc.updatedAt), 'MMM d, yyyy')}
+</p>
+Replace ONLY the date part with the new helper, and include a fallback to createdAt if updatedAt is not set:
+
+tsx
+Copy code
+<p className="text-slate-400 text-sm">
+  {formatBytes(doc.size)} ·{' '}
+  {formatDocDate(doc.updatedAt ?? doc.createdAt)}
+</p>
+If there are any other places in DocumentManager.tsx (or related components) where new Date(doc.updatedAt) or new Date(doc.createdAt) is used directly, replace them similarly with formatDocDate(...) or at least add the same kind of null/NaN guard.
+
+────────────────────────
+4) Ensure backend timestamps are set, but keep frontend defensive
+────────────────────────
+
+Confirm the Prisma Document model (or equivalent) has:
+
+prisma
+Copy code
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+Even with correct Prisma defaults, timestamps might still be undefined on the client when:
+
+the document object is created client-side before the server response, or
+
+legacy records lack these fields.
+
+Therefore, keep the frontend defensive checks; do not rely solely on the DB.
+
+────────────────────────
+5) Verify the fix
+────────────────────────
+
+Run the dev server.
+
+As an accountant:
+
+Register a new client.
+
+Go to that client’s Documents section.
+
+Upload a new document.
+
+Confirm:
+
+No more "RangeError: Invalid time value" in the browser console.
+
+The document row renders correctly with size and a date label (either formatted date or "—"/fallback).
+
+Also open a client that already has documents to ensure existing records still display correctly.
+
+Do not change any other parts of the accountant or company dashboards in this step. The only goal is to make document date rendering in DocumentManager safe and avoid runtime crashes when uploading or listing documents.
