@@ -1,0 +1,388 @@
+You are a senior full-stack engineer working on the **SuVerse Tax Credit Dashboard** project in this Replit.
+
+Stack & context:
+- Next.js 14 with App Router (TypeScript, React)
+- Prisma + PostgreSQL
+- Custom auth (no NextAuth) with:
+  - `users` table that has fields like: `id`, `email`, `hashedPassword`, `role`, `status`, `emailVerifiedAt`, `companyId`, `brokerId`, timestamps
+  - email-verification tokens table (name may be `emailVerificationToken` or similar) with fields like: `id`, `userId`, `token`, `expiresAt`, `usedAt`, timestamps
+- Email verification is sent through **SendGrid** using envs:
+  - `APP_BASE_URL` – Replit app base URL, **no trailing slash**, e.g. `https://cb85b968-....replit.dev`
+  - `SENDGRID_API_KEY`
+  - `EMAIL_FROM_ADDRESS`
+- There are two main roles already in the system: `COMPANY` and `BROKER`. The bug we’re fixing affects BOTH, so everything you do must be role-agnostic (work for any user).
+
+The current problem:
+- Registration works and a verification email is sent.
+- The **first** click on the verification link actually verifies the email correctly (Prisma logs show `"Email verified successfully"` and `usedAt` is set).
+- But because of duplicate calls from the verify page, a **second** request immediately happens to `/api/auth/verify-email`, receives `400` (“token already used or invalid”), and the user sees **"Verification Failed"**, even though verification succeeded.
+- Repeated clicks on the same link must show a clean “already used / invalid” message, but they must NOT break the actual first success.
+- There is also a “Resend Verification Email” flow that should:
+  - accept email,
+  - if user exists and is **unverified**, invalidate old tokens, create a new one, send a new email,
+  - always return a generic success response (no email enumeration).
+
+Your goal:
+**Stabilize and polish the email verification flow end-to-end**, with focus on:
+- Preventing duplicate verification API calls from the verify page.
+- Returning clear, consistent JSON from the API and mapping it to correct UI messages.
+- Keeping everything safe and role-agnostic (works for both COMPANY and BROKER).
+- Preserving existing behavior for “Resend verification email”, just making sure we don’t re-introduce the double-call bug.
+
+────────────────────────────────
+1) Locate relevant files
+────────────────────────────────
+1. In the repo, locate:
+   - The API route handling verification by token, something like:
+     - `app/api/auth/verify-email/route.ts`
+     - or `pages/api/auth/verify-email.ts` (if still using pages API).
+   - The React page that renders when the user opens the `/auth/verify?token=...` link, e.g.:
+     - `app/auth/verify/page.tsx` or similar.
+   - The API route that handles “resend verification email”, e.g.:
+     - `app/api/auth/resend-verification/route.ts` or similar.
+2. Do **not** change the registration logic (where the token is created and email is sent) except for adding logs if absolutely necessary.
+
+────────────────────────────────
+2) API: /api/auth/verify-email – make token logic clean & explicit
+────────────────────────────────
+Update the verification API route to:
+
+- Accept a **GET** request with `token` query param.
+- Validate input:
+  - If no `token` provided → return:
+    - HTTP 400
+    - JSON `{ success: false, code: 'MISSING_TOKEN', message: 'Invalid verification link.' }`
+- Fetch the token record using Prisma from the email-verification tokens table by exact token string.
+  - If not found → return:
+    - HTTP 400
+    - JSON `{ success: false, code: 'TOKEN_NOT_FOUND', message: 'This verification link is invalid or has already been used.' }`
+- If found, check:
+  1. `usedAt` **not null** → token already used:
+     - Return HTTP 400
+     - JSON `{ success: false, code: 'TOKEN_USED', message: 'This verification link is invalid or has already been used.' }`
+  2. `expiresAt` < `new Date()` → token expired:
+     - Do **not** modify the token (or optionally set `usedAt` as well, but not required)
+     - Return HTTP 400
+     - JSON `{ success: false, code: 'TOKEN_EXPIRED', message: 'This verification link has expired. Please request a new verification link.' }`
+  3. Otherwise, token is valid and unused:
+     - Use `prisma.$transaction` to perform an **atomic** update:
+       - Set `usedAt = new Date()` for that token.
+       - Update related user:
+         - `emailVerifiedAt = new Date()`
+         - `status = 'ACTIVE'` (or whatever flag your app uses to mark verified)
+     - Return HTTP 200 with:
+       - JSON `{ success: true }`
+- Add detailed logging (console.log) with a prefix `[VERIFY]` to trace:
+  - Start verification with token (masked: just first few chars).
+  - Whether token was found, and the branches taken (`used`, `expired`, `success`).
+  - Example keys: `found`, `expiresAt`, `usedAt`, user email.
+
+Implementation sketch (adapt to exact model names):
+
+```ts
+// app/api/auth/verify-email/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const token = searchParams.get('token');
+
+    if (!token) {
+      console.log('[VERIFY] Missing token in request');
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'MISSING_TOKEN',
+          message: 'Invalid verification link.',
+        },
+        { status: 400 },
+      );
+    }
+
+    console.log('[VERIFY] Starting verification for token:', token.slice(0, 8) + '...');
+
+    const record = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: true }, // adjust relation name if different
+    });
+
+    if (!record) {
+      console.log('[VERIFY] Token not found');
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'TOKEN_NOT_FOUND',
+          message: 'This verification link is invalid or has already been used.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const now = new Date();
+
+    console.log('[VERIFY] Token record:', {
+      token: token.slice(0, 8) + '...',
+      found: true,
+      expiresAt: record.expiresAt,
+      usedAt: record.usedAt,
+    });
+
+    if (record.usedAt) {
+      console.log('[VERIFY] Token already used at:', record.usedAt);
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'TOKEN_USED',
+          message: 'This verification link is invalid or has already been used.',
+        },
+        { status: 400 },
+      );
+    }
+
+    if (record.expiresAt && record.expiresAt < now) {
+      console.log('[VERIFY] Token expired at:', record.expiresAt);
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'TOKEN_EXPIRED',
+          message: 'This verification link has expired. Please request a new verification link.',
+        },
+        { status: 400 },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.emailVerificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: now },
+      });
+
+      await tx.user.update({
+        where: { id: record.userId },
+        data: {
+          emailVerifiedAt: now,
+          status: 'ACTIVE', // keep this consistent with your system
+        },
+      });
+    });
+
+    console.log('[VERIFY] ✅ Email verified successfully for user', record.user.email);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[VERIFY] Unexpected error', error);
+    return NextResponse.json(
+      {
+        success: false,
+        code: 'SERVER_ERROR',
+        message: 'An unexpected error occurred while verifying your email.',
+      },
+      { status: 500 },
+    );
+  }
+}
+
+Adapt model names (emailVerificationToken, user, userId) to the actual Prisma schema used in the project.
+
+────────────────────────────────
+3) Verify page: prevent double API calls
+────────────────────────────────
+Now fix the verify UI page, e.g. app/auth/verify/page.tsx, so that:
+	•	It:
+	•	reads token from useSearchParams(),
+	•	calls /api/auth/verify-email?token=... exactly once,
+	•	uses a useRef guard to prevent multiple runs in React Strict Mode,
+	•	shows 3 states:
+	•	Loading
+	•	Success (“Email Verified!” with auto-redirect in 3 seconds)
+	•	Error (proper message from API JSON).
+	•	It must NOT call the API again on re-render or after success.
+
+Example (adjust styling/components to your existing design; focus on logic):
+
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+type Status = 'idle' | 'loading' | 'success' | 'error';
+
+export default function VerifyEmailPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const token = searchParams.get('token');
+
+  const [status, setStatus] = useState<Status>('idle');
+  const [message, setMessage] = useState<string>('');
+  const hasRun = useRef(false); // <-- guard against double call
+
+  useEffect(() => {
+    if (!token) {
+      setStatus('error');
+      setMessage('Invalid verification link.');
+      return;
+    }
+
+    if (hasRun.current) {
+      return; // prevent duplicate API calls in StrictMode
+    }
+    hasRun.current = true;
+
+    const verify = async () => {
+      try {
+        setStatus('loading');
+
+        const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
+
+        if (res.ok) {
+          setStatus('success');
+          setMessage('Your email has been successfully verified. You can now sign in.');
+          // auto-redirect to login
+          setTimeout(() => {
+            router.push('/login');
+          }, 3000);
+        } else {
+          const data = await res.json().catch(() => null);
+          const msg =
+            data?.message ||
+            'Verification failed. Please request a new verification link.';
+          setStatus('error');
+          setMessage(msg);
+        }
+      } catch (err) {
+        console.error('[VERIFY_PAGE] Unexpected error', err);
+        setStatus('error');
+        setMessage('Verification failed. Please try again later.');
+      }
+    };
+
+    void verify();
+  }, [token, router]);
+
+  // Render according to status (simplified; use your design system)
+  if (status === 'loading' || status === 'idle') {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <div className="rounded-xl bg-slate-900 px-8 py-6 text-center text-slate-100">
+          <p className="text-lg font-semibold">Verifying your email…</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Please wait a moment while we confirm your account.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (status === 'success') {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <div className="rounded-xl bg-slate-900 px-8 py-6 text-center text-slate-100">
+          <div className="mb-3 text-3xl">✅</div>
+          <h1 className="text-xl font-semibold">Email Verified!</h1>
+          <p className="mt-2 text-sm text-slate-300">{message}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Redirecting to login in 3 seconds…
+          </p>
+          <button
+            className="mt-4 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-emerald-400"
+            onClick={() => router.push('/login')}
+          >
+            Go to Login
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // status === 'error'
+  return (
+    <main className="flex min-h-screen items-center justify-center">
+      <div className="rounded-xl bg-slate-900 px-8 py-6 text-center text-slate-100">
+        <div className="mb-3 text-3xl">❌</div>
+        <h1 className="text-xl font-semibold">Verification Failed</h1>
+        <p className="mt-2 text-sm text-slate-300">{message}</p>
+        <button
+          className="mt-4 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-emerald-400"
+          onClick={() => router.push('/login')}
+        >
+          Back to Login
+        </button>
+      </div>
+    </main>
+  );
+}
+
+Key idea: hasRun.current ensures fetch is executed exactly once per page load, so the second “Token already used” branch from the server no longer overwrites the first success.
+
+────────────────────────────────
+4) “Resend verification email” flow – keep behavior, avoid extra calls
+────────────────────────────────
+If you find a page like /auth/verify that also contains a “Resend verification email” form:
+	•	Make sure that:
+	•	The verify side and the resend side are independent.
+	•	The resend form only calls its API endpoint once on submit.
+	•	The resend API should:
+	•	Accept POST with { email }.
+	•	If user does not exist or is already verified → do nothing but return:
+	•	{ success: true } to avoid email enumeration.
+	•	If user exists and is unverified:
+	•	Invalidate all existing tokens for that user (e.g. set usedAt = now or delete).
+	•	Create a new token with expiresAt = now + 24h.
+	•	Send a new email using APP_BASE_URL and the same /auth/verify?token=... pattern.
+	•	Return { success: true }.
+	•	Log with prefix [RESEND] for debug.
+
+No need to redesign UI – just ensure there are no duplicate API calls from React (if there is any effect that automatically submits, guard it similarly with useRef or make it a simple form onSubmit handler).
+
+────────────────────────────────
+5) Manual test plan (run after changes)
+────────────────────────────────
+After implementing all changes, run npm run dev and test manually:
+	1.	Happy path – first time verification
+	•	Register a new user (COMPANY).
+	•	Open email, click the verification button once.
+	•	Expected:
+	•	In console:
+	•	[VERIFY] Starting verification for token ...
+	•	[VERIFY] Token record: ...
+	•	[VERIFY] ✅ Email verified successfully for user ...
+	•	In browser:
+	•	“Email Verified!” screen, auto-redirect to login.
+	•	Login works for that email + password.
+	2.	Trying to use the same link again
+	•	Click the same email link a second time.
+	•	Expected:
+	•	In console:
+	•	[VERIFY] Token already used at ...
+	•	UI:
+	•	“Verification Failed” with message:
+“This verification link is invalid or has already been used.”
+	•	But the user can still login (since they were verified in step 1).
+	3.	Resend verification for unverified user
+	•	Register another new user, but do not click the first link.
+	•	Go to verify page and use “Resend verification email” form.
+	•	Check that:
+	•	You get a second email with a different token.
+	•	Old link shows “invalid / already used” or similar.
+	•	New link shows “Email Verified!” and login works.
+	4.	Works for BROKER as well
+	•	Register a BROKER user using the same flow.
+	•	Verify email and login.
+	•	Confirm that the dashboard routing by role still works:
+	•	COMPANY → company dashboard.
+	•	BROKER → broker dashboard.
+
+────────────────────────────────
+6) Constraints
+────────────────────────────────
+	•	Do not change env-var names or base URL logic; continue to use APP_BASE_URL for links.
+	•	Do not introduce any breaking changes to registration or login; all we’re doing is stabilizing and clarifying the verification flow.
+	•	Keep TypeScript types and ESLint happy.
+	•	Keep existing styling and components where possible; only adjust layout minimally to fit the new logic.
+
+When you’re done:
+	•	Ensure npm run dev starts cleanly.
+	•	Ensure there are no unhandled promise rejections or TypeScript errors in the console.
+	•	Leave all important [VERIFY] and [RESEND] logs in place so the owner can debug from Replit console in the future.

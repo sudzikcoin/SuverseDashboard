@@ -16,6 +16,8 @@
  * - Token expires in 24 hours
  * - Token is marked as "used" after successful verification
  * - User status is set to ACTIVE and emailVerifiedAt is set to current time
+ * 
+ * Returns explicit JSON responses with success, code, and message fields.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,9 +27,13 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   
   if (!token) {
-    console.log('[verify-email] No token provided');
+    console.log('[VERIFY] Missing token in request');
     return NextResponse.json(
-      { ok: false, error: 'missing_token' },
+      {
+        success: false,
+        code: 'MISSING_TOKEN',
+        message: 'Invalid verification link.',
+      },
       { status: 400 }
     );
   }
@@ -35,10 +41,38 @@ export async function GET(req: NextRequest) {
   const result = await verifyEmailToken(token);
 
   if (!result.ok) {
-    return NextResponse.json(result, { status: 400 });
+    // Map internal error codes to user-friendly responses
+    if (result.error === 'expired') {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'TOKEN_EXPIRED',
+          message: 'This verification link has expired. Please request a new verification link.',
+        },
+        { status: 400 }
+      );
+    } else if (result.error === 'invalid_or_used') {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'TOKEN_USED',
+          message: 'This verification link is invalid or has already been used.',
+        },
+        { status: 400 }
+      );
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'SERVER_ERROR',
+          message: 'An unexpected error occurred while verifying your email.',
+        },
+        { status: 500 }
+      );
+    }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({ success: true });
 }
 
 export async function POST(req: NextRequest) {
@@ -47,8 +81,13 @@ export async function POST(req: NextRequest) {
     const token = body.token;
 
     if (!token) {
+      console.log('[VERIFY] Missing token in request body');
       return NextResponse.json(
-        { ok: false, error: 'missing_token' },
+        {
+          success: false,
+          code: 'MISSING_TOKEN',
+          message: 'Invalid verification link.',
+        },
         { status: 400 }
       );
     }
@@ -56,14 +95,46 @@ export async function POST(req: NextRequest) {
     const result = await verifyEmailToken(token);
 
     if (!result.ok) {
-      return NextResponse.json(result, { status: 400 });
+      // Map internal error codes to user-friendly responses
+      if (result.error === 'expired') {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'TOKEN_EXPIRED',
+            message: 'This verification link has expired. Please request a new verification link.',
+          },
+          { status: 400 }
+        );
+      } else if (result.error === 'invalid_or_used') {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'TOKEN_USED',
+            message: 'This verification link is invalid or has already been used.',
+          },
+          { status: 400 }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'SERVER_ERROR',
+            message: 'An unexpected error occurred while verifying your email.',
+          },
+          { status: 500 }
+        );
+      }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('[verify-email] Error:', error);
+    console.error('[VERIFY] Unexpected error:', error);
     return NextResponse.json(
-      { ok: false, error: 'server_error' },
+      {
+        success: false,
+        code: 'SERVER_ERROR',
+        message: 'An unexpected error occurred while verifying your email.',
+      },
       { status: 500 }
     );
   }
