@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { registerSchema } from "@/lib/validations"
 import { writeAudit } from "@/lib/audit"
-import { sendWelcomeEmail } from "@/lib/email"
+import { createEmailVerificationToken } from "@/lib/auth/emailVerification"
 import { getRequestContext } from "@/lib/reqctx"
 
 export async function POST(req: Request) {
@@ -46,6 +46,8 @@ export async function POST(req: Request) {
       })
     }
 
+    // User is created with status: PENDING_VERIFICATION (default in schema)
+    // and emailVerifiedAt: null
     const user = await prisma.user.create({
       data: {
         email: validated.email,
@@ -53,6 +55,8 @@ export async function POST(req: Request) {
         name: validated.name,
         role: validated.role,
         companyId: company?.id,
+        status: "PENDING_VERIFICATION", // Explicit for clarity
+        emailVerifiedAt: null,
       },
     })
 
@@ -74,21 +78,21 @@ export async function POST(req: Request) {
       details: {
         role: user.role,
         companyCreated: !!company,
+        emailVerificationRequired: true,
       },
       ...ctx,
     })
 
-    if (validated.role === "COMPANY" || validated.role === "ACCOUNTANT") {
-      await sendWelcomeEmail(
-        validated.email,
-        validated.role as "COMPANY" | "ACCOUNTANT",
-        validated.name
-      ).catch((err) => {
-        console.error("Failed to send welcome email:", err)
-      })
-    }
+    // Send email verification instead of welcome email
+    // User cannot log in until they verify their email address
+    await createEmailVerificationToken(user.id, user.email).catch((err) => {
+      console.error("Failed to send verification email:", err)
+      // Don't fail registration if email fails - user can request resend
+    })
 
     return NextResponse.json({
+      success: true,
+      requiresEmailVerification: true,
       user: {
         id: user.id,
         email: user.email,
