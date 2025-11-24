@@ -1,0 +1,218 @@
+You are a senior full-stack TypeScript engineer working on the **SuVerse Tax Credit Dashboard** (Next.js 14 App Router, Prisma, PostgreSQL).
+
+Goal: Fix the email verification flow. Right now the user:
+1) registers,
+2) receives the “Verify your email” message,
+3) clicks the link the FIRST time,
+4) but still sees **“Verification Failed – This verification link is invalid or has already been used”**.
+
+We need to find and fix the root cause so that:
+- First click on a FRESH token always succeeds.
+- Second click on the same token shows a clear “already used” state.
+- “Resend verification email” issues a NEW token and sends a new email.
+- Old tokens (used or expired) never verify successfully.
+- All reasons are clearly logged in the server console for debugging.
+
+────────────────────────
+1) Locate all related files
+────────────────────────
+Find and open (names may vary slightly, but follow these patterns):
+
+- Prisma model file:
+  - `prisma/schema.prisma` → model **EmailVerificationToken** (or similarly named).
+- Registration / signup handler:
+  - Something like `app/api/auth/register/route.ts` OR the file that creates a user and sends an email verification token.
+- Email sending helper:
+  - e.g. `lib/email.ts`, `lib/mailer/sendEmailVerification.ts`, or similar.
+- Verification API route:
+  - `app/api/auth/verify-email/route.ts` (or similar).
+- Verification page:
+  - `app/auth/verify/page.tsx` (or similar) which reads `token` from URL and calls the API.
+
+If names differ, search for:
+- `"EmailVerificationToken"` in the repo
+- `"verify-email"` in API routes
+- `"Verification Failed"` in the UI
+
+────────────────────────
+2) Normalise the data model
+────────────────────────
+In `schema.prisma`, make sure the email verification model looks conceptually like this (adapt to existing naming):
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique          // the raw (or consistently hashed) token
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+Key points:
+- `token` MUST be `@unique`.
+- Do NOT mix two different formats (e.g. plain in DB, hashed in email). If hashing is used, it must be applied consistently in both places.
+
+Run `npx prisma generate` if you make schema changes.
+
+────────────────────────
+3) Fix token creation logic
+────────────────────────
+In the registration handler (e.g. `app/api/auth/register/route.ts`):
+
+1. After creating the user, generate a token string:
+
+  const token = crypto.randomBytes(32).toString("hex");
+
+2. Store it exactly as you will later look it up:
+
+  await prisma.emailVerificationToken.create({
+    data: {
+      userId: user.id,
+      token,
+      expiresAt: addHours(new Date(), 24),
+    },
+  });
+
+3. Compose verification URL using **APP_BASE_URL** (already set in Replit secrets, without trailing slash):
+
+  const baseUrl = process.env.APP_BASE_URL!;
+  const verifyUrl = `${baseUrl}/auth/verify?token=${encodeURIComponent(token)}`;
+
+4. Pass this `verifyUrl` into the SendGrid mailer.
+
+If there is any hashing logic (e.g. `createHash('sha256')`) then:
+- either remove hashing and use plain `token` everywhere,
+- OR keep hashing but then hash the **same way** during verification before querying the DB.
+Pick ONE approach and use it consistently. For simplicity, prefer **plain token with @unique**.
+
+────────────────────────
+4) Fix the verification API logic
+────────────────────────
+In the verification handler `app/api/auth/verify-email/route.ts`:
+
+- Read the token from query:
+
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
+
+- Add detailed logging with a clear prefix so we can see what happens:
+
+  console.log("[verify-email] incoming token:", token);
+
+- Implement logic like this (adjust to your types):
+
+  if (!token) {
+    console.log("[verify-email] no token provided");
+    return NextResponse.json(
+      { success: false, reason: "missing-token" },
+      { status: 400 },
+    );
+  }
+
+  const record = await prisma.emailVerificationToken.findUnique({
+    where: { token },
+    include: { user: true },
+  });
+
+  if (!record) {
+    console.log("[verify-email] token not found");
+    return NextResponse.json(
+      { success: false, reason: "not-found" },
+      { status: 400 },
+    );
+  }
+
+  if (record.usedAt) {
+    console.log("[verify-email] token already used at", record.usedAt);
+    return NextResponse.json(
+      { success: false, reason: "already-used" },
+      { status: 400 },
+    );
+  }
+
+  if (record.expiresAt < new Date()) {
+    console.log("[verify-email] token expired at", record.expiresAt);
+    return NextResponse.json(
+      { success: false, reason: "expired" },
+      { status: 400 },
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.emailVerificationToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    }),
+    prisma.user.update({
+      where: { id: record.userId },
+      data: {
+        emailVerifiedAt: new Date(),
+        status: "ACTIVE", // or whatever enum is used for active user
+      },
+    }),
+  ]);
+
+  console.log("[verify-email] token verified OK for user", record.userId);
+
+  return NextResponse.json({ success: true });
+
+Make sure the **status code** for success is 200 and for failures is 400 or 401, but the UI should still show a nice message.
+
+────────────────────────
+5) Connect the verify page to the API
+────────────────────────
+In `app/auth/verify/page.tsx`:
+
+- Read `token` from `searchParams`.
+- On mount, call `/api/auth/verify-email?token=...` **once**.
+- Based on the `reason` from JSON (`not-found`, `already-used`, `expired`, etc.), show different messages:
+  - “Email verified, redirecting…” on success.
+  - “This link has already been used” if `already-used`.
+  - “This link is invalid or has expired” for other reasons.
+
+Also, ensure there is **no double call**:
+- Use a single `useEffect` with a boolean guard or abort controller so the request is not sent twice on React strict mode.
+
+────────────────────────
+6) Fix “Resend verification email”
+────────────────────────
+In the resend handler (e.g. `app/api/auth/resend-verification/route.ts`):
+
+1. Find user by email.
+2. Only continue if user exists and is NOT verified.
+3. Invalidate all previous tokens for this user:
+
+  await prisma.emailVerificationToken.updateMany({
+    where: { userId: user.id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+
+4. Create a NEW token, same way as in registration.
+5. Send a NEW email with a NEW `verifyUrl`.
+6. Return a generic success response (do not reveal whether email exists).
+
+Add logs with prefix `[resend-verification]` for easier debugging.
+
+────────────────────────
+7) Manual test plan (run this after changes)
+────────────────────────
+1. Make sure **APP_BASE_URL** in env is exactly your Replit URL, no trailing slash, e.g.:
+   APP_BASE_URL=https://36r44svw23zay.spock.replit.dev
+2. Stop any running dev process, then start **one** `npm run dev`.
+3. Register a brand-new email.
+4. Open the latest verification email and click the link ONCE.
+   - Expect to see “Email Verified” and logs:
+     - `[verify-email] incoming token: ...`
+     - `[verify-email] token verified OK ...`
+5. Click the SAME link again.
+   - Expect “already used” message and log:
+     - `[verify-email] token already used at ...`
+6. Test “Resend verification email”:
+   - Ask for a new link, check you receive a new email.
+   - Old link should fail with `already-used` or `expired`.
+   - New link should verify OK.
+
+Make all necessary code edits so that this test plan passes.
+
+When you are done, run `npm run dev` and ensure there are no TypeScript or runtime errors.
