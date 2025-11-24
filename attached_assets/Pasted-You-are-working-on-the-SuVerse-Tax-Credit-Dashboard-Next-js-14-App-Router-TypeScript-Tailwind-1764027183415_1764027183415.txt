@@ -1,0 +1,118 @@
+You are working on the SuVerse Tax Credit Dashboard (Next.js 14 + App Router + TypeScript + Tailwind).
+
+Goal: FIX the BROKER portal so that:
+- After a BROKER logs in, they are redirected to `/broker/dashboard`.
+- The broker sees a full sidebar dashboard UI (not the empty "Welcome, Sam / Connect Wallet" page).
+- All broker subpages (inventory, orders, payouts, compliance, integrations, settings, support) work and render basic content.
+
+Please do the following steps carefully:
+
+1) Inspect current repo
+- Open the `app` directory and list all subfolders related to dashboards:
+  - Existing company dashboard (usually `/dashboard` or `app/(dashboard)/...`)
+  - Any existing `/broker` files or folders.
+- Identify:
+  - Does `app/broker/layout.tsx` exist?
+  - Does `app/broker/dashboard/page.tsx` exist?
+  - Does `app/broker/page.tsx` exist? (this is currently the blank "Welcome, Sam / Connect Wallet" page).
+- Confirm which file is responsible for the page the user currently sees when logged in as BROKER.
+
+2) Fix post-login routing for BROKER
+- Open `app/post-login/page.tsx` (or equivalent post-login router).
+- Ensure the role-based routing block looks like this (adjust naming to match the actual code):
+
+  - If `user.role === 'BROKER'`:
+      redirect to `/broker/dashboard`
+  - If `user.role === 'COMPANY'`:
+      redirect to `/dashboard`
+  - If `user.role === 'ACCOUNTANT'`:
+      redirect to `/clients`
+  - If there is an `ADMIN` role:
+      redirect to `/admin`
+
+- Remove any redirect that sends BROKER users to `/broker` root or to `/dashboard`.
+
+3) Ensure `/broker` root redirects to `/broker/dashboard`
+- If `app/broker/page.tsx` exists and renders a simple empty page (“Welcome, Sam / Connect Wallet”), change it to a server component that immediately redirects to `/broker/dashboard`:
+
+  - Import `redirect` from `next/navigation`.
+  - In the default component, call `redirect('/broker/dashboard')`.
+  - This guarantees that visiting `/broker` always lands on the main broker dashboard.
+
+4) Create/repair broker layout with sidebar
+- Implement `app/broker/layout.tsx` if it does not exist, or update it if it is empty.
+- Reuse the EXISTING company dashboard layout as a template:
+  - Find the current dashboard layout used for `/dashboard` (likely in `app/(dashboard)/layout.tsx` or similar).
+  - Copy its structure (top navbar, main content area, etc.).
+- Inside `app/broker/layout.tsx`:
+  - Add a broker-specific sidebar with these menu items (links must match existing/created pages):
+    1. Dashboard → `/broker/dashboard`
+    2. Inventory → `/broker/inventory`
+    3. Orders → `/broker/orders`
+    4. Payouts → `/broker/payouts`
+    5. Documents & Compliance → `/broker/compliance`
+    6. API & Integrations → `/broker/integrations`
+    7. Settings → `/broker/settings`
+    8. Support → `/broker/support`
+  - Highlight the active menu item using `usePathname()` (same pattern as in the company dashboard).
+  - Make sure `children` are rendered in the main content area of the layout.
+
+5) Implement broker pages with basic content
+Create (or fix) the following broker pages so that none of them are blank and all render at least basic UI:
+
+- `app/broker/dashboard/page.tsx`
+  - Show a welcome header such as “Welcome, {brokerName}”.
+  - Show simple stat cards (e.g. “Total credit pools”, “Active orders”, “Pending payouts”).
+  - Use any shared `StatCard` or similar components from the company dashboard if available.
+
+- `app/broker/inventory/page.tsx`
+  - Simple heading: “Credit Pools (Inventory)”.
+  - A basic table listing mock pools (id, state, year, volume, price) or, if there is already a CreditPool model and API, display real data.
+
+- `app/broker/orders/page.tsx`
+  - Heading: “Orders”.
+  - Simple table with mock or real orders.
+
+- `app/broker/payouts/page.tsx`
+  - Heading: “Payouts”.
+  - List of payouts (mock or real).
+
+- `app/broker/compliance/page.tsx`
+  - Heading: “Documents & Compliance”.
+  - Placeholder texts or simple cards for uploading/completing compliance docs.
+
+- `app/broker/integrations/page.tsx`
+  - Heading: “API & Integrations”.
+  - Placeholder description of future API keys / webhooks area.
+
+- `app/broker/settings/page.tsx`
+  - Heading: “Broker Settings”.
+  - Basic form or placeholders for broker profile settings.
+
+- `app/broker/support/page.tsx`
+  - Heading: “Support”.
+  - Placeholder text with support instructions.
+
+Each page should:
+- Be a server component or client component consistent with the rest of the app.
+- Use existing shared components (cards, tables, typography) when possible so the UI matches the company dashboard style.
+
+6) Role guards for /broker/*
+- In `app/broker/layout.tsx` or a shared auth guard, ensure:
+  - Only authenticated users with `user.role === 'BROKER'` can access `/broker/*`.
+  - Non-broker users are redirected to `/dashboard` (or appropriate route).
+- Use the existing session/auth helper already used by the company dashboard (do NOT invent a new auth system).
+
+7) Manual verification (please actually run these steps)
+- Run the dev server.
+- Register a NEW user with role = BROKER.
+- Verify email using the link.
+- Log in as this broker.
+- Confirm:
+  - After login you land on `/broker/dashboard`.
+  - You see the sidebar with all 8 menu items.
+  - Clicking each item loads its page with real or placeholder content (no blank screen).
+- Also test:
+  - Log in as a COMPANY user and try to open `/broker/dashboard` manually → should redirect to `/dashboard`.
+
+When everything works and the broker portal is no longer empty, summarize the exact code changes (files touched + short description) in the Replit run log.
