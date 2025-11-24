@@ -4,6 +4,16 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**November 24, 2025** - Email Verification System Improvements
+- Enhanced API responses to include consistent `{ success, code, message }` format for both success and error cases
+- Added comprehensive frontend logging for debugging verification flow
+- Implemented error-specific UI with distinct styling:
+  - TOKEN_USED: Amber warning style with "Link Already Used" title and prominent login button
+  - TOKEN_EXPIRED: Red error style with "Link Expired" title and resend form
+  - Other errors: Generic error handling with resend option
+- Success response now includes `code: 'VERIFIED'` for consistency
+- Improved user experience for repeat link clicks (shows helpful message instead of generic error)
+
 **November 24, 2025** - Development User Reset Script
 - Created `scripts/resetUsers.ts` for development database resets
 - Deletes all users and related records in correct FK order (atomic transaction)
