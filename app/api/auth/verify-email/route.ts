@@ -72,7 +72,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true });
+  console.log('[VERIFY] ✓ Verification successful, returning success response');
+  return NextResponse.json({
+    success: true,
+    code: 'VERIFIED',
+    message: 'Your email has been successfully verified.',
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -126,7 +131,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    console.log('[VERIFY] ✓ Verification successful (POST), returning success response');
+    return NextResponse.json({
+      success: true,
+      code: 'VERIFIED',
+      message: 'Your email has been successfully verified.',
+    });
   } catch (error: any) {
     console.error('[VERIFY] Unexpected error:', error);
     return NextResponse.json(

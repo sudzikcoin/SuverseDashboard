@@ -1,0 +1,138 @@
+You are a senior full-stack engineer working inside this Replit project (SuVerse Tax Credit Dashboard, Next.js + App Router + TypeScript + Prisma).
+
+GOAL
+Fix the email verification system so that:
+- For BOTH COMPANY and BROKER registrations:
+  - The verification link works exactly once.
+  - On first click user sees a clean "Email Verified" screen and can login.
+  - On repeated / invalid / expired clicks, the verify page shows the correct error message, WITHOUT breaking happy-path users.
+- The current bug where:
+  - COMPANY sees "Verification failed" but still can login, and
+  - BROKER sees "Email Verified" but sometimes then sees a "link invalid / already used" message
+is removed.
+
+HIGH-LEVEL REQUIREMENTS
+1. Backend `/api/auth/verify-email` (or similar) must:
+   - Accept `token` from the query string.
+   - Look up verification token in DB by its plain value.
+   - Check:
+     - token exists;
+     - not expired;
+     - not already used.
+   - On success:
+     - Mark token as used (set `usedAt = now()`).
+     - Mark user’s email as verified (`emailVerifiedAt = now()` or `isEmailVerified = true`).
+     - Optionally set `status = 'ACTIVE'` if such a field exists for the user/company/broker.
+     - Return a clear JSON payload, e.g.
+       `{ status: 'ok', reason: 'verified' }`.
+   - On error:
+     - If NOT FOUND → `{ status: 'error', reason: 'not_found' }` and HTTP 400.
+     - If EXPIRED → `{ status: 'error', reason: 'expired' }` and HTTP 400.
+     - If ALREADY USED → `{ status: 'error', reason: 'used' }` and HTTP 400.
+   - VERY IMPORTANT:
+     - The first successful verification MUST NOT be turned into "failed" by a second request triggered by React or browser prefetch.
+     - The handler should be strictly idempotent: once `usedAt` is set, further calls only report `"used"` and do not change DB state.
+
+2. Verify page `/auth/verify` (or similar) must:
+   - Be the only place that calls `/api/auth/verify-email?token=...`.
+   - Call the API exactly once per page load (no double calls from `useEffect`).
+   - Show a clean state machine:
+     - `loading`: "Verifying your email…" while waiting.
+     - `success`: if API returns `{ status: 'ok' }` → show the existing "Email Verified" screen and auto-redirect to `/login`.
+     - `error`:
+       - If `reason === 'used'` → show "This link has already been used. Please login."
+       - If `reason === 'expired'` → show "This link has expired. Please request a new link below."
+       - If `reason === 'not_found'` or any other error → show "This verification link is invalid or has already been used."
+   - IMPORTANT: Do NOT show "Verification failed" if the first call was successful.
+     The component should use only ONE response from the API, not mix multiple responses.
+
+3. Resend verification endpoint `/api/auth/verify-email/resend` (or similar):
+   - When the user enters an email on the "Resend Verification Email" form:
+     - Look up user by email.
+     - If user exists and is NOT verified:
+       - Invalidate all existing tokens for that user (set `usedAt = now()` or delete them).
+       - Create a NEW token with fresh `expiresAt` (24h, or existing rule).
+       - Send email with the correct link:
+         `${APP_BASE_URL}/auth/verify?token=<token>`
+       - Always return generic 200 response (do NOT allow email enumeration).
+     - If user doesn’t exist or already verified:
+       - Still return generic success (no enumeration).
+
+4. Environment
+   - `APP_BASE_URL` must be correctly used when generating the verification link (for Replit dev URL).
+   - Ensure there is NO trailing slash problem (`https://xyz.replit.dev` NOT `https://xyz.replit.dev/`).
+
+IMPLEMENTATION STEPS
+1. Search the codebase for:
+   - `verify-email`
+   - `verification link`
+   - `Email Verified!`
+   - `Verification Failed`
+2. Locate:
+   - API route handling email verification (likely under `app/api/auth/verify-email/route.ts` or similar).
+   - Email resend API, if present.
+   - Verify page component (likely `app/auth/verify/page.tsx` or similar).
+3. Update Prisma models and types if needed:
+   - There is probably a `EmailVerificationToken` (or similarly named) model.
+   - Confirm it has:
+     - `token` (string),
+     - `userId`,
+     - `expiresAt`,
+     - `usedAt` (nullable).
+   - If `usedAt` doesn’t exist, add it and run Prisma migration.
+4. Implement the backend logic described in "HIGH-LEVEL REQUIREMENTS" for:
+   - Verify token
+   - Resend token
+5. Implement the frontend verify page state machine:
+   - `useSearchParams()` to read `token` from the URL.
+   - If no token → show generic invalid link message.
+   - Call the API once in `useEffect` with `fetch('/api/auth/verify-email?token=...')`.
+   - Based on response JSON, render the appropriate UI.
+   - Reuse existing success and error UI components so the design stays consistent.
+
+LOGGING / DEBUGGING
+- Add meaningful server logs for verification:
+  - `[VERIFY] Starting verification for token: ...`
+  - `[VERIFY] token record: found=?, expiresAt=?, usedAt=?`
+  - `[VERIFY] Email verified successfully for user: <email>`
+  - `[VERIFY] Token already used at: <timestamp>`
+  - `[VERIFY] Token expired at: <timestamp>`
+- Make sure logs clearly show which branch was taken in each verification attempt.
+
+MANUAL TEST PLAN (MUST PASS)
+1) Happy path — COMPANY
+   - Register new COMPANY user with a fresh email.
+   - Open verification link once.
+   - Expect:
+     - Backend logs success.
+     - Frontend shows "Email Verified!" and redirects to `/login`.
+     - Login works; user lands on the COMPANY dashboard (with Marketplace / My Purchases / Pay with USDC).
+   - Re-click the same link:
+     - Expect: error page with "link already used", but nothing breaks.
+
+2) Happy path — BROKER
+   - Register new BROKER user with a fresh email.
+   - Open verification link once.
+   - Expect:
+     - Backend logs success.
+     - Frontend shows "Email Verified!" and redirects to `/login`.
+     - Login works; user lands on the BROKER dashboard (even if it is minimal for now).
+   - Re-click the same link:
+     - Expect: "link already used" (or equivalent), no crash.
+
+3) Resend flow
+   - Register a new COMPANY user.
+   - DO NOT click the first email link.
+   - On `/auth/verify` use "Resend Verification Email", enter the same email.
+   - Check:
+     - Old token is now invalid (used or deleted).
+     - New email has a different token.
+     - New link works as in Happy path.
+     - Old link now shows "invalid / used" message.
+
+4) Expired token (can be simulated)
+   - Manually edit `expiresAt` in DB to be in the past.
+   - Click link.
+   - Expect: "This verification link has expired. Please request a new one below" and working resend.
+
+Make these changes now, keep the code clean and idiomatic (TypeScript + Next.js App Router), and do not alter unrelated business logic.
