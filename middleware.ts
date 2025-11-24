@@ -60,24 +60,29 @@ export async function middleware(req: NextRequest) {
     const expectedVersion = (await computeVersionHash(req)).substring(0, 8)
 
     if (currentVersion !== expectedVersion) {
-      console.log('[shield] Version mismatch detected, clearing auth cookies')
+      // Only clear auth cookies if there's an ACTUAL version mismatch 
+      // (old cookie exists but has wrong value - means secrets changed)
+      // Do NOT clear cookies if version cookie is just missing (new browser/session)
+      if (currentVersion && currentVersion !== expectedVersion) {
+        console.log('[shield] Version CHANGED, invalidating old sessions')
+        response.cookies.delete("sv.session.v2")
+        response.cookies.delete("next-auth.session-token")
+        response.cookies.delete("__Secure-next-auth.session-token")
+        
+        if (!isPublic(pathname) && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
+          const url = new URL("/login", req.url)
+          url.searchParams.set("callbackUrl", pathname)
+          return NextResponse.redirect(url)
+        }
+      }
       
-      response.cookies.delete("sv.session.v2")
-      response.cookies.delete("next-auth.session-token")
-      response.cookies.delete("__Secure-next-auth.session-token")
-      
+      // Always set the version cookie if missing or mismatched
       response.cookies.set("sv.version", expectedVersion, {
         httpOnly: true,
         sameSite: "lax",
         path: "/",
         maxAge: 60 * 60 * 24 * 365,
       })
-
-      if (!isPublic(pathname) && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
-        const url = new URL("/login", req.url)
-        url.searchParams.set("callbackUrl", pathname)
-        return NextResponse.redirect(url)
-      }
     }
   } catch (error) {
     console.error('[shield] Version guard error:', error)

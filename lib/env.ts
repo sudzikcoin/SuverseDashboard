@@ -262,7 +262,7 @@ export function computeVersionHash(): string {
     const combined = `${secret}:${sessionSecret}:${resendFrom}`;
     const hash = createHash('sha256').update(combined).digest('hex');
     
-    console.log('[shield] VERSION_HASH computed:', hash.substring(0, 8));
+    // Only log once at startup, not on every request
     return hash;
   } catch (error) {
     console.error('[shield] Failed to compute VERSION_HASH:', error);

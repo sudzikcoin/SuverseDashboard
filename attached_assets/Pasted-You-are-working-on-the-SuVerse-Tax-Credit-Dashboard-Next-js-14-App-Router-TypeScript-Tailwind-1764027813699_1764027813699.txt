@@ -1,0 +1,133 @@
+You are working on the SuVerse Tax Credit Dashboard (Next.js 14 + App Router + TypeScript + Tailwind).
+
+BUG TO FIX:
+- Logging in with correct email + password often only succeeds on the 2nd or 3rd attempt.
+- Symptom from the user:
+  - First login submit: form seems to "accept" but user ends up back on the login page or not logged in.
+  - Second/third submit: finally redirects to the correct dashboard.
+- In the console we see logs such as:
+  - `[auth] Cookie rotated to sv.session.v2 (invalidates old sessions)`
+  - `[shield] VERSION_HASH computed ...`
+- This means there is a race or mismatch between creating the session cookie on login and reading it on the next request.
+
+GOAL:
+Make login **reliably succeed on the first attempt** with correct credentials.
+
+Do the following steps carefully and make minimal, clean changes.
+
+────────────────────
+1) Inspect current auth implementation
+────────────────────
+1. Find the login handler:
+   - Likely in `app/api/auth/login/route.ts` OR a server action in the login page, OR in `lib/auth.ts`.
+   - Identify exactly where:
+     - Password is checked against the DB.
+     - A session/token is created (DB `Session` table or similar).
+     - The auth cookie is set (`Set-Cookie` header).
+
+2. Find how the current user/session is read:
+   - Helper like `getCurrentUser`, `getSession`, or similar (probably in `lib/auth.ts`).
+   - API route `/api/auth/session` or any middleware/route guard which checks the session.
+   - Confirm which cookie name is used (e.g. `sv.session.v2`, `session`, `auth_token`, etc.)
+
+3. Find the post-login redirect logic:
+   - File similar to `app/post-login/page.tsx` or wherever we redirect users after login based on `user.role`.
+   - Confirm the flow:
+     - Login API / server action returns 200.
+     - Frontend redirects to `/post-login`.
+     - `/post-login` reads the session and then redirects to `/dashboard`, `/broker/dashboard`, etc.
+
+────────────────────
+2) Add temporary logging to understand the bug
+────────────────────
+Add detailed logging (console.log) in these places:
+
+1. In the login handler, right before returning success:
+   - Log the email.
+   - Log that the password check passed.
+   - Log the newly created session record (id, userId, expiresAt).
+   - Log the cookie value being set (only the first 8 chars / mask the secret).
+
+2. In the session helper / `getCurrentUser`:
+   - Log the raw cookie value being read from the request.
+   - Log whether a matching session record is found.
+   - Log when the session is considered invalid (expired, not found, etc.).
+
+3. In the post-login page / dashboard guard:
+   - Log what `getCurrentUser` returned (`null` or a user object).
+   - Log the user role used for routing.
+
+Then run the app and **simulate the bug** (login a few times) so you can see the logs and understand what exactly happens on the first attempt vs the second/third.
+
+────────────────────
+3) Identify root cause and FIX it
+────────────────────
+Common root causes to explicitly check and fix:
+
+A) Cookie not set or not persisted on the first response
+   - Ensure the login handler actually returns a `Response` with `Set-Cookie` header BEFORE any redirect.
+   - If the login is done via a client-side `fetch('/api/auth/login', ...)`:
+     - Make sure `credentials: 'include'` is set on the fetch.
+     - Prefer to refactor to a **server action** form submit to avoid cookie races.
+
+B) Session read before cookie is available
+   - If, after login, you immediately `router.push('/post-login')` from the client, but some React cache or Next.js server component still uses the "old" request context, it might not see the new cookie.
+   - Preferred pattern:
+     - Use a **server action** for login.
+     - Inside the action: validate credentials, create session, set cookie, then call `redirect('/post-login')`.
+     - This ensures the redirected request always has the fresh cookie.
+
+C) Misconfig with `[shield] VERSION_HASH` / rotating cookies
+   - If there is any code that recomputes an auth hash on each request or every few seconds, it might be invalidating the session right after it is issued.
+   - Locate where `VERSION_HASH` or similar is computed.
+   - Ensure it is a stable constant (e.g. from an env var) and NOT something that changes per request or per process.
+   - After fixing, verify that logs like `Cookie rotated to sv.session.v2 (invalidates old sessions)` only appear when genuinely needed, not on every login attempt.
+
+D) Double hashing / wrong password comparison on first attempt
+   - Confirm the login handler uses `bcrypt.compare` (or similar) correctly.
+   - Ensure the stored `hashedPassword` does not change on failed attempts.
+   - Ensure there is no artificial delay or retry logic that could interfere.
+
+Make the minimal change that fixes the real root cause. Prefer refactoring the login to a server action with direct `redirect` if the current client-side flow is fragile.
+
+────────────────────
+4) Refactor login to a robust server action (if needed)
+────────────────────
+If the current login is client-side `fetch`, refactor to this pattern:
+
+1. On the login page component:
+   - Add a server action `login` with `"use server"` at the top.
+   - The form should use `action={login}` (no client-side fetch).
+
+2. In the `login` server action:
+   - Read form data (email, password).
+   - Find the user in DB.
+   - Compare password with `bcrypt.compare`.
+   - If invalid → throw a form error (or use `redirect('/login?error=InvalidCredentials')`).
+   - If valid:
+     - Create a new session row in the DB.
+     - Use `cookies().set(...)` to set the auth cookie.
+     - Then `redirect('/post-login')`.
+
+3. Ensure `getCurrentUser` reads exactly this cookie and matches it to the session table.
+
+This pattern usually eliminates the “login only works on 2nd try” bug.
+
+────────────────────
+5) Final verification
+────────────────────
+After making the fix:
+
+1. Restart the dev server.
+2. Clear browser cookies for this Replit URL.
+3. Test the following flows:
+   - Existing COMPANY user → login once → should immediately go to `/dashboard`.
+   - New COMPANY registration + email verification → login once → should go to `/dashboard`.
+   - New BROKER registration + email verification → login once → should go to `/broker/dashboard` (with full broker UI).
+4. Confirm:
+   - No need for 2nd/3rd try anymore.
+   - `/api/auth/session` returns the correct user immediately after first login.
+   - Console logs no longer show repeated unnecessary cookie rotations.
+
+Finally, remove or comment out noisy debug logs, but keep any useful error logs with clear messages.
+Summarize in the Replit logs what the root cause was and which files you changed.

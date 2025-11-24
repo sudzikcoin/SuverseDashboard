@@ -7,8 +7,6 @@ import { writeAudit } from "./audit"
 import { maskEmail, normalizeEmail, logAuth, ReasonCode } from "./auth-diagnostics"
 import { getAuthEnv } from "./env"
 
-console.log('[auth] Cookie rotated to sv.session.v2 (invalidates old sessions)');
-
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
