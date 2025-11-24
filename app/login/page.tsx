@@ -30,7 +30,7 @@ export default function LoginPage() {
       const result = await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        callbackUrl: "/post-login",
       })
 
       if (result?.error) {
@@ -44,14 +44,13 @@ export default function LoginPage() {
           setError("Invalid email or password")
           setShowResend(false)
         }
-      } else {
-        router.push("/dashboard")
-        router.refresh()
+        setLoading(false)
       }
+      // If no error, NextAuth handles the redirect to /post-login
+      // which then performs server-side role-based redirect
     } catch (err) {
       setError("An error occurred. Please try again.")
       setShowResend(false)
-    } finally {
       setLoading(false)
     }
   }

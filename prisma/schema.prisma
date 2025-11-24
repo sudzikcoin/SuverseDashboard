@@ -88,6 +88,12 @@ enum UserStatus {
   DISABLED
 }
 
+enum BrokerStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
 model User {
   id                      String                     @id @default(cuid())
   email                   String                     @unique
@@ -315,17 +321,22 @@ model Payment {
 }
 
 model Broker {
-  id          String             @id @default(cuid())
-  name        String
-  legalName   String?
-  email       String?            @unique
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  taxId       String?
-  state       String?
-  country     String?
-  users       User[]
-  creditPools BrokerCreditPool[]
+  id           String             @id @default(cuid())
+  name         String
+  legalName    String?
+  companyName  String             @default("Unnamed Broker")
+  contactName  String             @default("Contact Person")
+  email        String?            @unique
+  phone        String?
+  website      String?
+  taxId        String?
+  state        String?
+  country      String?
+  status       BrokerStatus       @default(PENDING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  users        User[]
+  creditPools  BrokerCreditPool[]
 }
 
 model BrokerCreditPool {

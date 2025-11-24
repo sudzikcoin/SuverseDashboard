@@ -7,7 +7,7 @@ export const registerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(["COMPANY", "ACCOUNTANT", "ADMIN"]),
+  role: z.enum(["COMPANY", "ACCOUNTANT", "ADMIN", "BROKER"]),
   companyLegalName: z.string().optional(),
   state: z.string().optional(),
   ein: z.string().optional().refine(
@@ -16,6 +16,29 @@ export const registerSchema = z.object({
   ),
   taxLiability: z.number().optional(),
   targetCloseYear: z.number().optional(),
+  // Broker-specific fields
+  brokerCompanyName: z.string().optional(),
+  brokerContactName: z.string().optional(),
+  phone: z.string().optional(),
+  website: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Validate role-specific required fields
+  if (data.role === "BROKER") {
+    if (!data.brokerCompanyName || data.brokerCompanyName.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Broker company name is required for broker registration",
+        path: ["brokerCompanyName"],
+      })
+    }
+    if (!data.state || data.state.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "State is required for broker registration",
+        path: ["state"],
+      })
+    }
+  }
 })
 
 export const loginSchema = z.object({

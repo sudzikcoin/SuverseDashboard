@@ -1,0 +1,414 @@
+You are a senior full-stack engineer working on the **SuVerse Tax Credit Dashboard** (Next.js 14 App Router + TypeScript + Tailwind + Prisma + PostgreSQL) hosted on Replit.
+
+Your task: **add a full Broker role** to the app, including:
+- registration as a broker,
+- backend logic (DB + API),
+- auth / routing,
+- and a full broker dashboard page (UI + data wiring),
+
+WITHOUT breaking existing flows for **Company** and **Accounting** users.
+
+────────────────────────────────
+0. General rules
+────────────────────────────────
+- Keep everything in **TypeScript**.
+- Follow existing folder structure, naming and styling (Tailwind, existing components, layout shells, etc.).
+- Do **not** change the email-verification flow, only reuse it for the new role.
+- Keep changes minimal and incremental; reuse helpers and components where possible.
+- If something already exists (e.g. `Broker`, `BrokerCreditPool`, `TaxCreditOrder` models), extend and reuse it rather than creating duplicates.
+- Run `prisma migrate dev` (or the project’s standard migration command) after schema changes.
+
+Use the following assumptions if you need them:
+- There is a `User` model with a `role` field (currently supporting at least `COMPANY` and `ACCOUNTANT`).
+- There is already a `Broker`/`TaxCreditOrder`/`BrokerCreditPool` ecosystem in Prisma (at minimum we saw `TaxCreditOrder` with `brokerId`, `poolId`).
+- Registration is currently handled by an API route like `/api/auth/register` and frontend page in `app/(auth)/register/page.tsx` (or similar).
+- Dashboards live under `app/(dashboard)/...`.
+
+If any of these assumptions differ slightly in the repo, **adapt the instructions to match the existing codebase**.
+
+────────────────────────────────
+1. Prisma: add / update Broker role & model
+────────────────────────────────
+1. Open `prisma/schema.prisma`.
+
+2. **Extend the User role enum** (name may differ; adjust accordingly):
+
+- If you see something like:
+  ```prisma
+  enum UserRole {
+    COMPANY
+    ACCOUNTANT
+  }
+extend it to:
+enum UserRole {
+  COMPANY
+  ACCOUNTANT
+  BROKER
+}
+	3.	Broker model
+
+	•	If a Broker model already exists, review it and only add what is missing.
+	•	If it does not exist, create it with the following structure (adjust names/relations to match existing models):
+model Broker {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+
+  companyName String
+  contactName String
+  email       String
+  state       String   // e.g. "FL"
+  phone       String?  // optional
+  website     String?  // optional
+
+  status      BrokerStatus @default(PENDING)
+
+  // relations with pools and orders, if not already declared:
+  creditPools BrokerCreditPool[]
+  orders      TaxCreditOrder[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum BrokerStatus {
+  PENDING   // initial state, under review
+  APPROVED  // can trade
+  SUSPENDED
+}
+•	Make sure the existing TaxCreditOrder model references Broker and BrokerCreditPool correctly (this already seems to be the case from the screenshot; just verify).
+
+	4.	Run migrations:
+
+	•	Use the project’s standard command, usually something like:
+	•	npx prisma migrate dev --name add-broker-role
+	•	Ensure migrations succeed.
+
+────────────────────────────────
+2. Backend: registration logic for Brokers
+────────────────────────────────
+Goal: On registration, user can choose “Broker” and be created as a Broker user with associated Broker record, and then use the same email verification flow as other roles.
+
+2.1 Update the registration API
+	•	Find the existing registration handler, e.g.:
+	•	app/api/auth/register/route.ts (App Router style) or
+	•	pages/api/auth/register.ts (Pages Router).
+	•	Locate where:
+	•	User is created,
+	•	a Company or AccountingProfile is created,
+	•	an email verification token is generated and email is sent.
+
+Extend this logic:
+	1.	Accept role from request:
+	•	Request body should contain role (e.g. "COMPANY" | "ACCOUNTANT" | "BROKER").
+	•	For broker registration also accept fields such as:
+	•	brokerCompanyName
+	•	brokerContactName
+	•	state
+	•	phone (optional)
+	•	website (optional)
+	2.	Create user with role BROKER:
+Pseudocode:
+const { name, email, password, role, companyName, state, ein, ...brokerFields } = body;
+
+// existing transaction
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.create({
+    data: {
+      name,
+      email,
+      passwordHash, // assume hashing already happens
+      role,         // "COMPANY" | "ACCOUNTANT" | "BROKER"
+      // other fields...
+    },
+  });
+
+  if (role === 'COMPANY') {
+    // existing: create Company
+  } else if (role === 'ACCOUNTANT') {
+    // existing accountant logic
+  } else if (role === 'BROKER') {
+    await tx.broker.create({
+      data: {
+        userId: user.id,
+        companyName: brokerFields.brokerCompanyName,
+        contactName: brokerFields.brokerContactName ?? name,
+        email,
+        state: brokerFields.state,
+        phone: brokerFields.phone ?? null,
+        website: brokerFields.website ?? null,
+        // status defaults to PENDING
+      },
+    });
+  }
+
+  // existing: create EmailVerificationToken and send email
+});
+3.	Return the same response shape as for company/accountant registration so the frontend doesn’t break.
+
+2.2 Email verification for brokers
+	•	The verification logic (/api/auth/verify-email or similar) should already activate the user and mark email verified.
+	•	Extend any role-based post-verify behaviour if needed (e.g. default status ACTIVE is fine for brokers; business verification can stay PENDING on the Broker model).
+	•	No special broker-specific logic is required here; it should “just work” with the new role.
+
+────────────────────────────────
+3. Frontend: registration page – add Broker option
+────────────────────────────────
+Goal: On the registration page the user can choose Broker and fill broker specific fields.
+
+3.1 Find registration page
+	•	Locate something like app/(auth)/register/page.tsx or similar.
+	•	This page probably already has:
+	•	Inputs for Name, Email, Password, Company Name, State, etc.
+	•	Some way to indicate user type: company vs accounting (could be tabs, radio buttons, select, etc.).
+
+3.2 Extend UI with “Broker”
+	1.	Role selector
+
+	•	Wherever the role selector is, add a third option:
+Example if it’s using buttons/tabs:
+const [role, setRole] = useState<'COMPANY' | 'ACCOUNTANT' | 'BROKER'>('COMPANY');
+And in UI:
+	•	Company
+	•	Accountant
+	•	Broker
+
+	2.	Broker-specific fields
+
+	•	When role === 'BROKER', show broker fields:
+	•	Broker company name (required)
+	•	Contact name (optional, default to Name)
+	•	State (required, reuse existing state select if available)
+	•	Phone (optional)
+	•	Website (optional)
+Example fragment inside the form:
+{role === 'BROKER' && (
+  <>
+    <FormField
+      name="brokerCompanyName"
+      label="Broker Company Name"
+      required
+    />
+    <FormField
+      name="brokerContactName"
+      label="Primary Contact Name"
+      placeholder="Same as your name"
+    />
+    <FormField
+      name="state"
+      label="State"
+      required
+      // reuse existing state select
+    />
+    <FormField
+      name="phone"
+      label="Phone (optional)"
+    />
+    <FormField
+      name="website"
+      label="Website (optional)"
+    />
+  </>
+)}
+•	Make sure all fields are wired to the react-hook-form (or whatever form lib is being used) and included in the payload sent to the registration API.
+
+	3.	Submit payload
+
+	•	When calling the registration API, include role and any broker fields:
+const payload = {
+  name,
+  email,
+  password,
+  role,
+  companyName,
+  state,
+  // ...
+  brokerCompanyName: data.brokerCompanyName,
+  brokerContactName: data.brokerContactName,
+  phone: data.phone,
+  website: data.website,
+};
+•	Maintain the same success/error handling (show “Check your email” screen, etc.).
+
+────────────────────────────────
+4. Routing & Access Control for Broker Dashboard
+────────────────────────────────
+Goal: Broker users, after login, should land on a Broker dashboard page, while other roles keep their existing behaviour.
+
+4.1 Decide route
+	•	Create a new broker dashboard page under the dashboard segment, for example:
+	•	app/(dashboard)/broker/page.tsx
+	•	Reuse the existing layout shell used by the company dashboard (nav, header, etc.), for consistency.
+
+4.2 Role-based redirect after login
+	•	Find the login logic:
+	•	Backend: api/auth/login (or similar) returns a session.
+	•	Frontend: login page submits credentials and, on success, redirects to some dashboard.
+	•	Determine how the app currently decides where to redirect:
+	•	There might be a generic /dashboard page that then redirects to company/accountant dashboards based on session.user.role.
+•	Extend this logic:
+if (user.role === 'COMPANY') {
+  redirect('/dashboard'); // or whatever company path is
+} else if (user.role === 'ACCOUNTANT') {
+  redirect('/accounting'); // example
+} else if (user.role === 'BROKER') {
+  redirect('/broker');
+}
+•	If there is a shared /app/(dashboard)/page.tsx that uses session.role, update it to handle BROKER and redirect/render accordingly.
+
+4.3 Protect broker route
+	•	In app/(dashboard)/broker/page.tsx, ensure server-side session is checked and that session.user.role === 'BROKER'.
+	•	If the user is not a broker, redirect them to their correct dashboard or login.
+Example (App Router, server component):
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+
+export default async function BrokerDashboardPage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.user.role !== 'BROKER') {
+    // optionally redirect depending on role
+    if (session.user.role === 'COMPANY') redirect('/dashboard');
+    if (session.user.role === 'ACCOUNTANT') redirect('/accounting');
+    redirect('/login');
+  }
+
+  // render broker dashboard...
+}
+────────────────────────────────
+5. Broker Dashboard UI & Data
+────────────────────────────────
+Goal: Build a beautiful, functional broker home page with:
+	•	top summary,
+	•	list of broker credit pools,
+	•	recent orders,
+	•	and profile/verification card.
+
+5.1 Data fetching
+	•	In BrokerDashboardPage, fetch the broker record and related data via Prisma:
+const broker = await prisma.broker.findUnique({
+  where: { userId: session.user.id },
+  include: {
+    creditPools: {
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    },
+    orders: {
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        company: true,
+        pool: true,
+      },
+    },
+  },
+});
+•	Handle edge cases:
+	•	If no broker record is found, show a helpful error or onboarding message.
+
+5.2 Layout structure
+
+Use the existing dashboard shell/layout components. Inside the BrokerDashboardPage component, structure UI similar to:
+	1.	Header
+	•	Title: Welcome, {broker.companyName}
+	•	Subtext: “Manage your tax credit pools and orders.”
+	•	Status pill:
+	•	broker.status === 'APPROVED' → green “Verified Broker”
+	•	PENDING → yellow “Verification Pending”
+	•	SUSPENDED → red “Suspended”
+	2.	Top summary cards (3-column on desktop, stacked on mobile):
+	•	Available Pools – count of active pools.
+	•	Total Inventory – sum of remainingFaceValueUsd across active pools.
+	•	Pending Orders – count of orders with status like PENDING / IN_REVIEW.
+	3.	Main content grid:
+Left side:
+	•	Credit Pools card:
+	•	Table/list of the broker’s pools:
+	•	Columns: Pool Name, State, Type, Remaining Face Value, Price per $, Status.
+	•	CTA button at top-right: “Create Pool” (for now route to /broker/pools or show a TODO).
+	•	If no pools → show an empty state:
+	•	“You don’t have any pools yet.”
+	•	Button: “Create your first pool”.
+	•	Optionally a link/button “View all pools” to /broker/pools.
+Right side:
+	•	Recent Orders card:
+	•	Table with: Date, Company, Pool, Face Value, Status.
+	•	If no orders → empty state message.
+Bottom:
+	•	Profile & Verification card:
+	•	Show broker details: companyName, contactName, email, state, phone, website.
+	•	Show BrokerStatus and a short description (e.g., for PENDING: “Your broker profile is under review. The marketplace team will approve it before you can close trades.”).
+	•	Button: “Edit profile” (link to /broker/settings or a TODO message for now).
+
+5.3 Styling
+	•	Use existing Tailwind + component primitives (e.g. from shadcn-ui or custom Card components already in project).
+	•	Match the existing dark gradient SuVerse style (like on the company dashboard):
+	•	Cards with subtle borders and background gradients.
+	•	Use existing typography and spacing utilities.
+	•	Ensure responsive behaviour for mobile (stacked layout).
+
+────────────────────────────────
+6. Optional but nice to have
+────────────────────────────────
+If time and context allow, add:
+	1.	Dedicated pages:
+	•	/broker/pools – full management of all pools.
+	•	/broker/orders – all orders list.
+	•	/broker/settings – broker profile editing form.
+	2.	Navigation
+	•	Update the dashboard sidebar/top nav to show a “Broker” section and links to:
+	•	Broker Home
+	•	Pools
+	•	Orders
+	•	Settings
+	3.	Empty state guidance
+	•	On a brand-new broker account, show a friendly onboarding message: steps to create first pool, how verification works, etc.
+
+────────────────────────────────
+7. QA / Manual test plan
+────────────────────────────────
+After implementing, manually test the following flows:
+	1.	New Broker Registration
+	•	Go to register page.
+	•	Choose Broker role.
+	•	Fill in name, email, password, broker company name, state, etc.
+	•	Submit → see “Check your email” screen.
+	•	Click the verification link:
+	•	Should see “Email Verified”.
+	•	After redirect or clicking “Go to Login”, login with the new broker credentials.
+	•	After login:
+	•	You should be taken to the Broker dashboard.
+	•	Header shows broker company name and status (PENDING).
+	•	If there is no data yet, empty states for pools and orders are shown.
+	2.	Existing roles still work
+	•	Register as a Company user:
+	•	Verify email.
+	•	Login → should land on Company dashboard (unchanged).
+	•	Register as an Accounting user:
+	•	Same – their behaviour should be unchanged.
+	•	Ensure neither company nor accounting users can access /broker (they should be redirected appropriately).
+	3.	Role-based protection
+	•	While logged in as broker, navigate manually to any company/accounting-only page:
+	•	Ensure the app either redirects or shows a “not allowed” message according to existing pattern.
+	4.	General sanity checks
+	•	No TypeScript errors in the dev console.
+	•	No Prisma migration issues.
+	•	No runtime errors in browser or server logs.
+
+────────────────────────────────
+8. Deliverables
+────────────────────────────────
+	•	Updated prisma/schema.prisma with BROKER role and Broker model (or extended existing one) plus migrations.
+	•	Updated registration API to correctly create BROKER users and broker profiles.
+	•	Updated registration UI to add a Broker role and necessary fields.
+	•	New broker dashboard page at app/(dashboard)/broker/page.tsx (or matching existing dashboard structure) with:
+	•	header,
+	•	summary cards,
+	•	credit pools list,
+	•	recent orders,
+	•	profile/verification section.
+	•	Role-based redirects and route protection so brokers land on /broker after login and only brokers can access it.
+Please implement all of the above now.

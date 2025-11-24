@@ -18,6 +18,11 @@ export default function RegisterPage() {
     ein: "",
     taxLiability: "",
     targetCloseYear: "",
+    // Broker fields
+    brokerCompanyName: "",
+    brokerContactName: "",
+    phone: "",
+    website: "",
   })
   const [error, setError] = useState("")
   const [einError, setEinError] = useState("")
@@ -60,6 +65,12 @@ export default function RegisterPage() {
         payload.targetCloseYear = formData.targetCloseYear
           ? parseInt(formData.targetCloseYear)
           : undefined
+      } else if (formData.role === "BROKER") {
+        payload.brokerCompanyName = formData.brokerCompanyName
+        payload.brokerContactName = formData.brokerContactName || formData.name
+        payload.state = formData.state
+        payload.phone = formData.phone || undefined
+        payload.website = formData.website || undefined
       }
 
       const res = await fetch("/api/auth/register", {
@@ -111,6 +122,7 @@ export default function RegisterPage() {
             >
               <option value="COMPANY">Company (Buyer)</option>
               <option value="ACCOUNTANT">Accountant</option>
+              <option value="BROKER">Broker (Credit Seller)</option>
             </select>
           </div>
 
@@ -250,6 +262,90 @@ export default function RegisterPage() {
                     }
                     className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
                     placeholder="2025"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {formData.role === "BROKER" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-200 mb-2">
+                  Broker Company Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.brokerCompanyName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, brokerCompanyName: e.target.value })
+                  }
+                  className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                  placeholder="Your Tax Credit Brokerage"
+                  required
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
+                    Primary Contact Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.brokerContactName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, brokerContactName: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                    placeholder="Same as your name (optional)"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) =>
+                      setFormData({ ...formData, state: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                    placeholder="CA, NY, TX..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
+                    Phone (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-200 mb-2">
+                    Website (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) =>
+                      setFormData({ ...formData, website: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-white/5 focus:bg-white/10 border border-white/10 rounded-xl focus:ring-2 focus:ring-brand focus:outline-none text-gray-100 placeholder-gray-400"
+                    placeholder="https://yourbrokerage.com"
                   />
                 </div>
               </div>

@@ -37,6 +37,8 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(validated.password, 12)
 
     let company = null
+    let broker = null
+    
     if (validated.role === "COMPANY" && validated.companyLegalName) {
       company = await prisma.company.create({
         data: {
@@ -47,6 +49,28 @@ export async function POST(req: Request) {
           taxLiability: validated.taxLiability,
           targetCloseYear: validated.targetCloseYear,
           verificationStatus: "UNVERIFIED",
+        },
+      })
+    } else if (validated.role === "BROKER") {
+      // Validate broker-specific required fields
+      if (!validated.brokerCompanyName || !validated.state) {
+        return NextResponse.json(
+          { error: "Broker company name and state are required for broker registration" },
+          { status: 400 }
+        )
+      }
+      
+      // Create broker profile
+      broker = await prisma.broker.create({
+        data: {
+          name: validated.name,
+          companyName: validated.brokerCompanyName,
+          contactName: validated.brokerContactName || validated.name,
+          email: normalizedEmail,
+          phone: validated.phone,
+          website: validated.website,
+          state: validated.state,
+          status: "PENDING", // Default status, admin will approve later
         },
       })
     }
@@ -60,6 +84,7 @@ export async function POST(req: Request) {
         name: validated.name,
         role: validated.role,
         companyId: company?.id,
+        brokerId: broker?.id,
         status: "PENDING_VERIFICATION", // Explicit for clarity
         emailVerifiedAt: null,
       },
@@ -83,6 +108,7 @@ export async function POST(req: Request) {
       details: {
         role: user.role,
         companyCreated: !!company,
+        brokerCreated: !!broker,
         emailVerificationRequired: true,
       },
       ...ctx,
