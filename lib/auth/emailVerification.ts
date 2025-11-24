@@ -12,10 +12,15 @@ import { prisma } from '@/lib/db';
 import { sendTransactionalEmail } from '@/lib/email/sendgrid';
 import crypto from 'crypto';
 
-const APP_BASE_URL = process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-
-if (!process.env.APP_BASE_URL) {
-  console.warn('[WARN] APP_BASE_URL not set, defaulting to', APP_BASE_URL);
+/**
+ * Get the base URL for the application.
+ * Priority: APP_BASE_URL > VERCEL_URL > localhost fallback
+ */
+function getBaseUrl(): string {
+  const envUrl = process.env.APP_BASE_URL;
+  if (envUrl && envUrl.length > 0) return envUrl;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'http://localhost:3000';
 }
 
 /**
@@ -53,8 +58,11 @@ export async function createEmailVerificationToken(
     },
   });
 
-  // Build verification URL
-  const verifyUrl = `${APP_BASE_URL}/auth/verify?token=${token}`;
+  // Build verification URL using base URL helper
+  const baseUrl = getBaseUrl();
+  const verifyUrl = `${baseUrl}/auth/verify?token=${token}`;
+  
+  console.log(`[emailVerification] Generated verification URL with base: ${baseUrl}`);
 
   // Send verification email
   const html = `
@@ -140,6 +148,8 @@ export async function verifyEmailToken(
 ): Promise<{ ok: boolean; error?: string }> {
   // Normalize token
   const normalizedToken = token.trim();
+  
+  console.log('[VERIFY] Starting verification for token:', normalizedToken.substring(0, 10) + '...');
 
   try {
     // Use transaction to atomically verify and activate user
@@ -150,21 +160,30 @@ export async function verifyEmailToken(
         include: { user: true },
       });
 
+      console.log('[VERIFY]', { 
+        token: normalizedToken.substring(0, 10) + '...', 
+        found: !!tokenRecord, 
+        expiresAt: tokenRecord?.expiresAt, 
+        usedAt: tokenRecord?.usedAt 
+      });
+
       if (!tokenRecord) {
+        console.log('[VERIFY] Token not found in database');
         return { ok: false, error: 'invalid_or_used' };
       }
 
       // Check if already used
       if (tokenRecord.usedAt !== null) {
+        console.log('[VERIFY] Token already used at:', tokenRecord.usedAt);
         return { ok: false, error: 'invalid_or_used' };
       }
 
       // Check if expired
-      if (tokenRecord.expiresAt < new Date()) {
+      const now = new Date();
+      if (tokenRecord.expiresAt < now) {
+        console.log('[VERIFY] Token expired. Expires:', tokenRecord.expiresAt, 'Now:', now);
         return { ok: false, error: 'expired' };
       }
-
-      const now = new Date();
 
       // Atomically mark token as used
       await tx.emailVerificationToken.update({
@@ -181,14 +200,14 @@ export async function verifyEmailToken(
         },
       });
 
-      console.log(`[emailVerification] Email verified for user ${tokenRecord.user.email}`);
+      console.log(`[VERIFY] ✓ Email verified successfully for user ${tokenRecord.user.email}`);
 
       return { ok: true };
     });
 
     return result;
   } catch (error) {
-    console.error('[emailVerification] Transaction failed:', error);
+    console.error('[VERIFY] Transaction failed:', error);
     return { ok: false, error: 'server_error' };
   }
 }

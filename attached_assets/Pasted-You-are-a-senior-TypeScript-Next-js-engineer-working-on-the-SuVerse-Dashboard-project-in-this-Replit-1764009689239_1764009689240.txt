@@ -1,0 +1,139 @@
+You are a senior TypeScript/Next.js engineer working on the SuVerse Dashboard project in this Replit.
+
+Goal: Fix email verification so that:
+1) The verification link in the email always uses APP_BASE_URL (NOT the dynamic Replit origin).
+2) The token from the link is successfully validated (no "Verification Failed" on first click).
+3) Resend verification email also uses the same logic.
+
+Please do all edits yourself. I want to be able to just click "Run" and test.
+
+────────────────────────
+1. ENV & base URL
+────────────────────────
+- In the code where the email verification link is generated (registration + "resend verification" endpoint), do the following:
+
+  - Introduce a helper to resolve the base URL, for example in a small util (if such util already exists – reuse it):
+
+    const getBaseUrl = () => {
+      const envUrl = process.env.APP_BASE_URL;
+      if (envUrl && envUrl.length > 0) return envUrl;
+      if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+      return 'http://localhost:3000';
+    };
+
+  - Use this helper when building the verification URL:
+
+    const baseUrl = getBaseUrl();
+    const verifyUrl = `${baseUrl}/auth/verify?token=${token}`;
+
+  - IMPORTANT: Do NOT use headers().get('origin'), new URL(req.url).origin, request.nextUrl.origin, etc. for this link.
+  - Make sure this logic is applied both:
+    - when sending the initial verification email after signup;
+    - when sending a "resend verification email".
+
+────────────────────────
+2. Token storage & validation
+────────────────────────
+We want a simple, consistent MVP implementation:
+
+MODEL:
+- Ensure the Prisma model for the email verification token looks roughly like this (adapt names to existing schema):
+
+  model EmailVerificationToken {
+    id        String   @id @default(cuid())
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    token     String   @unique
+    expiresAt DateTime
+    usedAt    DateTime?
+    createdAt DateTime @default(now())
+  }
+
+- If a similar model already exists, keep the structure but make sure "token" is stored in plain form (no hashing) – for MVP this is fine.
+
+GENERATION:
+- In the registration flow and in the "resend verification" endpoint:
+
+  - Generate a random token string:
+
+    import { randomBytes } from 'crypto';
+
+    function generateVerificationToken() {
+      return randomBytes(32).toString('hex'); // 64-char token
+    }
+
+  - When creating the DB record:
+
+    const token = generateVerificationToken();
+    const expiresAt = addHours(new Date(), 24); // or similar
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt,
+      },
+    });
+
+  - Use this same plain "token" string in the verification URL.
+
+VALIDATION:
+- In the "/auth/verify" handler (or corresponding API route/server action):
+
+  - Read "token" from the query string:
+
+    const token = searchParams.get('token'); // or request URL equivalent
+    if (!token) → show "invalid token".
+
+  - Look up the DB record:
+
+    const record = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+  - Validation rules:
+    - If !record → invalid token.
+    - If record.usedAt is not null → invalid token ("already used").
+    - If record.expiresAt < new Date() → invalid token ("expired").
+
+  - If all good:
+    - Mark user as VERIFIED (for example, user.emailVerified = new Date() or user.status = 'VERIFIED'):
+
+      await prisma.user.update({
+        where: { id: record.userId },
+        data: {
+          emailVerified: new Date(), // or status field
+        },
+      });
+
+    - Mark token as used:
+
+      await prisma.emailVerificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      });
+
+    - Redirect to a "Email verified" page or sign-in page.
+
+────────────────────────
+3. Logging to help debugging
+────────────────────────
+- In the verification handler, temporarily add some logging to the server console:
+
+  console.log('[VERIFY]', { token, found: !!record, expiresAt: record?.expiresAt, usedAt: record?.usedAt });
+
+- This will help see what exactly is happening when I click the link.
+
+────────────────────────
+4. Clean up & test
+────────────────────────
+- Make sure code compiles (no TypeScript errors).
+- Run `npx prisma migrate dev` IF you changed the Prisma schema and it requires a migration (or `prisma db push` if the project uses that).
+- Then I will:
+  1) Restart the Replit app (Stop → Run).
+  2) Register a brand-new user with a brand-new email.
+  3) Click the link from the email and expect to see a success "Email verified" screen.
+  4) Optionally test the "Resend verification email" flow.
+
+Do all edits now and then stop when everything is wired and builds successfully.
