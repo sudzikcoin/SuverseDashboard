@@ -32,7 +32,7 @@ async function getStats() {
     prisma.auditLog
       .findMany({
         take: 10,
-        orderBy: { createdAt: "desc" },
+        orderBy: { timestamp: "desc" },
         include: { actor: true },
       })
       .catch(() => []),
@@ -113,7 +113,7 @@ export default async function AdminDashboard() {
                   <p className="text-sm text-white">
                     {log.actor?.name || log.actor?.email || "System"}
                   </p>
-                  <p className="text-xs text-su-muted">{formatDate(log.createdAt)}</p>
+                  <p className="text-xs text-su-muted">{formatDate(log.timestamp)}</p>
                 </div>
               </div>
             ))

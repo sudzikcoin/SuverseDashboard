@@ -44,7 +44,7 @@ export const authOptions: NextAuthOptions = {
         try {
           const user = await prisma.user.findUnique({
             where: { email: normalizedEmail },
-            include: { company: true }
+            include: { company: true, broker: true }
           })
 
           // DEBUG LOGGING - Remove after fix
@@ -142,6 +142,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
             companyId: user.companyId,
             companyName: user.company?.legalName ?? null,
+            brokerId: user.brokerId ?? null,
           }
         } catch (error: any) {
           logAuth('FAILED', {
@@ -163,6 +164,7 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name || token.name
         token.companyId = user.companyId
         token.companyName = user.companyName
+        token.brokerId = user.brokerId
       }
       return token
     },
@@ -173,6 +175,7 @@ export const authOptions: NextAuthOptions = {
         session.user.name = token.name as string | null
         session.user.companyId = token.companyId as string | null
         session.user.companyName = token.companyName as string | null
+        session.user.brokerId = token.brokerId as string | null
       }
       return session
     }
