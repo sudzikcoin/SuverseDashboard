@@ -4,6 +4,12 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**November 24, 2025** - Login Reliability Fix
+- Fixed login requiring 2-3 attempts by correcting middleware stability shield behavior
+- Root cause: Middleware was clearing auth cookies when `sv.version` cookie was missing (first visit), incorrectly treating it as a version mismatch
+- Fix: Only clear auth cookies when there's an ACTUAL version mismatch (existing cookie has different value), not when cookie is simply missing
+- Removed excessive console logging from lib/env.ts and lib/auth.ts for cleaner output
+
 **November 24, 2025** - Broker Portal Session Fix
 - Fixed broker users being redirected to `/dashboard?error=broker_not_configured` after login
 - Added `brokerId` to NextAuth session by:
