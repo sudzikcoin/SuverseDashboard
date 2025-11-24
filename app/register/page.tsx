@@ -74,7 +74,13 @@ export default function RegisterPage() {
         throw new Error(data.error || "Registration failed")
       }
 
-      router.push("/login")
+      // Check if email verification is required
+      if (data.requiresEmailVerification) {
+        router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`)
+      } else {
+        // Fallback for backward compatibility (shouldn't happen with new flow)
+        router.push("/login")
+      }
     } catch (err: any) {
       setError(err.message || "An error occurred. Please try again.")
     } finally {
