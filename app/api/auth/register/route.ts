@@ -5,11 +5,15 @@ import { registerSchema } from "@/lib/validations"
 import { writeAudit } from "@/lib/audit"
 import { createEmailVerificationToken } from "@/lib/auth/emailVerification"
 import { getRequestContext } from "@/lib/reqctx"
+import { normalizeEmail } from "@/lib/auth-diagnostics"
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     const validated = registerSchema.parse(body)
+
+    // CRITICAL FIX: Normalize email to lowercase to match login behavior
+    const normalizedEmail = normalizeEmail(validated.email)
 
     if (validated.role === "ADMIN") {
       return NextResponse.json(
@@ -18,8 +22,9 @@ export async function POST(req: Request) {
       )
     }
 
+    // Use normalized email for all database operations
     const existingUser = await prisma.user.findUnique({
-      where: { email: validated.email },
+      where: { email: normalizedEmail },
     })
 
     if (existingUser) {
@@ -38,7 +43,7 @@ export async function POST(req: Request) {
           legalName: validated.companyLegalName,
           state: validated.state,
           ein: validated.ein,
-          contactEmail: validated.email,
+          contactEmail: normalizedEmail, // Use normalized email
           taxLiability: validated.taxLiability,
           targetCloseYear: validated.targetCloseYear,
           verificationStatus: "UNVERIFIED",
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
     // and emailVerifiedAt: null
     const user = await prisma.user.create({
       data: {
-        email: validated.email,
+        email: normalizedEmail, // CRITICAL: Use normalized email
         hashedPassword,
         name: validated.name,
         role: validated.role,
@@ -85,7 +90,8 @@ export async function POST(req: Request) {
 
     // Send email verification instead of welcome email
     // User cannot log in until they verify their email address
-    await createEmailVerificationToken(user.id, user.email).catch((err) => {
+    console.log(`[register] Created user with email: ${normalizedEmail}`)
+    await createEmailVerificationToken(user.id, normalizedEmail).catch((err) => {
       console.error("Failed to send verification email:", err)
       // Don't fail registration if email fails - user can request resend
     })

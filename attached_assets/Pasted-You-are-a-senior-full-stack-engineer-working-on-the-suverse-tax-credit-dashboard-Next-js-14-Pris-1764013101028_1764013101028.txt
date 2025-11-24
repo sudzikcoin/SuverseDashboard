@@ -1,0 +1,211 @@
+You are a senior full-stack engineer working on the "suverse-tax-credit-dashboard" Next.js 14 + Prisma app on Replit.
+
+Context / Bug:
+- We recently implemented email verification with SendGrid.
+- Flow NOW:
+  1) User registers at /register
+  2) Verification email is sent and received
+  3) Clicking the link shows "Email Verified!" screen and redirects to /login
+  4) On /login, entering the SAME email and password shows "Invalid email or password"
+- So verification works, but login for freshly verified users fails.
+
+Your task:
+1) Inspect the auth + verification implementation.
+2) Fix the root cause so that:
+   - After "Email Verified!", the user can log in with the same credentials.
+   - Old links behave correctly ("already used" / "expired").
+   - Security is preserved (no email enumeration, no leaking of whether user exists).
+
+Please follow these concrete steps:
+
+────────────────
+1. Check Prisma models
+────────────────
+- Open `prisma/schema.prisma`.
+- Find the `User` model and the `EmailVerificationToken` (or similar) model.
+- Confirm that:
+  - User has at least:
+    - `id        String @id @default(cuid())`
+    - `email     String @unique`
+    - `passwordHash String?` (or similar)
+    - `emailVerifiedAt DateTime?`
+    - `status   UserStatus` (enum) or `status String`
+- Confirm EmailVerificationToken has:
+  - `token       String @unique`
+  - `userId      String`
+  - `expiresAt   DateTime`
+  - `usedAt      DateTime?`
+  - Relation to User is correct.
+
+If anything is missing for this flow, add minimal fields, run `npx prisma migrate dev --name fix_auth_models` and update code accordingly.
+
+────────────────
+2. Inspect REGISTER handler
+────────────────
+- Open `app/api/auth/register/route.ts` (or wherever registration endpoint lives).
+- Make sure it:
+  1) Normalizes email:
+     - `const email = rawEmail.toLowerCase().trim();`
+  2) Hashes password using the same algorithm used in login (bcrypt or argon2). Example for bcrypt:
+     ```ts
+     import bcrypt from 'bcryptjs';
+     const passwordHash = await bcrypt.hash(password, 10);
+     ```
+  3) Creates user with:
+     - `email`
+     - `passwordHash`
+     - `emailVerifiedAt: null`
+     - `status: 'PENDING_VERIFICATION'` (or similar)
+  4) Creates `EmailVerificationToken` with:
+     - random token string
+     - userId
+     - `expiresAt` = now + 24h
+     - `usedAt = null`
+  5) Sends the email using `process.env.APP_BASE_URL` as:
+     `${APP_BASE_URL}/auth/verify?token=${token}`
+
+Do **not** log the password or hash anywhere.
+
+────────────────
+3. Inspect VERIFY handler
+────────────────
+- Open `app/api/auth/verify-email/route.ts` or similar.
+- Ensure the verify flow is:
+
+  ```ts
+  // 1. Read token from query
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get('token');
+
+  // 2. Find token in DB
+  const record = await prisma.emailVerificationToken.findUnique({ where: { token } });
+
+  // 3. Validate:
+  // - record exists
+  // - record.usedAt is null
+  // - record.expiresAt > now
+
+  // 4. In a single transaction:
+  //    - set record.usedAt = now()
+  //    - update user:
+  //         emailVerifiedAt = now()
+  //         status = 'ACTIVE'
+  // (or whatever status the LOGIN handler expects)
+•	Make sure the status string here EXACTLY matches what the login handler checks ('ACTIVE', 'VERIFIED', etc.). If login expects ACTIVE, set ACTIVE here too.
+	•	Return success JSON that the frontend Email Verified! page already expects.
+
+────────────────
+4. FIX the LOGIN handler
+────────────────
+	•	Open app/api/auth/login/route.ts (or equivalent).
+	•	Rewrite / refactor the logic to be simple and consistent:
+import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/prisma'; // adjust import path if needed
+
+export async function POST(req: Request) {
+  try {
+    const { email: rawEmail, password } = await req.json();
+
+    const email = rawEmail.toLowerCase().trim();
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    // To avoid user enumeration, use same error message for all failing paths
+    const INVALID = NextResponse.json(
+      { error: 'Invalid email or password' },
+      { status: 401 }
+    );
+
+    if (!user || !user.passwordHash) {
+      // small delay to make timing less obvious
+      await new Promise((r) => setTimeout(r, 300));
+      return INVALID;
+    }
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      await new Promise((r) => setTimeout(r, 300));
+      return INVALID;
+    }
+
+    // Optional: require verified + active status
+    if (!user.emailVerifiedAt || user.status !== 'ACTIVE') {
+      return NextResponse.json(
+        { error: 'Email not verified or account inactive' },
+        { status: 403 }
+      );
+    }
+
+    // At this point credentials are valid and user is active.
+    // Reuse the existing session / token creation logic that the app uses now.
+    // If there is already a helper like `createSession(user)` or NextAuth callback, call it here.
+    // Example (pseudo):
+    // const session = await createSession(user.id);
+    // const res = NextResponse.json({ ok: true });
+    // res.cookies.set('session', session.token, { ...options });
+    // return res;
+
+    // IMPORTANT: Do NOT change existing cookie/session format, just plug user.id into it.
+  } catch (err) {
+    console.error('[login] error', err);
+    return NextResponse.json(
+      { error: 'Something went wrong' },
+      { status: 500 }
+    );
+  }
+}
+•	Make sure:
+	•	We look up by normalized email.
+	•	We use the same hashing algorithm (bcrypt vs argon2) and same field (passwordHash).
+	•	Status check matches what verify handler sets (ACTIVE).
+
+────────────────
+5. Add temporary logging (for debugging only)
+────────────────
+	•	Around the login code (BEFORE the password comparison), add safe logs:
+console.log('[login] incoming email', email);
+console.log('[login] found user', user ? { id: user.id, email: user.email, status: user.status, emailVerifiedAt: user.emailVerifiedAt } : null);
+DO NOT log passwords or hashes.
+	•	This will allow Dmitrii to see in console that:
+	•	The user is indeed found.
+	•	emailVerifiedAt is not null.
+	•	status is 'ACTIVE'.
+
+After everything works, you can comment these logs.
+
+────────────────
+6. Fix EADDRINUSE on port 5000
+────────────────
+	•	Ensure the dev server is started only once.
+	•	In Replit:
+	•	If you see Error: listen EADDRINUSE: address already in use :::5000, it means another Next.js dev process is already running.
+	•	Stop the existing run (the big purple square button).
+	•	Only then run the dev command again.
+	•	If the npm run dev is configured in .replit or replit.nix, make sure there isn’t a second process spawning another Next dev server.
+
+────────────────
+7. Manual test plan (run it yourself after changes)
+────────────────
+Implement and then run these tests:
+
+Test 1: Fresh user
+	1.	Start dev server (npm run dev) and make sure it runs cleanly.
+	2.	Register a completely new user with a fresh email.
+	3.	Click the link in the verification email.
+	4.	You should see “Email Verified!” and redirect to /login.
+	5.	Log in with the same email and password.
+	6.	Login should succeed and redirect to the company dashboard.
+
+Test 2: Wrong password
+	1.	Try same email with a wrong password.
+	2.	You should see “Invalid email or password” (401), nothing else.
+
+Test 3: Unverified user
+	1.	Register another user but DO NOT click the verification link.
+	2.	Try to login.
+	3.	You should get 403 with an error like “Email not verified or account inactive”.
+
+When all these tests pass, the auth + verification system is fixed.

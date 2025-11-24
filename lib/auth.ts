@@ -47,6 +47,17 @@ export const authOptions: NextAuthOptions = {
             include: { company: true }
           })
 
+          // DEBUG LOGGING - Remove after fix
+          console.log('[login] DEBUG - incoming email:', normalizedEmail)
+          console.log('[login] DEBUG - found user:', user ? {
+            id: user.id,
+            email: user.email,
+            status: user.status,
+            emailVerifiedAt: user.emailVerifiedAt,
+            hasPassword: !!user.hashedPassword,
+            role: user.role
+          } : null)
+
           if (!user || !user.hashedPassword) {
             logAuth('FAILED', {
               stage: 'user_lookup',
@@ -71,6 +82,9 @@ export const authOptions: NextAuthOptions = {
             user.hashedPassword
           )
 
+          // DEBUG LOGGING - Remove after fix
+          console.log('[login] DEBUG - password valid:', isValid)
+
           if (!isValid) {
             logAuth('FAILED', {
               stage: 'password_verify',
@@ -81,6 +95,9 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Check if email is verified
+          console.log('[login] DEBUG - emailVerifiedAt:', user.emailVerifiedAt)
+          console.log('[login] DEBUG - user.status:', user.status)
+          
           if (!user.emailVerifiedAt) {
             logAuth('FAILED', {
               stage: 'email_verification_check',
@@ -88,6 +105,17 @@ export const authOptions: NextAuthOptions = {
               reasonCode: 'UNVERIFIED_EMAIL',
             })
             throw new Error("UNVERIFIED_EMAIL")
+          }
+
+          // CRITICAL FIX: Also check user status is ACTIVE
+          if (user.status !== 'ACTIVE') {
+            logAuth('FAILED', {
+              stage: 'user_status_check',
+              emailMasked,
+              reasonCode: 'USER_NOT_ACTIVE',
+            })
+            console.log('[login] DEBUG - User status is not ACTIVE:', user.status)
+            throw new Error(`Account status: ${user.status}. Please verify your email.`)
           }
 
           if (user.role === "COMPANY" && user.company) {
