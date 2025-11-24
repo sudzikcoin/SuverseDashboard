@@ -80,6 +80,16 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
+          // Check if email is verified
+          if (!user.emailVerifiedAt) {
+            logAuth('FAILED', {
+              stage: 'email_verification_check',
+              emailMasked,
+              reasonCode: 'UNVERIFIED_EMAIL',
+            })
+            throw new Error("UNVERIFIED_EMAIL")
+          }
+
           if (user.role === "COMPANY" && user.company) {
             if (user.company.status === "ARCHIVED") {
               logAuth('FAILED', {
