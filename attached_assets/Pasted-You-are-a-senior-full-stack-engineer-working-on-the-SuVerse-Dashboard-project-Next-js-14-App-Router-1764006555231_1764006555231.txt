@@ -1,0 +1,321 @@
+You are a senior full-stack engineer working on the SuVerse Dashboard project (Next.js 14 App Router + TypeScript + Tailwind + Prisma + PostgreSQL) running on Replit.
+
+Goal for this task:
+Implement production-ready **e-mail verification on registration** using **SendGrid + info@suverse.io**, wired into the existing auth and dashboards (company, accountant, broker). Respect the current codebase structure and do NOT break existing flows.
+
+Environment (already configured in Replit secrets):
+- SENDGRID_API_KEY = valid SendGrid API key.
+- EMAIL_FROM_ADDRESS = "info@suverse.io".
+- APP_BASE_URL = current public URL of the app (e.g. "https://6r44svw23zay.spock.replit.dev", no trailing slash).
+
+You MUST:
+- Keep the existing project structure, styles, and design language.
+- Prefer small, focused changes with clear TODOs where needed.
+- Add comments where behaviour may not be obvious.
+- Avoid introducing breaking changes to existing API endpoints unless explicitly mentioned.
+
+────────────────────────────────
+1. Prisma: add EmailVerificationToken + user status
+────────────────────────────────
+
+1. Open `prisma/schema.prisma` and extend the existing `User` (or equivalent auth model) with fields for verification. If the model is not named `User`, use the existing auth model name.
+
+Example changes (adapt to actual model name/fields):
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  // NEW: verification fields
+  emailVerifiedAt   DateTime?     // null until user confirms email
+  status            UserStatus    @default(PENDING_VERIFICATION)
+
+  emailVerificationTokens EmailVerificationToken[]
+  // ...other existing relations/fields
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  DISABLED
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+2. Run Prisma migration (or `prisma db push` if the project uses that) according to existing project conventions. On Replit, use the existing scripts in `package.json` (e.g. `pnpm prisma migrate dev`) and ensure the schema compiles.
+
+────────────────────────────────
+2. Shared e-mail utility using SendGrid
+────────────────────────────────
+
+Create a small, centralised e-mail helper that hides SendGrid details and handles “dev mode” when keys are missing.
+
+1. Add a new file `lib/email/sendgrid.ts` (or similar shared lib folder):
+
+- It should:
+  - Import `@sendgrid/mail`.
+  - Read `process.env.SENDGRID_API_KEY` and `process.env.EMAIL_FROM_ADDRESS`.
+  - In `initSendGrid()`, if `SENDGRID_API_KEY` is missing:
+    - Log a warning: `[DEV] SENDGRID_API_KEY not set – emails will be logged to console only`.
+    - Do NOT throw; allow dev mode.
+  - Export a function `sendTransactionalEmail(opts)` where `opts` includes:
+    - `to: string`
+    - `subject: string`
+    - `html: string`
+    - `text?: string`
+  - If API key is present:
+    - Actually send via SendGrid.
+  - If API key is missing:
+    - `console.log` the e-mail payload including the verification URL.
+
+Example (adapt to project style, ESM/CJS as needed):
+
+import sgMail from '@sendgrid/mail';
+
+const apiKey = process.env.SENDGRID_API_KEY;
+const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'info@suverse.io';
+
+if (apiKey) {
+  sgMail.setApiKey(apiKey);
+} else {
+  console.warn('[DEV] SENDGRID_API_KEY is not set. Emails will not be sent, only logged.');
+}
+
+export async function sendTransactionalEmail({
+  to,
+  subject,
+  html,
+  text,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}) {
+  if (!apiKey) {
+    console.log('[DEV EMAIL]', { to, subject, html, text });
+    return;
+  }
+
+  await sgMail.send({
+    to,
+    from: {
+      email: fromAddress,
+      name: 'SuVerse Dashboard',
+    },
+    subject,
+    html,
+    text: text || subject,
+  });
+}
+
+2. Ensure `@sendgrid/mail` is added to `package.json` and installed.
+
+────────────────────────────────
+3. Email verification workflow – backend
+────────────────────────────────
+
+You need to integrate email verification into the existing auth flow. Assume there is already a registration route (e.g. `/api/auth/register` or similar) and a login route (e.g. `/api/auth/login`). Use the actual endpoint paths you find.
+
+A. Helper to create and send verification email
+
+Create `lib/auth/emailVerification.ts` (or a similar path):
+
+- Export functions:
+
+  - `createEmailVerificationToken(userId: string, email: string): Promise<void>`
+  - `verifyEmailToken(token: string): Promise<{ ok: boolean; error?: string }>`
+  - `resendVerification(email: string): Promise<{ ok: boolean; error?: string }>`
+
+Implementation details:
+
+1. `createEmailVerificationToken`:
+   - Generate a cryptographically secure random token (e.g. `crypto.randomBytes(32).toString('hex')`).
+   - Expiry: `expiresAt = now + 24 hours`.
+   - Save record in `EmailVerificationToken`:
+     - For the same user, optionally invalidate previous unused tokens (set `usedAt = now`).
+   - Build verification URL using `APP_BASE_URL`:
+
+     const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+     const verifyUrl = `${appBaseUrl}/auth/verify?token=${token}`;
+
+   - Call `sendTransactionalEmail` with:
+     - `to: email`
+     - `subject: "Verify your email for SuVerse Dashboard"`
+     - `html`: simple, clean HTML with:
+       - Greeting by email or “Hi,”.
+       - Short text “Please confirm your email to finish creating your SuVerse Dashboard account.”
+       - Button/link with `verifyUrl`.
+       - Note: “If you did not create an account, you can ignore this email.”
+     - Plain text fallback.
+
+2. `verifyEmailToken(token)`:
+   - Look up `EmailVerificationToken` by `token`.
+   - If not found → `{ ok: false, error: 'invalid_or_used' }`.
+   - If `usedAt` not null → treat as invalid.
+   - If `expiresAt < now` → invalid (`expired`).
+   - If valid:
+     - Mark `usedAt = now`.
+     - Update `user`:
+       - `emailVerifiedAt = now`
+       - `status = ACTIVE` (if using enum).
+     - Return `{ ok: true }`.
+
+3. `resendVerification(email)`:
+   - Find user by `email`.
+   - If no user → return ok but no details (do not leak).
+   - If user already verified → return `{ ok: false, error: 'already_verified' }`.
+   - If not verified → call `createEmailVerificationToken(user.id, user.email)` and return `{ ok: true }`.
+
+B. Wire into registration endpoint
+
+Locate the registration handler (e.g. `app/api/auth/register/route.ts` or similar). Modify it so that:
+
+- When a new user is created:
+  - Set `status = PENDING_VERIFICATION`.
+  - Ensure `emailVerifiedAt` is not set.
+- Instead of auto-logging in, respond with something like:
+
+  { success: true, requiresEmailVerification: true }
+
+- Immediately after user creation, call `createEmailVerificationToken(user.id, user.email)`.
+
+Ensure any error is caught and logged, but the endpoint still returns a safe error response.
+
+C. Login endpoint: block unverified users
+
+In the login handler:
+
+- After verifying email/password:
+  - Fetch user’s `emailVerifiedAt` and/or `status`.
+  - If user is not verified:
+    - DO NOT create a session.
+    - Return a specific error code, for example:
+
+      { success: false, code: 'UNVERIFIED_EMAIL' }
+
+    - Do not reveal other sensitive info.
+
+- If verified:
+  - Proceed with existing login/session creation.
+
+D. New API routes for verification & resend
+
+1. `/api/auth/verify-email` (POST or GET):
+
+- Accept `token` (from query or JSON body).
+- Call `verifyEmailToken(token)`.
+- On success:
+  - Option A (simpler): return JSON `{ ok: true }`. The client will redirect to login with a success message.
+  - Option B: immediately create a session and redirect to dashboard. Choose whichever fits current auth infrastructure better. If it is complex to create sessions manually, use Option A and keep it simple.
+
+2. `/api/auth/resend-verification` (POST):
+
+- Accepts `email` in body (or uses current logged-in user).
+- Call `resendVerification(email)`.
+- Return generic success response regardless of whether user exists, but in case of `already_verified` you can send a specific code for UX.
+
+────────────────────────────────
+4. Frontend: pages & UX
+────────────────────────────────
+
+Assume App Router structure under `app/`.
+
+A. “Check your inbox” page
+
+Create a page, e.g. `app/auth/check-email/page.tsx`:
+
+- Simple card saying:
+  - “Check your inbox”
+  - “We’ve sent a verification link to <email>. Click the link to confirm your account.”
+  - Option to “Resend verification e-mail”:
+    - Small form asking to re-enter e-mail or using a query param `?email=...`.
+    - Calls `/api/auth/resend-verification`.
+
+Style it consistent with other auth pages (dark theme, SuVerse gradients, etc.).
+
+B. Update registration flow
+
+In the registration form component:
+
+- After a successful API call that returns `requiresEmailVerification: true`, redirect user to `/auth/check-email?email=...`.
+- Do NOT log user in automatically.
+- If registration fails, preserve existing error handling.
+
+C. Verification page
+
+Create `app/auth/verify/page.tsx`:
+
+- Read `token` from `searchParams`.
+- On mount (`useEffect`):
+  - Call `/api/auth/verify-email` with the token.
+  - Show one of three states:
+    1. “Verifying your email…” (spinner).
+    2. “Email verified!” with:
+       - Button: “Go to login” (redirect to `/auth/login`).
+       - Optionally auto-redirect in a few seconds.
+    3. If invalid/expired:
+       - Message: “This verification link is invalid or has expired.”
+       - Button: “Resend verification e-mail” → show a simple e-mail input that calls `/api/auth/resend-verification`.
+
+D. Login screen behaviour
+
+In the login form:
+
+- When API returns `code: 'UNVERIFIED_EMAIL'`, show a friendly message:
+
+  “Your e-mail address is not verified yet. Please check your inbox for the verification link or request a new one.”
+
+- Show a small “Resend verification e-mail” link/button:
+  - Prefill the email from the login form.
+  - Call `/api/auth/resend-verification`.
+  - On success, show toast: “If an account with that e-mail exists, we’ve sent a new verification link.”
+
+Keep all other login behaviour unchanged.
+
+────────────────────────────────
+5. Safety / Edge cases / Dev experience
+────────────────────────────────
+
+1. If `APP_BASE_URL` is missing:
+   - Default to `http://localhost:3000`, but:
+     - Log a warning: `[WARN] APP_BASE_URL not set, defaulting to http://localhost:3000`.
+
+2. If SendGrid keys are missing:
+   - Do NOT throw.
+   - Just log the e-mail content to console (already implemented in the send helper).
+
+3. Make sure the new Prisma models and enums are used consistently:
+   - Update any user creation code to set `status: PENDING_VERIFICATION` by default.
+   - Where user status is checked (if anywhere), treat `ACTIVE` as normal, treat others conservatively.
+
+4. Do not modify the accountant/company/broker business logic except for:
+   - Requiring that the underlying user account be verified before they can log in.
+   - After verification, all existing dashboards must work as before.
+
+────────────────────────────────
+6. Final checks
+────────────────────────────────
+
+Before you finish, please:
+
+1. Ensure TypeScript passes (no new TS errors).
+2. Ensure Prisma schema is valid (`prisma validate`) and migrations applied.
+3. Manually test flow (you can describe tests in comments if you can’t execute them):
+   - New user registration → redirected to “Check your inbox”.
+   - Verify link works and marks user as verified.
+   - Unverified user cannot log in (gets UNVERIFIED_EMAIL).
+   - After verification, login works.
+   - Resend link endpoint works and does not leak whether user exists.
+4. Add brief comments in new files explaining their purpose and any TODOs (e.g., future password reset workflow).
+
+Keep all code changes focused on this e-mail verification feature. Do not refactor unrelated parts of the app.

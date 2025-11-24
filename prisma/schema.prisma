@@ -82,22 +82,31 @@ enum CreditPoolVisibility {
   PRIVATE
 }
 
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  DISABLED
+}
+
 model User {
-  id             String              @id @default(cuid())
-  email          String              @unique
-  hashedPassword String?
-  role           String              @default("COMPANY")
-  name           String?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  companyId      String?
-  company        Company?            @relation(fields: [companyId], references: [id])
-  brokerId       String?
-  broker         Broker?             @relation(fields: [brokerId], references: [id])
-  accountantClients AccountantClient[]
-  uploadedDocuments Document[]
-  auditLogs      AuditLog[]
-  purchases      Purchase[]
+  id                      String                     @id @default(cuid())
+  email                   String                     @unique
+  hashedPassword          String?
+  role                    String                     @default("COMPANY")
+  name                    String?
+  emailVerifiedAt         DateTime?
+  status                  UserStatus                 @default(PENDING_VERIFICATION)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  companyId               String?
+  company                 Company?                   @relation(fields: [companyId], references: [id])
+  brokerId                String?
+  broker                  Broker?                    @relation(fields: [brokerId], references: [id])
+  accountantClients       AccountantClient[]
+  uploadedDocuments       Document[]
+  auditLogs               AuditLog[]
+  purchases               Purchase[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 model Company {
@@ -135,6 +144,19 @@ model AccountantClient {
   company      Company  @relation(fields: [companyId], references: [id])
 
   @@unique([accountantId, companyId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([token])
 }
 
 model CreditInventory {
