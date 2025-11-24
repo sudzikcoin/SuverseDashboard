@@ -155,7 +155,7 @@ export default async function BrokerDashboardPage() {
                         {formatCurrency(Number(pool.availableFaceValueUsd))}
                       </td>
                       <td className="py-4 text-sm text-su-text text-right">
-                        ${pool.pricePerDollar}
+                        ${Number(pool.pricePerDollar).toFixed(2)}
                       </td>
                       <td className="py-4">
                         <div className="flex justify-center">

@@ -1,0 +1,156 @@
+You are a senior full-stack engineer working inside this Replit project (SuVerse Tax Credit Dashboard, Next.js + App Router + TypeScript + Tailwind + Prisma).
+
+GOAL
+Implement a proper BROKER portal so that:
+- When a user registers as BROKER and verifies email:
+  - They can login successfully.
+  - They are routed to a dedicated BROKER dashboard, not to the COMPANY dashboard.
+- BROKER dashboard has:
+  - Left sidebar menu: Dashboard, Inventory, Orders, Payouts, Compliance, Integrations, Settings, Support.
+  - Each menu item opens a real page (even if currently a stub with simple content).
+- COMPANY users keep their existing dashboard UX.
+- No regression for ACCOUNTANT or ADMIN roles (if present).
+
+CURRENT STATE (based on screenshots and DB)
+- There is `User` table with a `role` column (values like `COMPANY`, `BROKER`, etc.).
+- There are optional `companyId` and `brokerId` columns on `User` or separate tables `Company` and `Broker`.
+- Registration already supports selecting COMPANY vs BROKER and writes this into DB.
+- After verifying email:
+  - COMPANY: "Verification failed" is sometimes shown, but login works and user sees COMPANY dashboard (Marketplace, My Purchases, Pay with USDC).
+  - BROKER: Email verification is shown as successful, but:
+    - After login, the UI shows an empty page with only "Connect Wallet" button (no broker menu), OR
+    - The left menu with "Tax Credit Dashboard / Inventory / Orders / Payouts / Compliance / Integrations / Settings / Support" is not wired to real content.
+
+TASKS
+
+1. CONFIRM DATA MODEL
+   - Inspect Prisma schema for:
+     - `User` model (must have `role`, and likely `companyId` and/or `brokerId`).
+     - `Company` model.
+     - `Broker` model (if present) or create it if missing.
+   - Ensure:
+     - `User.role` is an enum with at least `COMPANY` and `BROKER`.
+     - For BROKER users, `user.brokerId` references a `Broker` row.
+     - For COMPANY users, `user.companyId` references a `Company` row.
+
+   If a `Broker` model does not exist, create something minimal like:
+   - `id` (string / cuid),
+   - `name`,
+   - `createdAt`,
+   - `updatedAt`.
+
+   Run Prisma migration if you add / modify models.
+
+2. REGISTRATION LOGIC FOR BROKER
+   - Locate registration API route (`/api/auth/register` or similar).
+   - Make sure that when `role === 'BROKER'`:
+     - A new `Broker` record is created (with broker name from the form, or `"{User name} Broker"` as a fallback).
+     - `user.role` is set to `'BROKER'`.
+     - `user.brokerId` is linked to the new `Broker`.
+     - `user.companyId` remains `null` for brokers.
+   - For `role === 'COMPANY'`, keep current behavior (create `Company`, set `companyId`, `role = 'COMPANY'`).
+   - DO NOT break existing email verification; reuse the fixed logic from Prompt #1.
+
+3. ROLE-BASED ROUTING AFTER LOGIN
+   - Locate the login API and/or auth session logic.
+   - Find where the app decides which dashboard route to open after successful login (e.g. `router.push('/dashboard')`).
+   - Implement role-based redirect:
+     - If `user.role === 'COMPANY'` → push `/dashboard` (existing company dashboard).
+     - If `user.role === 'BROKER'` → push `/broker/dashboard` (new broker dashboard).
+     - If there is `ADMIN` or `ACCOUNTANT` role, preserve or define their own routes.
+   - Also add server-side guards:
+     - On `/dashboard`:
+       - If logged-in user is NOT `COMPANY`, redirect them to the correct dashboard (e.g. `/broker/dashboard`).
+     - On `/broker/*`:
+       - If logged-in user is not `BROKER`, redirect to their own home or to login.
+
+4. BROKER LAYOUT & PAGES
+   - Search the codebase for strings:
+     - `"Tax Credit Dashboard"`
+     - `"Inventory"`
+     - `"Payouts"`
+     - `"Compliance"`
+     - `"Integrations"`
+   - Reuse any existing broker/admin layout if present.
+   - Create a layout for broker under something like:
+     - `app/(broker)/broker/layout.tsx`
+   - This layout should render:
+     - App title: `SuVerse` and subtitle `Tax Credit Dashboard`.
+     - Left sidebar with menu:
+       - Dashboard
+       - Inventory
+       - Orders
+       - Payouts
+       - Compliance
+       - Integrations
+       - Settings
+       - Support
+     - Right side: main content (`{children}`).
+
+   - Under that layout, create pages:
+     - `app/(broker)/broker/dashboard/page.tsx`
+     - `app/(broker)/broker/inventory/page.tsx`
+     - `app/(broker)/broker/orders/page.tsx`
+     - `app/(broker)/broker/payouts/page.tsx`
+     - `app/(broker)/broker/compliance/page.tsx`
+     - `app/(broker)/broker/integrations/page.tsx`
+     - `app/(broker)/broker/settings/page.tsx`
+     - `app/(broker)/broker/support/page.tsx`
+
+   - For now, each page can be a simple but nice stub using Tailwind, for example:
+     - `Dashboard`: cards with "Total Listings", "Active Deals", "Pending Payouts".
+     - `Inventory`: table with columns like "Credit ID", "State", "Amount", "Status".
+     - `Orders`: table with "Order #", "Buyer", "Amount", "Status".
+     - etc.
+   - The key requirement: navigation works, the page is not empty, and it is clear that user is in a broker portal.
+
+5. ENSURE EMAIL VERIFICATION CREATES CORRECT LINKS FOR BROKER
+   - When a BROKER user verifies email:
+     - Their user record must have `role = 'BROKER'` and valid `brokerId`.
+     - After verification, login should redirect them to `/broker/dashboard`.
+   - Re-check the verify page and login flow so it does not assume that only companies exist.
+
+6. UI / UX DETAILS
+   - Keep color scheme and typography consistent with the existing COMPANY dashboard.
+   - Show "Welcome, {UserName}" or "Welcome, {BrokerName}" on broker dashboard.
+   - For BROKER dashboard, show status banner such as:
+     - "Broker Profile Incomplete" or "No inventory yet. Add your first credit listing."
+   - If `brokerId` is missing for a user with role BROKER (legacy data), handle gracefully and show a message instead of crashing.
+
+LOGGING / DEBUGGING
+- Add logs around:
+  - Broker registration (`[BROKER_REGISTER] ...`).
+  - Role-based redirects after login (`[AUTH_REDIRECT] role=... redirecting to ...`).
+  - Loading broker dashboard data (`[BROKER_DASHBOARD] userId=..., brokerId=...`).
+
+MANUAL TEST PLAN (MUST PASS)
+1) Register BROKER
+   - Go to registration form, select BROKER.
+   - Fill name, email, password, broker/company name.
+   - Submit → user is created, email with verification link is sent.
+
+2) Verify BROKER email
+   - Click verification link once.
+   - Expect:
+     - "Email Verified" page, then redirect to login.
+   - Login with same email + password.
+   - Expect:
+     - Redirect to `/broker/dashboard`.
+     - See broker sidebar (Dashboard, Inventory, Orders, Payouts, Compliance, Integrations, Settings, Support).
+     - Dashboard page shows basic content (no empty grey screen).
+
+3) Register COMPANY
+   - Register company user as before.
+   - Verify email and login.
+   - Expect:
+     - Redirect to `/dashboard`.
+     - Company UI (Unverified / Wallet not linked / Marketplace / My Purchases / Pay with USDC) works as before.
+     - No broker menu.
+
+4) Wrong role access
+   - Logged in as BROKER, try to open `/dashboard` manually.
+   - Expect redirect to `/broker/dashboard`.
+   - Logged in as COMPANY, try to open `/broker/dashboard`.
+   - Expect redirect to `/dashboard` or login.
+
+Implement these changes now, keeping code clean and idiomatic. Do not introduce breaking changes to other parts of the app.
