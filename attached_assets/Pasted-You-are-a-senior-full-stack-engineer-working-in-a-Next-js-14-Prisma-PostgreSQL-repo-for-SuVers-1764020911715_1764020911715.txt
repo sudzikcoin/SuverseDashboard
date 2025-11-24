@@ -1,0 +1,166 @@
+You are a senior full-stack engineer working in a Next.js 14 + Prisma + PostgreSQL repo for **SuVerse Tax Credit Dashboard**.
+
+🚩 GOAL  
+Create a **development reset script** that:
+
+1. Deletes ALL existing users and all related auth records from the database (so I can reuse the same email addresses).
+2. Seeds ONE fresh user with a **new email + password** that I will use as the main “admin” / test account for logging into the dashboard.
+3. Is safe to run repeatedly in DEV (idempotent) and does NOT affect any production config.
+
+Use clear logging so I can see what was done.
+
+────────────────────────
+ADMIN ACCOUNT DETAILS
+────────────────────────
+Use these defaults (make them easy to change at the top of the script):
+
+- ADMIN_EMAIL: `admin@suverse.io`
+- ADMIN_PASSWORD: `SuVerseAdmin123!`
+- ADMIN_NAME: `SuVerse Admin`
+- ROLE: use the existing enum/string used in the project for company users (in the DB I currently see roles like `COMPANY` and `BROKER`).  
+  ➜ Set the new user’s `role` to `"COMPANY"` so the app can log in and see the normal dashboard.  
+If the `User` model has extra required fields (like `status`, `emailVerifiedAt`, etc.), fill them with sensible values (e.g. `status = 'ACTIVE'`, `emailVerifiedAt = now()`).
+
+────────────────────────
+STEP 1 – Inspect schema
+────────────────────────
+1. Open `prisma/schema.prisma` and find ALL models related to auth / users:
+   - `User`
+   - Email verification token model (likely `EmailVerificationToken` or similar)
+   - Any session / auth tables (e.g. `Session`, `AuthSession`, `AuthToken`, etc.)
+   - Any models that depend on `User` via foreign keys: `Company`, `Broker`, `Accountant`, etc.
+2. Identify FK dependencies so the reset script deletes records in the correct order (children first, then `User`).
+
+────────────────────────
+STEP 2 – Create reset script
+────────────────────────
+1. Create a new folder `scripts` at the repo root if it does not exist.
+2. Add a new file: `scripts/resetUsers.ts`.
+3. In this file:
+
+   - Import Prisma Client and bcrypt (or whatever the project already uses to hash passwords).
+   - Read `DATABASE_URL` from env as usual (Prisma already uses it).
+   - At the top, define constants for the admin seed:
+
+     ```ts
+     const ADMIN_EMAIL = process.env.ADMIN_SEED_EMAIL ?? 'admin@suverse.io';
+     const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD ?? 'SuVerseAdmin123!';
+     const ADMIN_NAME = process.env.ADMIN_SEED_NAME ?? 'SuVerse Admin';
+     ```
+
+   - Implement an `async main()` that does the following **in a transaction-safe order**:
+
+     1. Log: `"[resetUsers] Starting reset..."`.
+     2. Delete all email-verification tokens:
+        ```ts
+        await prisma.emailVerificationToken?.deleteMany();
+        ```
+        (Guard with `if (prisma.emailVerificationToken)` if model name differs.)
+     3. Delete all session / auth tables (`Session`, etc.) if they exist:
+        ```ts
+        await prisma.session?.deleteMany();
+        // repeat for any other auth-related tables
+        ```
+     4. Delete all domain entities that reference `userId`:
+        - `Broker`
+        - `Company`
+        - Any other models with `userId` FK.
+        Example:
+        ```ts
+        await prisma.broker?.deleteMany();
+        await prisma.company?.deleteMany();
+        ```
+     5. Finally, delete all users:
+        ```ts
+        await prisma.user.deleteMany();
+        ```
+
+     6. Hash the admin password with the same method used today for normal registration (usually bcrypt with the same salt rounds):
+
+        ```ts
+        const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
+        ```
+
+     7. Create a **single** new user:
+
+        ```ts
+        const adminUser = await prisma.user.create({
+          data: {
+            name: ADMIN_NAME,
+            email: ADMIN_EMAIL,
+            hashedPassword,
+            role: 'COMPANY',       // use the existing role type from schema
+            emailVerifiedAt: new Date(), // if this field exists
+            status: 'ACTIVE',      // if there is a status field
+            // set any other required fields here
+          },
+        });
+        ```
+
+     8. If the schema requires a related `Company` record for COMPANY users, create a simple dev company and link it:
+
+        ```ts
+        const company = await prisma.company?.create({
+          data: {
+            name: 'SuVerse Admin Company',
+            ownerId: adminUser.id,     // or userId / accountId, depending on schema
+            // fill other required fields with dummy but valid values
+          },
+        });
+        ```
+
+     9. Log the results:
+        ```ts
+        console.log('[resetUsers] All existing users and related records deleted.');
+        console.log('[resetUsers] New admin user created: ', adminUser.email);
+        ```
+
+   - Wrap `main()` with proper error handling and `process.exit(0/1)`:
+
+     ```ts
+     main()
+       .catch((err) => {
+         console.error('[resetUsers] ERROR:', err);
+         process.exit(1);
+       })
+       .finally(async () => {
+         await prisma.$disconnect();
+       });
+     ```
+
+────────────────────────
+STEP 3 – NPM script
+────────────────────────
+1. Open `package.json`.
+2. Add a script to run this reset:
+
+   ```json
+   "scripts": {
+     "reset:users": "tsx scripts/resetUsers.ts"
+   }
+•	If the project already uses ts-node instead of tsx, adapt accordingly:
+"reset:users": "ts-node scripts/resetUsers.ts"
+3.	Ensure tsx or ts-node is installed (use whichever is already in devDependencies; only add a new one if necessary).
+
+────────────────────────
+STEP 4 – Clear server cache / sessions
+────────────────────────
+	1.	If there is any in-DB session table, it is already cleared by deleteMany() above.
+	2.	If the app uses only stateless cookies (like sv.session from Replit Shield), there is nothing to clear on the server side; client cookies can just be removed in the browser.
+➜ Add a short comment about this in the script header so I understand.
+
+────────────────────────
+STEP 5 – Quick usage instructions (write to README or code comment)
+────────────────────────
+Add a short section to README.md OR a big comment at the top of scripts/resetUsers.ts explaining how to use it:
+	•	To completely reset all users and seed a new admin account:
+npm run reset:users
+•	After that, log in with:
+	•	Email: admin@suverse.io (or the value in ADMIN_SEED_EMAIL)
+	•	Password: SuVerseAdmin123! (or the value in ADMIN_SEED_PASSWORD)
+
+Confirm that:
+	1.	Old emails can now be reused for new registrations (previous rows are gone).
+	2.	The new admin/test account can log into the dashboard successfully.
+
+Make sure all code compiles, TypeScript types are correct, and run npm run reset:users once at the end to verify it completes without errors.
