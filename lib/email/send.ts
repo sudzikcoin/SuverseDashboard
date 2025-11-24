@@ -11,7 +11,7 @@ export async function sendWelcomeEmail(
   userId?: string
 ): Promise<SendResult> {
   const masked = maskEmail(to);
-  const from = fromAddress();
+  const from = fromAddress() || 'noreply@suverse.io';
   
   console.log(`[mail] sending → to=${masked}, from=${from}`);
   

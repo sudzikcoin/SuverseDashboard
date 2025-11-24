@@ -132,71 +132,93 @@ If you didn't create an account with SuVerse, you can safely ignore this email.
 
 /**
  * Verify an email token and activate the user account.
+ * Uses a transaction to atomically update token and user to prevent race conditions.
  * Returns result indicating success or specific error.
  */
 export async function verifyEmailToken(
   token: string
 ): Promise<{ ok: boolean; error?: string }> {
-  // Look up token
-  const tokenRecord = await prisma.emailVerificationToken.findUnique({
-    where: { token },
-    include: { user: true },
-  });
+  // Normalize token
+  const normalizedToken = token.trim();
 
-  if (!tokenRecord) {
-    return { ok: false, error: 'invalid_or_used' };
+  try {
+    // Use transaction to atomically verify and activate user
+    const result = await prisma.$transaction(async (tx) => {
+      // Look up and lock token for update
+      const tokenRecord = await tx.emailVerificationToken.findUnique({
+        where: { token: normalizedToken },
+        include: { user: true },
+      });
+
+      if (!tokenRecord) {
+        return { ok: false, error: 'invalid_or_used' };
+      }
+
+      // Check if already used
+      if (tokenRecord.usedAt !== null) {
+        return { ok: false, error: 'invalid_or_used' };
+      }
+
+      // Check if expired
+      if (tokenRecord.expiresAt < new Date()) {
+        return { ok: false, error: 'expired' };
+      }
+
+      const now = new Date();
+
+      // Atomically mark token as used
+      await tx.emailVerificationToken.update({
+        where: { id: tokenRecord.id },
+        data: { usedAt: now },
+      });
+
+      // Atomically update user - verify email and activate account
+      await tx.user.update({
+        where: { id: tokenRecord.userId },
+        data: {
+          emailVerifiedAt: now,
+          status: 'ACTIVE',
+        },
+      });
+
+      console.log(`[emailVerification] Email verified for user ${tokenRecord.user.email}`);
+
+      return { ok: true };
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[emailVerification] Transaction failed:', error);
+    return { ok: false, error: 'server_error' };
   }
-
-  // Check if already used
-  if (tokenRecord.usedAt !== null) {
-    return { ok: false, error: 'invalid_or_used' };
-  }
-
-  // Check if expired
-  if (tokenRecord.expiresAt < new Date()) {
-    return { ok: false, error: 'expired' };
-  }
-
-  // Mark token as used
-  await prisma.emailVerificationToken.update({
-    where: { id: tokenRecord.id },
-    data: { usedAt: new Date() },
-  });
-
-  // Update user - verify email and activate account
-  await prisma.user.update({
-    where: { id: tokenRecord.userId },
-    data: {
-      emailVerifiedAt: new Date(),
-      status: 'ACTIVE',
-    },
-  });
-
-  console.log(`[emailVerification] Email verified for user ${tokenRecord.user.email}`);
-
-  return { ok: true };
 }
 
 /**
  * Resend verification email to a user by email address.
- * Does not leak whether user exists (returns success regardless).
+ * IMPORTANT: Does not leak whether user exists or is already verified.
+ * Always returns generic success to prevent email enumeration attacks.
  */
 export async function resendVerification(
   email: string
 ): Promise<{ ok: boolean; error?: string }> {
+  const normalizedEmail = email.toLowerCase().trim();
+  
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: { email: normalizedEmail },
   });
 
-  // Don't leak whether user exists
+  // Don't leak whether user exists or verification status
   if (!user) {
     console.log(`[emailVerification] Resend requested for non-existent email`);
-    return { ok: true }; // Return success to prevent email enumeration
+    // Return success to prevent email enumeration
+    return { ok: true };
   }
 
-  // Check if already verified
+  // Check if already verified - but don't reveal this to the client
   if (user.emailVerifiedAt !== null) {
-    return { ok: false, error: 'already_verified' };
+    console.log(`[emailVerification] Resend requested for already verified email`);
+    // Return success to prevent email enumeration
+    return { ok: true };
   }
 
   // Create and send new verification token

@@ -31,19 +31,8 @@ export async function POST(req: NextRequest) {
 
     const result = await resendVerification(email);
 
-    // Handle already verified case explicitly
-    if (!result.ok && result.error === 'already_verified') {
-      return NextResponse.json(
-        { 
-          ok: false, 
-          error: 'already_verified',
-          message: 'This email address is already verified. You can log in now.' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Generic success response (don't leak user existence)
+    // Always return generic success response to prevent email enumeration
+    // Never reveal whether the email exists, is already verified, etc.
     return NextResponse.json({
       ok: true,
       message: 'If an account with that email exists and is not yet verified, a new verification link has been sent.',

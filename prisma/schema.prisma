@@ -156,7 +156,8 @@ model EmailVerificationToken {
   createdAt DateTime  @default(now())
   
   @@index([userId])
-  @@index([token])
+  @@index([expiresAt])
+  @@index([token, usedAt])
 }
 
 model CreditInventory {

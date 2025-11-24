@@ -4,7 +4,7 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, RefreshCw } from "lucide-react"
 import Card from "@/components/Card"
 import Button from "@/components/Button"
 
@@ -15,10 +15,15 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showResend, setShowResend] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendMessage, setResendMessage] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setShowResend(false)
+    setResendMessage("")
     setLoading(true)
 
     try {
@@ -31,8 +36,13 @@ export default function LoginPage() {
       if (result?.error) {
         if (result.error.toLowerCase().includes("archived")) {
           setError("Company is archived. Please contact info@suverse.io")
+          setShowResend(false)
+        } else if (result.error.includes("UNVERIFIED_EMAIL")) {
+          setError("Your email address is not verified yet. Please check your inbox for the verification link or request a new one below.")
+          setShowResend(true)
         } else {
           setError("Invalid email or password")
+          setShowResend(false)
         }
       } else {
         router.push("/dashboard")
@@ -40,8 +50,34 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError("An error occurred. Please try again.")
+      setShowResend(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    setResendLoading(true)
+    setResendMessage("")
+
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (data.ok) {
+        setResendMessage(data.message || "Verification email sent! Please check your inbox.")
+      } else {
+        setResendMessage(data.message || "Failed to send email. Please try again.")
+      }
+    } catch (error) {
+      setResendMessage("An error occurred. Please try again.")
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -53,6 +89,33 @@ export default function LoginPage() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4">
             {error}
+          </div>
+        )}
+
+        {showResend && (
+          <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-xl p-4 mb-4">
+            <button
+              onClick={handleResendVerification}
+              disabled={resendLoading}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-semibold py-2 px-4 rounded-lg transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {resendLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Resend Verification Email
+                </>
+              )}
+            </button>
+            {resendMessage && (
+              <p className="mt-3 text-sm text-emerald-300 text-center">
+                {resendMessage}
+              </p>
+            )}
           </div>
         )}
 
