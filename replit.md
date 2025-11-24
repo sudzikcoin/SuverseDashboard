@@ -18,12 +18,12 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 ### Technical Implementations
 -   **Frontend**: Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Recharts.
 -   **Backend**: Next.js API Routes.
--   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin, Broker), JWTs, and automatic audit logging.
+-   **Authentication**: NextAuth.js with Role-Based Access Control (Company, Accountant, Admin, Broker), JWTs, email verification (SendGrid-powered with atomic token workflow), user status management (PENDING_VERIFICATION, ACTIVE, DISABLED), and automatic audit logging.
 -   **Wallet Connection**: User-scoped Wagmi provider for isolated wallet state; automatic disconnect on user switch and secure wallet linking via API endpoint with audit logging, preventing wallet leakage between companies.
 -   **Database**: Prisma ORM with PostgreSQL (SQLite for development) for models including `User`, `Company`, `CreditInventory`, `Broker`, `BrokerCreditPool`, `AuditLog`.
 -   **Security**: Bcrypt for password hashing, NextAuth sessions, Zod for input validation, Stripe webhook verification, and JWT-validated middleware.
 -   **PDF Generation**: `@react-pdf/renderer` for broker packages and closing certificates.
--   **Email**: Resend for transactional emails.
+-   **Email**: Resend and SendGrid for transactional emails (SendGrid for verification, Resend for notifications).
 -   **Audit Logging**: Comprehensive enum-based system for type-safe audit trails.
 -   **Telegram Notifications**: Real-time event notifications via Telegram Bot API.
 -   **Analytics Dashboard**: AI-style audit analytics for statistical analysis and interactive charting.
@@ -31,7 +31,7 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **File Storage**: Private, per-company document storage with RBAC.
 
 ### Feature Specifications
--   **User Management**: Registration, login, role-based access.
+-   **User Management**: Registration with email verification (production-ready SendGrid integration), login with verification status check, role-based access, and anti-enumeration security.
 -   **Company Verification**: EIN validation and manual admin verification workflow restricting key operations until verified.
 -   **Marketplace**: Browse, filter, reserve, and purchase tax credits, including accountant-specific features.
 -   **Purchase Workflows**: Supports Stripe Checkout and on-chain USDC purchases with company verification.
@@ -63,3 +63,4 @@ The application is built using a modern web stack, emphasizing a "Clario-style" 
 -   **framer-motion**: Animations.
 -   **tailwindcss-animate**: Tailwind CSS animations.
 -   **WalletConnect Cloud**: RainbowKit v2 for wallet connections.
+-   **SendGrid**: Production email verification system using info@suverse.io.
