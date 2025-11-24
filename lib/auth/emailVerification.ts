@@ -15,12 +15,19 @@ import crypto from 'crypto';
 /**
  * Get the base URL for the application.
  * Priority: APP_BASE_URL > VERCEL_URL > localhost fallback
+ * Ensures no trailing slash for consistent URL building.
  */
 function getBaseUrl(): string {
-  const envUrl = process.env.APP_BASE_URL;
-  if (envUrl && envUrl.length > 0) return envUrl;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'http://localhost:3000';
+  let baseUrl = process.env.APP_BASE_URL;
+  if (!baseUrl || baseUrl.length === 0) {
+    if (process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    } else {
+      baseUrl = 'http://localhost:3000';
+    }
+  }
+  // Remove trailing slash if present
+  return baseUrl.replace(/\/$/, '');
 }
 
 /**

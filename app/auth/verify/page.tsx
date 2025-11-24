@@ -32,8 +32,17 @@ export default function VerifyEmailPage() {
       return
     }
 
-    verifyToken(token)
-  }, [token])
+    // Only verify once - prevent duplicate calls from React Strict Mode
+    let didCancel = false;
+    
+    verifyToken(token).then(() => {
+      if (didCancel) return;
+    });
+
+    return () => {
+      didCancel = true;
+    };
+  }, [token])  // Only re-run if token changes
 
   const verifyToken = async (token: string) => {
     try {

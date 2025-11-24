@@ -1,0 +1,88 @@
+You are a senior full-stack engineer working on my Next.js 14 + TypeScript + Prisma project “SuVerse Tax Credit Dashboard” on Replit.
+
+Goal: Fix the **email verification flow**, which currently sends an email, but clicking the link shows “Verification Failed – This verification link is invalid or has already been used”, and the “Resend verification email” button does not send a new email.
+
+Please do the following steps carefully:
+
+1) FIND CURRENT IMPLEMENTATION
+- Search the repo for:
+  - `EmailVerificationToken` (Prisma model),
+  - any files named like `email-verification`, `verify-email`, `verify`, `resend-verification`,
+  - API routes under `app/api/auth` or similar (`register`, `verify`, `resend`),
+  - the UI pages/components:
+    - registration form (sign up),
+    - “Check your email” screen,
+    - “Verification Failed” screen.
+- Open Prisma schema and show the full `EmailVerificationToken` model.
+- Open the API handler that creates the token on registration.
+- Open the API handler that processes `/auth/verify?token=...`.
+- Open the API handler that processes “Resend verification email”.
+
+2) ENSURE CONSISTENT TOKEN LOGIC
+Fix the logic so that:
+- When a user registers:
+  - A new `EmailVerificationToken` is created with fields:
+    - `id`: cuid
+    - `userId`
+    - `token`: a RANDOM string (do NOT hash in one place and compare raw in another; use the same value everywhere).
+    - `expiresAt`: now + 24 hours.
+    - `usedAt`: null.
+  - An email is sent using SendGrid and the link is built as:
+    - `${process.env.APP_BASE_URL}/auth/verify?token=${token}`
+- In the verify API:
+  - Read `token` from the query.
+  - Look up `EmailVerificationToken` by **exact token string**.
+  - If not found → return a clean “invalid” result (no crash).
+  - If `usedAt` is not null → also “invalid”.
+  - If `expiresAt` is in the past → also “invalid”.
+  - Otherwise:
+    - mark the user as VERIFIED (set `emailVerified` or `status = 'VERIFIED'`, according to the existing user model),
+    - set `usedAt = new Date()` on the token,
+    - return success (for the UI success page).
+- Make sure we DO NOT hash the token in one place and store plain text in another. Either:
+  - store and compare plain string, or
+  - if hashing is used, then:
+    - hash before saving,
+    - hash again the incoming token before comparing,
+    - always compare hash-to-hash.
+  The important thing is consistency.
+
+3) FIX RESEND VERIFICATION EMAIL
+- Find the API route that handles “Resend verification email”.
+- Fix it so that:
+  - It checks that the user exists and is NOT yet verified.
+  - It invalidates any previous tokens for this user (sets `usedAt` or deletes them).
+  - It creates a **new** token with fresh `expiresAt`.
+  - It sends a new email with the same link format:
+    - `${process.env.APP_BASE_URL}/auth/verify?token=${newToken}`
+  - It returns a clear JSON success or error response.
+- Make sure that errors from SendGrid (bad API key, etc.) are logged but do NOT crash the server; return an HTTP 500 with an error message.
+
+4) UI BEHAVIOR
+- The “Verification Failed” page should:
+  - Show the same generic message as now, but
+  - When user enters their email and clicks “Resend verification email”, call the FIXED resend API and:
+    - on success → show a toast like “We’ve sent you a new verification link”.
+    - on error → show a toast with a readable message.
+- The “Check your email” page after registration should:
+  - Show the actual email address the user just used.
+  - Also use the same resend endpoint for the “Resend verification email” button.
+
+5) ENV & BASE URL
+- Use `process.env.APP_BASE_URL` ONLY for building verification links in emails.
+- Do NOT hardcode the Replit URL in code. The only place it should come from is the environment variable.
+- Do NOT change other secrets (SENDGRID_API_KEY, EMAIL_FROM_ADDRESS).
+
+6) TESTS / MANUAL TEST PLAN
+- Add or update a short test plan in a comment at the top of the main verify API file, describing how I can test:
+  1) Register a new user → receive email → click link → see success.
+  2) Click the same link again → see “Verification Failed”.
+  3) Try resend → receive a **new** email with a new token → old link no longer works, new link works.
+- If possible, add a small unit-test or integration-test for the verify handler (optional but nice).
+
+7) IMPORTANT
+- Do NOT break any existing authentication logic (login, session).
+- Keep the existing design, Tailwind styles and components.
+- When you’re done, summarize EXACTLY which files you changed and what you changed in each file, so I can review the diff.
+
+Now, please implement all the above in the current project.
