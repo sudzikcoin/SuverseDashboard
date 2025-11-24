@@ -3,6 +3,14 @@
 ## Overview
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
+## Recent Changes
+**November 24, 2025** - Email Verification Duplicate Call Fix
+- Fixed email verification flow to prevent duplicate API calls from React Strict Mode double-mounting
+- Updated `/api/auth/verify-email` to return explicit JSON responses with `success`, `code`, and `message` fields
+- Implemented `useRef` guard in `/auth/verify` page to ensure verification endpoint is called exactly once per mount
+- Improved error messaging to distinguish between expired tokens vs already-used tokens
+- Role-agnostic implementation works for all user types (COMPANY, BROKER, ADMIN, ACCOUNTANT)
+
 ## User Preferences
 I prefer clear and direct communication. I value iterative development and expect to be consulted before any major architectural or feature changes are implemented. Please provide detailed explanations for complex solutions or significant decisions. Ensure that any changes maintain the modern dark theme and existing UI/UX patterns.
 
