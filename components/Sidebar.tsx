@@ -31,6 +31,7 @@ export default function Sidebar({ role }: SidebarProps) {
   const adminLinks = [
     { href: "/admin", label: "Dashboard" },
     { href: "/admin/accountants", label: "Accountants" },
+    { href: "/admin/brokers", label: "Brokers" },
     { href: "/admin/companies", label: "Companies" },
     { href: "/admin/inventory", label: "Inventory" },
     { href: "/admin/purchases", label: "Purchase Orders" },
