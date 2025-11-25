@@ -68,8 +68,10 @@ export default async function BrokerDashboardPage() {
         return <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-400">Verified Broker</span>
       case "PENDING":
         return <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-yellow-500/20 text-yellow-400">Verification Pending</span>
+      case "REJECTED":
+        return <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400">Verification Rejected</span>
       case "SUSPENDED":
-        return <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400">Suspended</span>
+        return <span className="px-3 py-1 rounded-lg text-xs font-semibold bg-orange-500/20 text-orange-400">Suspended</span>
       default:
         return null
     }
@@ -232,6 +234,20 @@ export default async function BrokerDashboardPage() {
               <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                 <p className="text-sm text-yellow-400">
                   Your broker profile is under review. The marketplace team will approve it before you can start trading.
+                </p>
+              </div>
+            )}
+            {broker.status === "REJECTED" && (
+              <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-sm text-red-400">
+                  Your broker profile was rejected. Please contact support for more information.
+                </p>
+              </div>
+            )}
+            {broker.status === "SUSPENDED" && (
+              <div className="mt-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                <p className="text-sm text-orange-400">
+                  Your broker account has been suspended. Please contact support for assistance.
                 </p>
               </div>
             )}

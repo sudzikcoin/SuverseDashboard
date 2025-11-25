@@ -94,6 +94,7 @@ enum UserStatus {
 enum BrokerStatus {
   PENDING
   APPROVED
+  REJECTED
   SUSPENDED
 }
 

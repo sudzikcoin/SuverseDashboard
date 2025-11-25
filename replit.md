@@ -4,6 +4,25 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**November 25, 2025** - Broker Verification Management
+- Added full broker verification management to admin portal (similar to company verification)
+- Schema updates:
+  - Added `REJECTED` to `BrokerStatus` enum (now: PENDING, APPROVED, REJECTED, SUSPENDED)
+  - Added `VERIFY_BROKER` and `REJECT_BROKER` to `AuditAction` enum
+  - Added `BROKER` to `AuditEntity` enum for proper audit logging
+- New admin API routes:
+  - `GET /api/admin/brokers` - List all brokers with search/filter
+  - `PATCH /api/admin/brokers/[id]/verify` - Approve or reject brokers
+- New admin UI:
+  - Added "Brokers" link to admin sidebar
+  - Created `/admin/brokers` page with broker cards, status badges, and approve/reject buttons
+  - Stats dashboard showing total, pending, verified, rejected, and suspended counts
+- Broker portal updates:
+  - BrokerHeader now shows dynamic verification status badge
+  - Action gating: "Create Pool" buttons disabled for unverified brokers
+  - Status-specific messages in broker profile (pending, rejected, suspended)
+  - Page-level protection: `/broker/inventory/new` redirects unverified brokers
+
 **November 24, 2025** - Login Reliability Fix
 - Fixed login requiring 2-3 attempts by correcting middleware stability shield behavior
 - Root cause: Middleware was clearing auth cookies when `sv.version` cookie was missing (first visit), incorrectly treating it as a version mismatch

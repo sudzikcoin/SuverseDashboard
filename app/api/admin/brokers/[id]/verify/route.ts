@@ -40,7 +40,7 @@ export async function PATCH(
 
     const previousStatus = broker.status
 
-    const newStatus = validated.action === "VERIFY" ? "APPROVED" : "SUSPENDED"
+    const newStatus = validated.action === "VERIFY" ? "APPROVED" : "REJECTED"
 
     const updatedBroker = await prisma.broker.update({
       where: { id: params.id },
@@ -63,7 +63,6 @@ export async function PATCH(
         brokerName: broker.name,
         companyName: broker.companyName,
         brokerEmail: broker.email,
-        adminEmail: broker.users[0]?.email,
       },
       ...ctx,
     })

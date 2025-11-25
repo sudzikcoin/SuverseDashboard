@@ -4,7 +4,7 @@ import { Bell, CheckCircle2, Clock, XCircle } from "lucide-react"
 
 interface BrokerHeaderProps {
   brokerName?: string
-  brokerStatus?: "PENDING" | "APPROVED" | "SUSPENDED"
+  brokerStatus?: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
   initials?: string
 }
 
@@ -24,11 +24,18 @@ function getStatusBadge(status: BrokerHeaderProps["brokerStatus"]) {
           Pending
         </span>
       )
-    case "SUSPENDED":
+    case "REJECTED":
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
           <XCircle className="h-3 w-3" />
           Rejected
+        </span>
+      )
+    case "SUSPENDED":
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+          <XCircle className="h-3 w-3" />
+          Suspended
         </span>
       )
     default:

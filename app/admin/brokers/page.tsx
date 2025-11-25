@@ -19,7 +19,7 @@ interface Broker {
   email: string | null
   phone: string | null
   state: string | null
-  status: "PENDING" | "APPROVED" | "SUSPENDED"
+  status: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
   createdAt: string
   users: BrokerUser[]
   _count: {
@@ -43,11 +43,18 @@ function getStatusBadge(status: Broker["status"]) {
           Pending
         </span>
       )
-    case "SUSPENDED":
+    case "REJECTED":
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
           <XCircle className="h-3.5 w-3.5" />
           Rejected
+        </span>
+      )
+    case "SUSPENDED":
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+          <AlertCircle className="h-3.5 w-3.5" />
+          Suspended
         </span>
       )
     default:
@@ -119,6 +126,7 @@ export default function AdminBrokersPage() {
 
   const pendingBrokers = filteredBrokers.filter(b => b.status === "PENDING")
   const approvedBrokers = filteredBrokers.filter(b => b.status === "APPROVED")
+  const rejectedBrokers = filteredBrokers.filter(b => b.status === "REJECTED")
   const suspendedBrokers = filteredBrokers.filter(b => b.status === "SUSPENDED")
 
   return (
@@ -130,7 +138,7 @@ export default function AdminBrokersPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-su-card border border-white/10 rounded-xl p-4">
           <p className="text-2xl font-bold text-white">{brokers.length}</p>
           <p className="text-xs text-su-muted">Total Brokers</p>
@@ -144,8 +152,12 @@ export default function AdminBrokersPage() {
           <p className="text-xs text-su-muted">Verified</p>
         </div>
         <div className="bg-su-card border border-red-500/20 rounded-xl p-4">
-          <p className="text-2xl font-bold text-red-400">{suspendedBrokers.length}</p>
+          <p className="text-2xl font-bold text-red-400">{rejectedBrokers.length}</p>
           <p className="text-xs text-su-muted">Rejected</p>
+        </div>
+        <div className="bg-su-card border border-orange-500/20 rounded-xl p-4">
+          <p className="text-2xl font-bold text-orange-400">{suspendedBrokers.length}</p>
+          <p className="text-xs text-su-muted">Suspended</p>
         </div>
       </div>
 
@@ -182,30 +194,30 @@ export default function AdminBrokersPage() {
                 </div>
 
                 <div className="flex items-center gap-3 mb-3">
-                  {broker.status !== "APPROVED" && (
-                    <div className="flex gap-2">
+                  <div className="flex gap-2">
+                    {broker.status !== "APPROVED" && (
                       <button
                         onClick={(e) => handleVerify(broker.id, "VERIFY", e)}
                         disabled={verifyingBrokerId === broker.id}
                         className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg text-xs font-medium transition disabled:opacity-50"
-                        title="Verify broker"
+                        title="Approve broker"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Approve
                       </button>
-                      {broker.status !== "SUSPENDED" && (
-                        <button
-                          onClick={(e) => handleVerify(broker.id, "REJECT", e)}
-                          disabled={verifyingBrokerId === broker.id}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 rounded-lg text-xs font-medium transition disabled:opacity-50"
-                          title="Reject broker"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          Reject
-                        </button>
-                      )}
-                    </div>
-                  )}
+                    )}
+                    {broker.status === "PENDING" && (
+                      <button
+                        onClick={(e) => handleVerify(broker.id, "REJECT", e)}
+                        disabled={verifyingBrokerId === broker.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 rounded-lg text-xs font-medium transition disabled:opacity-50"
+                        title="Reject broker"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                        Reject
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
