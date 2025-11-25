@@ -4,6 +4,12 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**November 25, 2025** - Login Reliability Fix (Round 2)
+- Fixed login hanging on "Logging in..." by adding `redirect: false` to NextAuth signIn call
+- Root cause: Without `redirect: false`, NextAuth auto-redirects while React code also handles the result, causing race conditions
+- Fix: Manual redirect via `router.replace()` after successful auth, with double-submit guard
+- All error cases preserved: archived company, unverified email, invalid credentials
+
 **November 25, 2025** - Broker Verification Management
 - Added full broker verification management to admin portal (similar to company verification)
 - Schema updates:

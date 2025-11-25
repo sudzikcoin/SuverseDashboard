@@ -1,0 +1,170 @@
+You are a senior full-stack engineer working on the SuVerse Tax Credit Dashboard (Next.js 14, App Router, TypeScript, Tailwind, NextAuth credentials).
+
+BUG TO FIX
+- When a user logs in (any role, but especially BROKER), the login screen often hangs on “Logging in…” and only redirects to the dashboard after 2–3 attempts.
+- We must make login **reliable on the first attempt** and prevent double submissions.
+
+ROOT CAUSE (what to assume)
+- The login page uses `signIn("credentials", { email, password, callbackUrl: "/post-login" })` **without** `redirect: false`.
+- At the same time, the code tries to handle `result?.error` and then rely on `/post-login` for role-based routing.
+- With default `redirect: true`, NextAuth may trigger a redirect while the React code also tries to process `result`, which leads to race conditions and flaky behavior (especially when hitting protected routes like `/broker/dashboard`).
+
+GOAL
+1. Make login deterministic:
+   - Exactly one call to `signIn`.
+   - No auto-redirect from NextAuth; redirect is handled manually via `/post-login`.
+   - Ignore repeated submits while a login is in progress.
+2. Keep all existing UI and error messages (archived company, unverified email, wrong credentials, etc.).
+3. Ensure this works for all roles (COMPANY, BROKER, ADMIN, ACCOUNTANT) via the existing `/post-login` logic.
+
+FILES TO EDIT
+1) `app/login/page.tsx`
+2) (read-only sanity check, no big refactor) `app/post-login/page.tsx`
+3) If needed, only minimal adjustments in broker guard:
+   - `app/broker/layout.tsx`
+   - `lib/auth/session.ts` OR similar helper used for `getCurrentUser`
+
+DETAILED TASKS
+
+1) FIX HANDLE SUBMIT IN `app/login/page.tsx`
+
+- Open `app/login/page.tsx` and locate `handleSubmit` (the form submit handler).
+- Replace the current implementation with a clean, robust version that:
+
+  a) Prevents double-submit:
+  ```ts
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return; // ignore if already submitting
+    setError(null);
+    setShowResend(false);
+    setLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        redirect: false,              // IMPORTANT: disable auto redirect
+        email,
+        password,
+        callbackUrl: "/post-login",   // we still route through post-login
+      });
+
+      // If NextAuth didn't return anything, treat as generic error
+      if (!result) {
+        setError("Unexpected error. Please try again.");
+        return;
+      }
+
+      if (result.error) {
+        const msg = result.error.toLowerCase();
+
+        if (msg.includes("archived")) {
+          setError("Company is archived. Please contact info@suverse.io");
+          setShowResend(false);
+        } else if (msg.includes("not verified")) {
+          setError("Email not verified. Please check your inbox or resend verification.");
+          setShowResend(true);
+        } else if (msg.includes("invalid credentials")) {
+          setError("Invalid email or password.");
+          setShowResend(false);
+        } else {
+          setError(result.error);
+          setShowResend(false);
+        }
+
+        return;
+      }
+
+      // SUCCESS PATH
+      // NextAuth should give us a URL; fall back to /post-login
+      const target = result.url || "/post-login";
+
+      // Important: use replace so we don't keep /login in history
+      router.replace(target);
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+•	Make sure:
+	•	loading is used to disable the submit button:
+<button
+  type="submit"
+  disabled={loading}
+  ...
+>
+  {loading ? "Logging in..." : "Login"}
+</button>
+•	No other code calls signIn or router.push on submit. There must be only this one handleSubmit.
+
+	2.	VERIFY /post-login ROLE ROUTING
+
+	•	Open app/post-login/page.tsx and ensure the logic is:
+	•	Server component using getServerSession / getCurrentUser.
+	•	If no session → redirect to /login.
+	•	If session exists:
+	•	If user.role === "ADMIN" → redirect to /admin
+	•	If user.role === "BROKER" → redirect to /broker/dashboard
+	•	If user.role === "ACCOUNTANT" → redirect to /clients
+	•	If user.role === "COMPANY" (default) → redirect to /dashboard
+	•	DO NOT change the routing rules, only confirm they use server-side redirect() from next/navigation and that there is no extra client-side redirect logic that might trigger double navigation.
+
+	3.	ENSURE BROKER GUARD DOES NOT FIGHT LOGIN
+
+	•	Open app/broker/layout.tsx:
+	•	This layout should:
+	•	Read the current user on the server.
+	•	If there is no user or user.role !== “BROKER”:
+redirect(`/login?callbackUrl=/broker/dashboard`);
+•	Otherwise, render the broker sidebar + children.
+
+	•	Confirm that layout.tsx does not import the login form directly and does not try to handle login on the client.
+
+	4.	CLEAN UP ANY LEFTOVER LOGIN REDIRECTS
+
+	•	Search the codebase for "/broker/dashboard" and /post-login and:
+	•	Remove or simplify any extra router.push("/broker/dashboard") calls that happen immediately after signIn with redirect turned on.
+	•	After the changes above, all redirects after login should go through /post-login.
+
+	5.	MANUAL TEST PLAN (VERY IMPORTANT)
+
+Use the Replit preview domain and test all flows:
+	1.	Broker login happy path
+	•	Go to /login.
+	•	Enter valid BROKER credentials.
+	•	Click “Login” once.
+	•	Expected:
+	•	Button goes to “Logging in…” (disabled).
+	•	After 1–2 seconds, redirect to /post-login, then immediately to /broker/dashboard.
+	•	Works on the first attempt, every time.
+	2.	Wrong password
+	•	Same email, wrong password.
+	•	Expected:
+	•	No redirect.
+	•	Error “Invalid email or password.” appears below the form.
+	•	Button returns to “Login”, can try again.
+	3.	Unverified email
+	•	Use a COMPANY or BROKER user with emailVerified = null.
+	•	Expected:
+	•	No redirect.
+	•	Error about email not verified + “Resend verification” link visible.
+	4.	Archived company
+	•	If there is a test archived company, login should show the “Company is archived” message and not redirect.
+	5.	Direct /broker/dashboard access
+	•	While logged out, open /broker/dashboard directly.
+	•	Expected:
+	•	Immediate server redirect to /login?callbackUrl=/broker/dashboard.
+	•	After successful login as BROKER, redirect to /broker/dashboard in a single step.
+
+Make the changes, run npm run lint and npm run build to ensure there are no TypeScript or runtime errors.
+
+DO NOT:
+	•	Change any visual styles or layout.
+	•	Modify other pages besides app/login/page.tsx, app/post-login/page.tsx, and minimal logic in app/broker/layout.tsx if necessary.
+	•	Introduce new dependencies.
+
+The result should be:
+	•	Login always works from the first attempt.
+	•	No more “stuck on Logging in…” screens.
+	•	Clean, predictable redirect path for all roles via /post-login.

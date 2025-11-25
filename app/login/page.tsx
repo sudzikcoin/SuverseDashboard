@@ -21,6 +21,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
     setError("")
     setShowResend(false)
     setResendMessage("")
@@ -28,29 +29,43 @@ export default function LoginPage() {
 
     try {
       const result = await signIn("credentials", {
+        redirect: false,
         email,
         password,
         callbackUrl: "/post-login",
       })
 
-      if (result?.error) {
-        if (result.error.toLowerCase().includes("archived")) {
+      if (!result) {
+        setError("Unexpected error. Please try again.")
+        return
+      }
+
+      if (result.error) {
+        const msg = result.error.toLowerCase()
+
+        if (msg.includes("archived")) {
           setError("Company is archived. Please contact info@suverse.io")
           setShowResend(false)
-        } else if (result.error.includes("UNVERIFIED_EMAIL")) {
+        } else if (msg.includes("unverified") || msg.includes("not verified")) {
           setError("Your email address is not verified yet. Please check your inbox for the verification link or request a new one below.")
           setShowResend(true)
-        } else {
+        } else if (msg.includes("invalid") || msg.includes("credentials")) {
           setError("Invalid email or password")
           setShowResend(false)
+        } else {
+          setError(result.error)
+          setShowResend(false)
         }
-        setLoading(false)
+        return
       }
-      // If no error, NextAuth handles the redirect to /post-login
-      // which then performs server-side role-based redirect
+
+      const target = result.url || "/post-login"
+      router.replace(target)
     } catch (err) {
+      console.error("Login error:", err)
       setError("An error occurred. Please try again.")
       setShowResend(false)
+    } finally {
       setLoading(false)
     }
   }
