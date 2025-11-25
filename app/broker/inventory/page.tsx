@@ -36,6 +36,8 @@ export default async function InventoryPage() {
     }).format(amount)
   }
 
+  const isVerified = broker.status === "APPROVED"
+
   return (
     <div className="p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
@@ -45,14 +47,32 @@ export default async function InventoryPage() {
           </h1>
           <p className="text-su-muted">Manage your credit pools</p>
         </div>
-        <Link
-          href="/broker/inventory/new"
-          className="flex items-center gap-2 px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-white rounded-xl transition font-medium w-fit"
-        >
-          <Plus size={20} />
-          Add Credit Pool
-        </Link>
+        {isVerified ? (
+          <Link
+            href="/broker/inventory/new"
+            className="flex items-center gap-2 px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-white rounded-xl transition font-medium w-fit"
+          >
+            <Plus size={20} />
+            Add Credit Pool
+          </Link>
+        ) : (
+          <span 
+            className="flex items-center gap-2 px-6 py-3 bg-gray-500/30 text-gray-400 rounded-xl font-medium w-fit cursor-not-allowed"
+            title="Broker must be verified to add credit pools"
+          >
+            <Plus size={20} />
+            Add Credit Pool
+          </span>
+        )}
       </div>
+
+      {!isVerified && (
+        <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+          <p className="text-sm text-yellow-400">
+            Your broker profile is pending verification. You can view existing pools, but creating new pools is disabled until verification is complete.
+          </p>
+        </div>
+      )}
 
       <div className="glass rounded-2xl p-6">
         <div className="overflow-x-auto">

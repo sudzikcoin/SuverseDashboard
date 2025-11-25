@@ -1,6 +1,14 @@
+import { redirect } from "next/navigation"
+import { getCurrentBrokerOrThrow } from "@/lib/broker/currentBroker"
 import CreditPoolForm from "../components/CreditPoolForm"
 
-export default function NewCreditPoolPage() {
+export default async function NewCreditPoolPage() {
+  const broker = await getCurrentBrokerOrThrow()
+
+  if (broker.status !== "APPROVED") {
+    redirect("/broker/inventory?error=verification_required")
+  }
+
   return (
     <div className="p-4 md:p-8">
       <div className="mb-8">

@@ -114,23 +114,45 @@ export default async function BrokerDashboardPage() {
         <div className="lg:col-span-2 glass rounded-2xl p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-su-text">Credit Pools</h2>
-            <a 
-              href="/broker/inventory/new" 
-              className="px-4 py-2 bg-su-emerald hover:bg-su-emerald/90 text-su-base rounded-lg text-sm font-semibold transition"
-            >
-              Create Pool
-            </a>
+            {broker.status === "APPROVED" ? (
+              <a 
+                href="/broker/inventory/new" 
+                className="px-4 py-2 bg-su-emerald hover:bg-su-emerald/90 text-su-base rounded-lg text-sm font-semibold transition"
+              >
+                Create Pool
+              </a>
+            ) : (
+              <span 
+                className="px-4 py-2 bg-gray-500/30 text-gray-400 rounded-lg text-sm font-semibold cursor-not-allowed"
+                title="Broker must be verified to create pools"
+              >
+                Create Pool
+              </span>
+            )}
           </div>
           
           {creditPools.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-su-muted mb-4">You don't have any credit pools yet.</p>
-              <a 
-                href="/broker/inventory/new" 
-                className="inline-block px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-su-base rounded-lg font-semibold transition"
-              >
-                Create Your First Pool
-              </a>
+              {broker.status === "APPROVED" ? (
+                <a 
+                  href="/broker/inventory/new" 
+                  className="inline-block px-6 py-3 bg-su-emerald hover:bg-su-emerald/90 text-su-base rounded-lg font-semibold transition"
+                >
+                  Create Your First Pool
+                </a>
+              ) : (
+                <div className="space-y-3">
+                  <span 
+                    className="inline-block px-6 py-3 bg-gray-500/30 text-gray-400 rounded-lg font-semibold cursor-not-allowed"
+                  >
+                    Create Your First Pool
+                  </span>
+                  <p className="text-sm text-yellow-400">
+                    Your broker profile must be verified before you can create pools.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
