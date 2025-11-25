@@ -1,0 +1,232 @@
+You are a senior full-stack engineer working in the **SuVerseDashboard** Next.js 14 + App Router + TypeScript + Prisma project.
+
+GOAL
+Add full broker verification management to the ADMIN portal, similar to how company verification already works.
+
+High-level:
+- There are 4 roles: ADMIN, COMPANY, ACCOUNTANT, BROKER.
+- Companies already have an approval flow: admin can see companies list and mark them verified; until then, company dashboard shows "Company Verification Pending".
+- Brokers now also have `Verification Pending` in their dashboard header, but there is NO admin UI to approve them.
+
+Your tasks:
+1) Confirm and normalize Broker schema & status enum.
+2) Add ADMIN API endpoints to list and approve/reject brokers.
+3) Add a new **Admin → Brokers** page with UI similar to Companies list.
+4) Wire broker verification status into broker UI and guards (enable/disable actions).
+5) Make sure everything compiles and basic flows work (register broker → verify email → login → admin approves → broker dashboard shows Verified).
+
+────────────────────────────────
+1. Inspect current schema and models
+────────────────────────────────
+1. Open `prisma/schema.prisma` and locate:
+   - `model User`
+   - `model Company`
+   - `model Broker` (or similarly named)
+   - any existing enums for statuses (e.g. `enum CompanyStatus`).
+2. Ensure the `Broker` model has:
+   - `id` (string/UUID)
+   - `name`
+   - optional company-like fields (state, ein, etc., if already defined)
+   - **status** field with an enum (similar to company):
+     - If an enum already exists (e.g. `enum BrokerStatus { PENDING VERIFIED REJECTED }`), reuse it.
+     - If NOT, create a new enum `BrokerStatus` with at least:
+       - `PENDING`
+       - `VERIFIED`
+       - `REJECTED`
+     and set `Broker.status BrokerStatus @default(PENDING)`.
+3. In `model User`, confirm there is a relation field linking broker users to their broker record:
+   - `brokerId String?`
+   - `broker   Broker? @relation(fields: [brokerId], references: [id])`
+   If this relation is missing or named differently, align naming so it matches how broker registration currently works.
+4. If you change `schema.prisma`, run:
+   - `npx prisma migrate dev --name broker_verification_status`
+   Make sure migration succeeds.
+
+────────────────────────────────
+2. Review existing verification logic for Companies
+────────────────────────────────
+1. Search for the existing company admin UI and API:
+   - Likely files:
+     - `app/admin/companies/page.tsx`
+     - `app/api/admin/companies/route.ts`
+     - or similar.
+2. Identify how company approval is currently implemented:
+   - API endpoint that allows ADMIN to change `Company.status` from `PENDING` to `VERIFIED` (and possibly `REJECTED`).
+   - Frontend components that show:
+     - status badge (`Verified`, `Pending`, etc.)
+     - “Approve” / “Reject” buttons.
+3. **Important:** Reuse the same patterns and styles for brokers instead of inventing a new approach. We want broker approval to feel identical to company approval.
+
+────────────────────────────────
+3. Add Broker admin API routes
+────────────────────────────────
+Implement admin-only endpoints to:
+- list brokers
+- update broker status (VERIFY / REJECT)
+
+Follow the same folder structure and patterns as for companies.
+
+Suggested structure (adapt to existing organization):
+
+- `app/api/admin/brokers/route.ts`
+  - `GET` → return paginated list of brokers with:
+    - `id`
+    - `name`
+    - `email` (from related User if needed)
+    - `state` (if any)
+    - `status`
+    - `createdAt`
+    - counts (optional, can be 0 for now):
+      - total pools
+      - total orders
+  - Support optional search query param `?q=` to filter by name/email.
+
+- `app/api/admin/brokers/[id]/route.ts`
+  - `PATCH` → update broker status.
+  - Request body: `{ action: 'VERIFY' | 'REJECT' }`
+  - Logic:
+    - Check the current user is authenticated and has role `ADMIN`.
+      - Reuse the same helper that company admin API uses (e.g. `getCurrentUser()` + `assertAdmin()`).
+    - If `action === 'VERIFY'`:
+      - set `broker.status = BrokerStatus.VERIFIED`
+      - optionally set `verifiedAt = new Date()` if such field exists or you can add it.
+    - If `action === 'REJECT'`:
+      - set `broker.status = BrokerStatus.REJECTED`
+    - Return updated broker.
+
+Security:
+- All `/api/admin/brokers*` handlers **must** check role === 'ADMIN' and return 403 for non-admins.
+- Follow the same error-handling style that company admin endpoints use.
+
+────────────────────────────────
+4. Add Admin "Brokers" page and navigation
+────────────────────────────────
+1. Locate the admin layout and sidebar:
+   - e.g. `app/admin/layout.tsx`, `app/admin/components/AdminSidebar.tsx`, or similar.
+2. Add a new link in the admin sidebar:
+   - Label: `Brokers`
+   - Route: `/admin/brokers`
+   - Style it the same way as `Companies`, `Accountants`, etc.
+
+3. Create a new page at `app/admin/brokers/page.tsx` that:
+   - Uses the existing admin layout.
+   - On server side (preferred) or client side, fetches broker list from `/api/admin/brokers`.
+   - Displays brokers in cards or a table, **mirroring the Companies UI**.
+   - For each broker, show:
+     - Broker name (e.g. “SuVerse Capital”)
+     - Status pill (Pending / Verified / Rejected) with color coding matching company statuses.
+     - Broker admin contact email (from User, if there is a 1:1 relation).
+     - State and EIN fields, if present.
+     - Created date.
+   - Add a search input at the top (placeholder: “Search brokers…”) that filters the list by name/email via client-side filter OR refetch with `?q=`.
+
+4. For each broker card/row, add action buttons:
+   - If status === `PENDING`:
+     - `Approve` (primary)
+     - optional `Reject` (secondary)
+   - If status === `VERIFIED`:
+     - Show “Verified” badge; disable Approve.
+   - If status === `REJECTED`:
+     - Show “Rejected” badge; optionally allow “Re-approve”.
+   - On click of `Approve`:
+     - Call `PATCH /api/admin/brokers/[id]` with body `{ action: 'VERIFY' }`.
+     - On success, optimistically update the UI state.
+   - On click of `Reject`:
+     - Call `PATCH /api/admin/brokers/[id]` with body `{ action: 'REJECT' }`.
+
+Styling:
+- Reuse existing Tailwind classes and components from Companies page, so the Brokers page visually looks like the Companies page (same card layout, colors, badges, etc.).
+
+────────────────────────────────
+5. Wire broker status into Broker Dashboard UI
+────────────────────────────────
+The broker dashboard already shows a “Verification Pending” pill for brokers with `status = PENDING`. Ensure this behavior is correct and extend it slightly.
+
+1. Locate broker layout and dashboard:
+   - `app/broker/layout.tsx`
+   - `app/broker/dashboard/page.tsx`
+   - any other broker sub-pages: inventory, orders, payouts, etc.
+2. Make sure broker data is loaded including `status`:
+   - e.g. using a helper `getCurrentBroker()` or fetching `/api/broker/me`.
+3. In the broker header:
+   - If `status === 'PENDING'`:
+     - Show yellow badge: `Verification Pending`.
+     - Under the main headline, include a short text:
+       - “Your broker profile is under review. You can explore the dashboard, but creating pools and orders is disabled until verification is complete.”
+   - If `status === 'VERIFIED'`:
+     - Show green badge: `Verified`.
+   - If `status === 'REJECTED'`:
+     - Show red badge: `Verification Rejected. Please contact support.`
+
+4. Access control to broker actions:
+   - For core actions like:
+     - “Create Pool” / “New Pool”
+     - “Create Order”
+   - If `status !== 'VERIFIED'`:
+     - Disable corresponding buttons (or hide them).
+     - Show tooltip or small helper text: “Broker must be verified by SuVerse admin before performing this action.”
+   - This ensures that only VERIFIED brokers can actually create and sell tax credit pools.
+
+────────────────────────────────
+6. Authentication / Login stability
+────────────────────────────────
+There is a known behavior where login sometimes succeeds only on 2nd or 3rd attempt during development because of session cookie rotation and hot-reload. Make sure:
+1. Login handler (`/api/auth/login`) returns proper status codes:
+   - 200 on success
+   - 401 on invalid credentials
+2. Post-login redirect logic (`app/post-login/page.tsx` or similar) routes BROKER users to `/broker/dashboard` based on `user.role === 'BROKER'`.
+3. The broker admin created during registration:
+   - Has `role = 'BROKER'`
+   - Has `brokerId` set
+   - After email verification and successful login, you end up at `/broker/dashboard` with correct data.
+
+Do not overcomplicate login; just ensure the flow is consistent and does not throw avoidable errors.
+
+────────────────────────────────
+7. Testing checklist (manual)
+────────────────────────────────
+After implementing:
+
+1. **Register BROKER**
+   - Go to `/register`.
+   - Fill broker registration form:
+     - Select role: BROKER.
+     - Enter broker company name and state.
+   - Submit → observe no server errors.
+   - Confirm DB:
+     - New User with `role = 'BROKER'` and `brokerId` set.
+     - New Broker with `status = PENDING`.
+
+2. **Verify broker email**
+   - Open email, click verification link once.
+   - Should show “Email Verified!” and then redirect to login.
+   - Log in with broker credentials.
+   - Should be redirected to `/broker/dashboard`.
+   - See:
+     - Broker header with name and “Verification Pending” badge.
+     - Restricted actions disabled.
+
+3. **Admin approves broker**
+   - Log in as ADMIN (existing `admin@suverse.io` or whatever admin account exists).
+   - Go to `/admin/brokers`.
+   - Find the new broker.
+   - Click “Approve”.
+   - Status badge should change to “Verified”.
+
+4. **Broker after approval**
+   - Log out as admin, log back in as broker.
+   - Go to `/broker/dashboard`.
+   - Badge should now be “Verified”.
+   - “Create Pool” and other actions should be enabled.
+
+5. **Non-admin protections**
+   - Try opening `/admin/brokers` as:
+     - COMPANY user
+     - BROKER user
+   - Expect redirect to their dashboards or a 403, consistent with other admin pages.
+
+6. Run typecheck and lint:
+   - `npm run lint` (or the equivalent script in this repo).
+   - Fix any new TypeScript / ESLint errors you introduced.
+
+Keep changes focused on broker verification and do NOT remove or break existing company/accountant/admin logic.

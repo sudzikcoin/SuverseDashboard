@@ -65,6 +65,11 @@ export const verifyCompanySchema = z.object({
   note: z.string().nullish(),
 })
 
+export const verifyBrokerSchema = z.object({
+  action: z.enum(["VERIFY", "REJECT"]),
+  note: z.string().nullish(),
+})
+
 export const createInventorySchema = z.object({
   creditType: z.enum(["ITC", "PTC", "C45Q", "C48C", "C48E", "OTHER"]),
   taxYear: z.number(),
