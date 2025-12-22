@@ -4,6 +4,16 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**December 22, 2025** - Production Build Ready for VPS Deployment
+- Successfully completed `npm run build` for VPS deployment
+- Fixed Edge runtime compatibility: moved Node.js crypto imports to server-only module (`lib/version-hash.server.ts`)
+- Resolved all TypeScript build errors: renamed `pdf.ts`→`pdf.tsx`, fixed enum values, corrected Stripe API version
+- Added Suspense boundaries to auth pages for useSearchParams handling
+- Added `export const dynamic = "force-dynamic"` to layouts and API routes that use headers/cookies
+- Made Stripe initialization lazy to handle missing env vars gracefully
+- WalletConnect 403 warnings during build are non-blocking (missing project ID)
+- All routes properly marked as static (○) or dynamic (ƒ) in build output
+
 **December 22, 2025** - Mobile Layout & PWA Support
 - Made all dashboard pages mobile-responsive (tested at 375-400px width)
 - Card grids now single column on mobile, 2 columns on tablet, 3-4 on desktop
