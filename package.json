@@ -19,6 +19,7 @@
     "restore:admin": "tsx scripts/restoreAdmin.ts",
     "test:notify": "tsx scripts/dev-notifier-test.ts",
     "cleanup:test-users": "tsx scripts/cleanup-test-users.ts",
+    "cleanup:non-admin-users": "tsx scripts/cleanup-non-admin-users.ts",
     "test:resend-email": "tsx scripts/test-resend-email.ts"
   },
   "dependencies": {

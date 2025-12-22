@@ -1,0 +1,88 @@
+You are a senior backend engineer working in my Next.js 14 + Prisma project on Replit. I’ve run out of test email inboxes and I need a **database cleanup** so I can reuse them.
+
+Goal
+Create a safe cleanup script that **deletes all users and related data EXCEPT admin accounts**.
+
+Important rules
+- Keep every user whose role is `ADMIN`.
+- Delete ALL other users (COMPANY, BROKER, ACCOUNTANT, or any other non-admin role).
+- Also delete all related records that belong only to those non-admin users:
+  - Company / Broker / Accountant profiles linked to these users
+  - Orders / Purchases / Holds / Payments / Credit pools created by these users’ entities
+  - Auth sessions, verification tokens, password reset tokens, etc. for these users
+  - Any other records that reference these users or their company/broker/accountant records by foreign key
+- Do NOT delete or modify:
+  - Admin user accounts
+  - Any global/system configuration data that is not tied to a specific user (e.g. static reference tables, seed data we need for the app to boot).
+
+Step-by-step tasks
+
+1. Inspect the project:
+   - Open `prisma/schema.prisma` and identify:
+     - The `User` model (and its `role` field).
+     - All models that link to `User` via `userId` or similar.
+     - Models that link to Company/Broker/Accountant entities (for orders, purchases, etc.).
+   - Also quickly scan `/lib` and `/app` to understand which models are used for:
+     - Companies
+     - Brokers
+     - Accountants
+     - Purchases / Orders / Holds / Payments
+     - Sessions and tokens (e.g. NextAuth, email verification).
+
+2. Create a cleanup script:
+   - Add a new file: `scripts/cleanup-non-admin-users.ts`.
+   - In this script:
+     - Import `PrismaClient` from `@prisma/client`.
+     - Create a function that:
+       1. Logs that cleanup is starting.
+       2. Queries all users where `role != 'ADMIN'`.
+       3. If there are no such users, log “No non-admin users found” and exit.
+       4. For the found non-admin users:
+          - Collect their `id`s.
+          - For each related model (companies, brokers, accountants, orders, purchases, holds, documents, files, sessions, tokens, etc.), delete records that belong to those user IDs (directly or via company/broker/accountant IDs).
+          - Use the correct delete order to satisfy foreign key constraints (e.g. delete orders/purchases/holds -> then companies/brokers/accountants -> then users).
+       5. Finally, delete all non-admin users.
+       6. Log how many records were deleted per model and a final summary.
+     - Wrap everything in a `main()` with try/catch/finally:
+       - On error, log a clear error message and `process.exit(1)`.
+       - Always disconnect Prisma in `finally`.
+
+3. Add an npm script:
+   - In `package.json`, add:
+     - `"cleanup:non-admin-users": "ts-node scripts/cleanup-non-admin-users.ts"`  
+       (adjust to whatever command you are already using for TypeScript scripts, e.g. `tsx` instead of `ts-node` if that’s what the project uses).
+   - Make sure the script works with the current tooling (no missing devDependencies).
+
+4. Safety checks in code:
+   - In the cleanup script, add an extra safety guard:
+     - Before deleting, log all admin users (id, email, role) and explicitly log that they **will NOT** be deleted.
+     - Also log the list (or count) of non-admin users that **will be deleted**.
+   - Do **not** delete any user whose `role === 'ADMIN'` even if their email looks like a test email.
+
+5. Run the script (dev only):
+   - Execute the cleanup locally in this Replit environment using:
+     - `npm run cleanup:non-admin-users`
+   - Confirm via logs that:
+     - Admin users are preserved.
+     - Non-admin users and their related records are removed without foreign key errors.
+
+6. Verify via Prisma Studio or app:
+   - If Prisma Studio is configured, you can optionally run it to double-check:
+     - Admin users still exist.
+     - Other users are gone.
+   - Alternatively, verify through the app:
+     - Try signing up again using one of the previously used emails to confirm it no longer conflicts.
+
+7. Documentation:
+   - Create a short markdown file `CLEANUP_NON_ADMIN_USERS.md` with:
+     - A description of what the script does.
+     - A list of models it touches.
+     - The exact command to run: `npm run cleanup:non-admin-users`.
+     - A clear warning that it will delete **all non-admin accounts and their data**.
+
+Constraints
+- Keep changes tightly scoped to the cleanup script and minimal adjustments needed in `package.json`.
+- Do not change existing business logic, routes, or auth flows.
+- Do not log any secrets.
+
+When finished, briefly summarize in the cleanup markdown how many models are affected and confirm that only non-admin users are removed.
