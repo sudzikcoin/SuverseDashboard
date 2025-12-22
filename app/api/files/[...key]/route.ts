@@ -22,7 +22,7 @@ export async function GET(
   const key = params.key.join("/");
 
   const document = await prisma.document.findFirst({
-    where: { storageKey: key }
+    where: { storagePath: key }
   });
 
   if (!document) {
@@ -31,7 +31,7 @@ export async function GET(
 
   const isAuthorized = 
     session.user.role === "ADMIN" ||
-    document.userId === session.user.id ||
+    document.uploadedById === session.user.id ||
     (document.companyId && session.user.companyId === document.companyId) ||
     (document.companyId && session.user.role === "ACCOUNTANT" && 
       await prisma.accountantClient.findFirst({

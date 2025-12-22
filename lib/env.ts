@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { createHash } from "crypto";
 
 const PublicEnvSchema = z.object({
   NEXT_PUBLIC_BASE_CHAIN_ID: z.coerce.number().int().positive(),
@@ -252,24 +251,5 @@ export function maskKey(key: string | null | undefined, showChars = 4): string {
   if (key.length <= showChars) return '***';
   return key.substring(0, showChars) + '***';
 }
-
-export function computeVersionHash(): string {
-  try {
-    const secret = process.env.NEXTAUTH_SECRET || '';
-    const sessionSecret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '';
-    const resendFrom = process.env.RESEND_FROM || '';
-    
-    const combined = `${secret}:${sessionSecret}:${resendFrom}`;
-    const hash = createHash('sha256').update(combined).digest('hex');
-    
-    // Only log once at startup, not on every request
-    return hash;
-  } catch (error) {
-    console.error('[shield] Failed to compute VERSION_HASH:', error);
-    return 'fallback-version';
-  }
-}
-
-export const VERSION_HASH = computeVersionHash();
 
 export default env;

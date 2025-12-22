@@ -1,0 +1,132 @@
+You are a senior full-stack engineer working on my Next.js 14 App Router project “SuVerse Tax Credit Dashboard”. Your main goal: make this project production-ready so that it can successfully run `npm run build` and then `npm run start -p 3000` on a VPS (Ubuntu + nginx reverse proxy to port 3000), WITHOUT relying on `next export` or development mode.
+
+IMPORTANT GLOBAL RULES:
+- Make MINIMAL, LOCALIZED changes. Do not rewrite large parts of the app, do not change database schema, and do not break existing flows (auth, dashboard, broker pages, admin pages).
+- Do not introduce new heavy dependencies unless absolutely necessary.
+- Never commit secrets into the repo. If an env var is needed, use a placeholder name and comment for me.
+
+High-level context (from server logs):
+- The app runs fine with `npm run dev` on Replit and even on the VPS.
+- `next build` / `next start` fail with:
+  - “Route /broker/... couldn't be rendered statically because it used `headers`” and similar dynamic-server-usage errors.
+  - “Export encountered errors on the following paths: /auth/check-email/page, /auth/verify/page, /dashboard/... etc.”
+  - `[Reown Config] Failed to fetch remote project configuration. Using local/default values. Error: HTTP status code: 403` for https://api.web3modal.org/appkit/v1/config?projectId=demo...
+  - Edge middleware error: “EvalError: Code generation from strings disallowed for this context” in `.next/server/middleware.js`.
+- On the VPS we temporarily ran `npm run dev -p 3000` via systemd, and the site worked, but production build is still broken.
+
+YOUR TASK:
+Refactor and configure the project inside Replit so that:
+- `npm run build` completes successfully without errors.
+- `npm run start -p 3000` works as a real production server (no `next export`).
+- All important routes remain functional: `/`, `/login`, `/register`, `/dashboard/...`, all `/broker/...` and `/admin/...` pages, and the auth routes `/auth/check-email` and `/auth/verify`.
+
+Follow these steps carefully:
+
+1) Inspect package.json
+- Open package.json and:
+  - Ensure scripts are exactly:
+
+    "scripts": {
+      "dev": "next dev -p 3000",
+      "build": "next build",
+      "start": "next start -p 3000",
+      "lint": "next lint"
+    }
+
+  - Remove any usage of `next export` or scripts like `"export": "next export"` or `"build": "next build && next export"` etc.
+- Do NOT change dependencies yet.
+- When done, run `npm run lint` and confirm it still works (you can fix simple ESLint issues automatically if easy).
+
+2) Fix Next.js configuration (next.config.js / next.config.mjs)
+- Locate the Next.js config file (next.config.mjs or next.config.js).
+- Remove any of the following if present:
+  - `output: 'export'`
+  - experimental/static/export related flags that force static export.
+- Keep the config as simple and standard as possible for an App Router app. A good baseline:
+
+  const nextConfig = {
+    reactStrictMode: true,
+    experimental: {
+      serverActions: true
+    }
+  };
+
+  export default nextConfig;
+
+- If there are other options already configured (images, redirects, rewrites, etc.), keep them as long as they do not enforce static export or conflict with dynamic routes.
+- The key requirement: PROJECT MUST BUILD as a standard Next.js app server, NOT as a static export.
+
+3) Fix WalletConnect / Reown / Web3Modal config so it doesn’t break the build
+- Search the project for Web3Modal / Reown / WalletConnect usage (e.g. @reown/appkit, @web3modal, walletconnect, projectId = "demo", etc.).
+- If you see something like `projectId: "demo"` or a hardcoded demo projectId:
+  - Refactor it to read from an environment variable:
+
+    const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
+  - If the env var is missing during build, DO NOT throw an error or crash. Instead:
+    - Log a warning to the console (server-side) and either:
+      - disable WalletConnect-related features gracefully, or
+      - fall back to a safe “no wallet” mode.
+- Add a short comment near this config telling me to define NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in `.env.production` on the server.
+
+4) Fix middleware so it is Edge-safe or temporarily simplified
+- Find the main `middleware.ts` or `middleware.js` in the root (if any).
+- The current build error on the VPS is an `EvalError: Code generation from strings disallowed for this context` coming from compiled middleware. This means something inside middleware or its imports uses `eval`, `new Function`, or other dynamic code not allowed on Edge runtime.
+- Inspect middleware and its imports. Then:
+
+  CASE A (middleware is non-critical: only logs, debug, trivial redirects):
+    - Simplify it to a minimal safe middleware, for example:
+      - Import only from "next/server".
+      - Export a simple function that just returns NextResponse.next() (or equivalent).
+      - Remove or comment out any complex logic or 3rd-party libs that cause Edge issues.
+  
+  CASE B (middleware is important for auth, locale, or security):
+    - Try to refactor it so:
+      - It only uses APIs supported in Edge runtime (no eval, no dynamic code generation, no Node-only APIs like fs, crypto.randomBytes, etc).
+      - All heavy logic is moved to regular server routes or API handlers instead of middleware.
+- The priority is: middleware MUST compile and run without throwing Runtime/Eval errors in production.
+
+5) Ensure no route tries to be statically exported when using dynamic server features
+- Search all app routes (app/auth, app/dashboard, app/broker, app/admin, etc.) for:
+  - `headers()`, `cookies()`, useSearchParams, or other dynamic request APIs.
+- This is allowed in an App Router server environment, but not with static export. Since we have removed `output: 'export'`, verify that:
+  - These pages are not using `export const dynamic = 'error'` or similar flags that would block dynamic usage.
+  - There is no legacy configuration forcing them to be statically generated when they clearly rely on runtime request data.
+- If any page has explicit static export settings that conflict with dynamic behavior, adjust them to allow dynamic rendering (for example, `export const dynamic = 'force-dynamic';` where appropriate). Only do this when necessary and document it with a small comment.
+
+6) Type issues (like bcryptjs)
+- If there are TypeScript build errors such as:
+  - "Could not find a declaration file for module 'bcryptjs'"
+- Fix them in the simplest way:
+  - Ensure `@types/bcryptjs` is installed as a devDependency.
+  - Confirm imports use the correct ESM/CJS pattern.
+- Do NOT disable TypeScript or set "skipLibCheck": true unless there is no better option. Prefer proper typings.
+
+7) Verify production build and dev both work
+- After modifications:
+  - Run `npm run lint` and fix remaining easy issues that block build.
+  - Run `npm run build` and make sure it completes successfully with no fatal errors.
+    - Warnings about dynamic routes are OK as long as build passes.
+- Then explicitly test dev mode:
+  - Run `npm run dev -p 3000`.
+  - Confirm that key pages still load and basic flows work (landing page, login, register, dashboard main route, one broker route, one admin route).
+- If something breaks functionally, prefer small code adjustments over big refactors.
+
+8) Final cleanup and summary
+- Do NOT add or modify any deployment/server/nginx/systemd files in this repo. Those are handled separately on the VPS.
+- At the end, produce a clear summary in REPLIT CHAT of:
+  - All files you changed.
+  - What exactly you changed in each file.
+  - The exact `npm run build` and `npm run dev` results.
+  - A short note telling me which env vars (like NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) I must configure on the server for production.
+
+Your end state:
+- The repository is ready to be pushed to GitHub.
+- On the VPS, I will only need to:
+  - pull the latest code,
+  - install dependencies,
+  - create `.env.production` with the same vars as in Replit plus the real WalletConnect projectId,
+  - run `npm run build`,
+  - and start the app with `npm run start -p 3000` behind nginx.
+
+Please start by scanning the project and confirming the current Next.js version, package.json scripts, and next.config configuration before making changes.

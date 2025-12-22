@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db"
 import BrokerSidebar from "./components/BrokerSidebar"
 import BrokerHeader from "./components/BrokerHeader"
 
+export const dynamic = "force-dynamic"
+
 export default async function BrokerLayout({
   children,
 }: {

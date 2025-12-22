@@ -119,8 +119,8 @@ export async function DELETE(
     await prisma.auditLog.create({
       data: {
         actorId: session.user.id,
-        action: "DELETE",
-        entity: "Document",
+        action: "DOCUMENT_DELETE",
+        entity: "DOCUMENT",
         entityId: params.id,
         details: `Deleted ${document.filename} (${document.sizeBytes} bytes)`,
       },

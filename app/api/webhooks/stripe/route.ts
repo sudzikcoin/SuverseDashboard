@@ -5,13 +5,22 @@ import { prisma } from "@/lib/db"
 import { generateBrokerPackagePDF } from "@/lib/pdf"
 import { sendPaymentConfirmation } from "@/lib/email"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-11-20.acacia",
-})
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
+function getStripeClient(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    console.warn('[stripe] STRIPE_SECRET_KEY not configured');
+    return null;
+  }
+  return new Stripe(key, { apiVersion: "2025-10-29.clover" });
+}
 
 export async function POST(req: Request) {
+  const stripe = getStripeClient();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+  
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+  }
   try {
     const body = await req.text()
     const signature = headers().get("stripe-signature")
@@ -69,7 +78,7 @@ export async function POST(req: Request) {
         amountUSD: Number(purchaseOrder.amountUSD),
         pricePerDollar: Number(purchaseOrder.pricePerDollar),
         totalUSD: Number(purchaseOrder.totalUSD),
-        documents: documents.map(d => ({ type: d.type, url: d.url })),
+        documents: documents.map(d => ({ type: d.filename, url: `/api/file-by-id?id=${d.id}` })),
       })
 
       const brokerPackageUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`

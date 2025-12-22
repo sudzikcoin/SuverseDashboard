@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/ops/auth-middleware";
 import { getServerSession } from "next-auth";

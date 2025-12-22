@@ -1,13 +1,17 @@
 "use client"
 import { motion } from "framer-motion"
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps {
   variant?: "primary" | "glass" | "danger"
   children: React.ReactNode
   href?: string
+  className?: string
+  onClick?: () => void
+  disabled?: boolean
+  type?: "button" | "submit" | "reset"
 }
 
-export default function Button({ variant = "primary", children, href, className = "", ...props }: ButtonProps) {
+export default function Button({ variant = "primary", children, href, className = "", onClick, disabled, type = "button" }: ButtonProps) {
   const baseClasses = "rounded-2xl font-semibold py-3 px-6 transition"
   
   const variantClasses = {
@@ -34,7 +38,9 @@ export default function Button({ variant = "primary", children, href, className 
     <motion.button
       className={combinedClasses}
       whileTap={{ scale: 0.98 }}
-      {...props}
+      onClick={onClick}
+      disabled={disabled}
+      type={type}
     >
       {children}
     </motion.button>

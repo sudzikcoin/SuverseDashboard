@@ -1,5 +1,6 @@
 import { prisma } from '../db';
-import { getAuthEnv, getEmailEnv, getWalletEnv, getUsdcEnv, VERSION_HASH, maskEmail, maskKey } from '../env';
+import { getAuthEnv, getEmailEnv, getWalletEnv, getUsdcEnv, maskEmail, maskKey } from '../env';
+import { VERSION_HASH } from '../version-hash.server';
 
 export interface HealthCheckResult {
   ok: boolean;

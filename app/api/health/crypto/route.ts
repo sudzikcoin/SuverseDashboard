@@ -1,7 +1,9 @@
+export const dynamic = "force-dynamic"
+
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/ops/auth-middleware";
 import { getAuthEnv } from "@/lib/env";
-import { VERSION_HASH } from "@/lib/env";
+import { VERSION_HASH } from "@/lib/version-hash.server";
 
 export async function GET() {
   const adminError = await requireAdmin();

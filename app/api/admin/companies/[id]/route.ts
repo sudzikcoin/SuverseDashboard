@@ -70,7 +70,7 @@ export async function PUT(
   })
 
   await createAuditLog(
-    (session.user as any).id,
+    (session!.user as any).id,
     "UPDATE",
     "Company",
     company.id,
@@ -95,7 +95,7 @@ export async function DELETE(
   })
 
   await createAuditLog(
-    (session.user as any).id,
+    (session!.user as any).id,
     "DELETE",
     "Company",
     params.id

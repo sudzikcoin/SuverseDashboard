@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import Button from "@/components/ui/Button";
 
 export function EmailTestCard() {
   const [email, setEmail] = useState("");

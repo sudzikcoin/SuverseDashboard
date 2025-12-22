@@ -27,7 +27,7 @@ export async function GET() {
       prisma.user.count({ where: { role: "ACCOUNTANT" } }),
       prisma.auditLog.findMany({
         take: 10,
-        orderBy: { createdAt: "desc" },
+        orderBy: { timestamp: "desc" },
         include: {
           actor: { select: { email: true, name: true } },
         },

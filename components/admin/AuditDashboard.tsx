@@ -191,7 +191,7 @@ export default function AuditDashboard() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry) => entry.action}
+                  label={(entry: any) => entry.action}
                   outerRadius={70}
                   fill="#8884d8"
                   dataKey="count"
