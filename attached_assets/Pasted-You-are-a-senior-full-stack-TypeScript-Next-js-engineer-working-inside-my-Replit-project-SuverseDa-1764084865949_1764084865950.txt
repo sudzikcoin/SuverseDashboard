@@ -1,0 +1,129 @@
+You are a senior full-stack TypeScript/Next.js engineer working inside my Replit project **SuverseDashboard**.
+
+GOAL  
+Fix the **company purchase flow** so that when a company user buys credits, the new order **always appears on the “My Purchases” page**, and add an automatic end-to-end test that verifies this. Also make sure login is stable (no “third try” issues) for this flow.
+
+PROJECT CONTEXT (IMPORTANT)  
+- Stack: Next.js 14 (App Router) + TypeScript + Tailwind + Prisma + PostgreSQL.  
+- Root structure (already in project):  
+  - `app/(dashboard)/...` — main company dashboard pages.  
+  - `app/company/...` — company-specific routes.  
+  - `app/api/...` — API routes (checkout, purchases, payments, etc.).  
+  - `prisma/schema.prisma` — DB models for `User`, `Company`, `Order`/`Purchase` (names may slightly differ, inspect carefully).  
+  - Markdown docs in root: `IMPLEMENTATION_SUMMARY.md`, `PAYMENT_FALLBACK.md`, `ADMIN_DASHBOARD_FIX.md`, `STABILITY_*`, etc — use them to understand the existing logic before changing code.
+
+BUSINESS LOGIC (WHAT SHOULD HAPPEN)  
+1. A **company** user logs in and sees its dashboard.  
+2. On **Marketplace** page the company selects a broker pool (e.g. “C48E 2025”), enters a purchase amount and clicks **“Purchase Now”**.  
+3. In demo mode, no real payment is sent, but the app must still create a **purchase/order record** in the DB linked to:  
+   - the current `companyId`  
+   - the selected broker pool / credit  
+   - correct monetary fields (face value, discount, subtotal, status = e.g. `PENDING` or `RESERVED` depending on logic).  
+4. After a successful order creation, the company can open **“My Purchases”** from the sidebar and must see the new order in the list (with correct status, date, amount, broker, etc).
+
+CURRENT BUG (WHAT USER EXPERIENCES)  
+- From the company account, pressing **“Purchase Now”** shows a success/demo message (modal with “Order created in demo mode (no payment required)”), but the **“My Purchases”** page remains empty (“No purchases yet.”).  
+- Previously, purchases appeared there correctly.  
+- Login sometimes only works from the 2nd or 3rd attempt (button stuck on “Logging in…”). This should also be stabilized while you are in the flow.
+
+YOUR TASKS — STEP BY STEP  
+
+1. **Project scan & understanding**  
+   - Open and read these files first (if they exist):  
+     - `IMPLEMENTATION_SUMMARY.md`  
+     - `PAYMENT_FALLBACK.md`  
+     - `ADMIN_DASHBOARD_FIX.md`  
+     - `STABILITY_*` and `SETUP_CHECKLIST.md`  
+   - Then inspect the main purchase-related code:  
+     - Company marketplace & purchase UI:  
+       - Something like `app/(dashboard)/marketplace/page.tsx` or similar.  
+       - The modal / component for selecting amount and clicking **“Purchase Now”**.  
+     - Company “My Purchases” page:  
+       - `app/(dashboard)/purchases/page.tsx` or similar path.  
+     - API routes used when clicking **“Purchase Now”**:  
+       - `app/api/checkout/route.ts` and/or `app/api/payments/route.ts`  
+       - `app/api/purchases/route.ts` and `app/api/purchases/[id]/route.ts`  
+     - Auth helpers:  
+       - Anything under `lib/auth/*`, `lib/session/*`, `app/api/auth/*`, and `middleware.ts`.
+
+2. **Reproduce the bug programmatically**  
+   - Start the dev server in Replit (whatever is already configured, e.g. `npm run dev`).  
+   - Use a **headless E2E script** (Playwright preferred; if not installed, add it as devDependency and basic config) that does:  
+     1. Opens the site root.  
+     2. Navigates to **Login**.  
+     3. Logs in as a **company** user.  
+        - If there is no test company, first create one via Sign Up flow (role = COMPANY), then verify email via direct DB update (set `emailVerified` or similar flag) to avoid real email.  
+     4. Navigates to marketplace, opens a pool, enters a test value (e.g. 80 000 face value) and clicks **“Purchase Now”**.  
+     5. Waits for success/demo confirmation.  
+     6. Navigates to **“My Purchases”** page and checks that **at least one purchase card/row is visible and includes the correct amount**.  
+   - Put this test into `tests/e2e/purchase-flow.spec.ts` (or create a similar folder if none exists).
+
+3. **Debug why purchases are not shown**  
+   - Compare what the **API for purchase creation** writes to the DB vs what the **My Purchases page** is querying:  
+     - Confirm the **same table/model** is used (`Purchase`, `Order`, etc.).  
+     - Confirm records are filtered by the **current company’s `id`** and **NOT** by `userId` if business logic is company-based; or, if purchasing is per user, keep logic consistent on both sides.  
+     - Check for filters like `status: 'CONFIRMED'` or `isDeleted: false` — if new demo orders are created as `PENDING`, but the UI only shows `CONFIRMED`, they will never appear.  
+     - Confirm `companyId` and `brokerPoolId` (or similar relation) are set when inserting.  
+   - Add temporary logging (console.logs on server) if needed to verify that:  
+     - The API handler is called.  
+     - Prisma `create` actually runs.  
+     - The My Purchases loader receives at least one record from Prisma.
+
+4. **Implement the FIX**  
+   - Fix ONLY what is logically wrong, don’t refactor the whole project. Typical issues to look for and fix:  
+     - Purchase API is using the wrong relation (`userId` instead of `companyId`, wrong field name, or missing `companyId` entirely).  
+     - My Purchases page is using the wrong filter (e.g. filtering by `userId` while orders are stored by `companyId`, or filtering by `status: 'CONFIRMED'` while new orders are `PENDING`).  
+     - My Purchases page is querying the right data but mapping over an empty list due to `select` causing missing fields.  
+     - Demo mode logic short-circuits before saving to DB.  
+   - Make sure that after your fix:  
+     - Clicking **“Purchase Now”** ALWAYS creates a DB record in demo mode.  
+     - The record appears on the **My Purchases** page for that company, with reasonable fields (date, status, face value, broker, etc.).  
+   - Do not break admin or broker behaviour. If there are role checks, keep them intact.
+
+5. **Stabilize LOGIN behaviour for this flow**  
+   - Inspect `middleware.ts`, auth utilities and `app/api/auth/login/route.ts` (or similar).  
+   - The reported issue: login sometimes only works on the 2nd–3rd attempt and the button hangs on “Logging in…”.  
+   - Typical culprits to check and fix:  
+     - Missing `await` around `signIn` or session save.  
+     - Race condition between redirect and session cookie set.  
+     - Client side not handling non-200 responses and staying in a “loading” state.  
+   - Make sure the login request:  
+     - Returns clear success or error JSON.  
+     - The client resets `isLoading` in both success and catch branches.  
+     - On success, it **redirects to the correct dashboard** depending on role (COMPANY → `/dashboard`, BROKER → `/broker/dashboard`, etc.).  
+   - Re-run the E2E test to ensure login is deterministic (enters dashboard on first attempt).
+
+6. **Create and RUN automated test**  
+   - Finalize the Playwright (or similar) spec so it:  
+     - Creates/ensures a test company user (either via sign-up or direct DB seed).  
+     - Logs in once.  
+     - Creates a purchase.  
+     - Asserts that the purchase list on **My Purchases** contains an item.  
+   - Make the test runnable with an npm script like:  
+     - `"test:e2e": "playwright test tests/e2e/purchase-flow.spec.ts"`  
+   - Run the test and ensure it **passes**.
+
+7. **Clean up & document**  
+   - Remove any temporary debug logging that is no longer useful.  
+   - Add a short markdown file in project root describing exactly what you changed, e.g. `PURCHASES_FLOW_FIX.md` with:  
+     - The root cause.  
+     - The files you changed.  
+     - How to run the new E2E test.  
+   - Ensure TypeScript passes (`npm run lint` or `tsc --noEmit` if configured) and the app builds without errors.
+
+CONSTRAINTS & STYLE  
+- Keep the architecture consistent with existing patterns in the project.  
+- Do not introduce new libraries unless absolutely necessary (Playwright is OK if not already present).  
+- Prefer small, focused fixes over large refactors.  
+- All new code must be typed (TypeScript) and should avoid “any” where possible.  
+- Do not hard-code my personal emails; for tests use clearly marked dummy emails like `company.test+e2e@suverse.io`.
+
+DELIVERABLES  
+1. Working purchase flow where:  
+   - Company purchase via “Purchase Now” creates an order.  
+   - “My Purchases” page displays that order.  
+2. Stable login for this company flow.  
+3. E2E test file that automatically verifies this behaviour.  
+4. `PURCHASES_FLOW_FIX.md` in the root summarizing what you did.
+
+Now start from step 1 and proceed sequentially until everything is fixed and the E2E test is passing.

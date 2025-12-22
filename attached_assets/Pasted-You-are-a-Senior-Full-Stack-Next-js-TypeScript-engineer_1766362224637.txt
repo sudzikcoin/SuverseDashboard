@@ -1,0 +1,139 @@
+You are a Senior Full-Stack Next.js/TypeScript engineer and internal auditor of the **SuverseDashboard** project in Replit.  
+Goal: fully fix email verification sending via Resend so that **any new user (any domain, including iCloud)** consistently receives the verification email, and the Resend call is always executed on registration.
+
+CONSTRAINTS (MANDATORY):
+1. Do NOT change the DB schema (Prisma schema) or migrations.
+2. Do NOT rename existing env variables and do NOT add heavy dependencies.
+3. All changes must be local and minimal, no large-scale refactors.
+4. Do NOT break existing features (login, broker dashboard, orders, etc.).
+5. If you add any helper dev endpoint/script for testing, gate it from production with `process.env.NODE_ENV !== 'production'` or a dedicated flag.
+
+CURRENT ISSUE:
+– Registering a user with email `agip32@icloud.com` shows the screen “Check your email”,  
+  but in Resend’s logs there is **no record** for this email → the backend never calls Resend for that registration.  
+– Other emails (gmail) are delivered, so the Resend key and base integration are working.  
+→ You must find **why for some registrations the verification email is not sent** and fix it.
+
+YOUR TASK – DO THE FOLLOWING:
+
+================================================================
+1. Project scan and locating email-sending logic
+================================================================
+1.1. Scan the code and find all places where Resend is used:
+    – Patterns: `new Resend`, `resend.emails.send`, `sendVerificationEmail`, `Verify your email`, `email verification`.
+1.2. Record the structure:
+    – Where the Resend client is defined (e.g. `lib/email/...` or `lib/resend.ts`).
+    – Which functions are responsible for sending the email verification (something like `sendEmailVerification(user, token)`).
+    – Which API route / server action creates the user and triggers sending (typically `app/api/auth/register/route.ts` or similar).
+
+Create a small log file in the project root `EMAIL_VERIFICATION_AUDIT.md` with a brief description:
+    – which files participate in registration + email sending flow;
+    – which roles are supported (COMPANY, BROKER, ACCOUNTANT, etc.);
+    – which functions call Resend today.
+
+================================================================
+2. Find mismatches between roles / registration paths
+================================================================
+2.1. Find all API routes and server actions that create new users:
+    – Search for `prisma.user.create(`, `prisma.user.upsert(`, `createUser`, `register`, etc.
+2.2. Map out:
+    – For which routes/roles a **verification email is sent after user creation**.
+    – For which routes it is not (maybe a new or alternative registration path).
+
+Pay special attention to:
+    – COMPANY registration.
+    – BROKER registration.
+    – Any “invite accountant” or similar flows.
+
+2.3. If you find a condition that limits sending to certain domains or roles (e.g. `if (email.endsWith('@gmail.com'))` or `if (role === 'BROKER')`), document it in `EMAIL_VERIFICATION_AUDIT.md` and prepare a fix.
+
+================================================================
+3. Normalize verification email sending for ALL registrations
+================================================================
+3.1. Extract or confirm a shared function for sending the email (if it doesn’t exist yet):
+    – For example: `lib/email/sendVerificationEmail.ts` with signature:
+      `export async function sendVerificationEmail(user: User, token: string) { ... }`
+    – Inside, reuse the existing Resend client. Do not change subject/body template unless strictly necessary.
+
+3.2. In ALL registration routes:
+    – Wherever a new user is created via `prisma.user.create` (or equivalent) and a verification token is generated:
+      – immediately call:
+        `await sendVerificationEmail(user, verificationToken);`
+    – Ensure this happens **independently of email domain and user role** (COMPANY/BROKER/ACCOUNTANT/etc).
+
+3.3. If there is any guard like `if (process.env.NODE_ENV === 'production') return;` around Resend:
+    – We still need emails in dev.
+    – Either remove this guard or change logic as follows:
+      – if `RESEND_API_KEY` is missing → log a warning and skip sending;
+      – if the key exists → send emails in both dev and production.
+
+================================================================
+4. Logging and safe Resend error handling
+================================================================
+4.1. In the verification email function, add detailed logging:
+    – Before call:
+      `console.log('[EMAIL] Sending verification email to', email, 'userId=', user.id);`
+    – After call:
+      – if Resend returns an error:
+        `console.error('[EMAIL] Resend error for', email, result.error);`
+      – if success:
+        `console.log('[EMAIL] Verification email sent successfully to', email);`
+
+4.2. Wrap sending in try/catch so that a failure in Resend does NOT break registration, but always logs:
+    ```ts
+    try {
+      const result = await resend.emails.send({ ... });
+      if ((result as any).error) {
+        console.error('[EMAIL] Resend API logical error:', (result as any).error);
+      }
+    } catch (err) {
+      console.error('[EMAIL] Resend API threw exception:', err);
+    }
+    ```
+
+4.3. Ensure there are no silent catches and that every error path logs something meaningful.
+
+================================================================
+5. Automated registration test inside Replit
+================================================================
+Create minimal automated verification, without changing frontend:
+
+5.1. Identify the HTTP endpoint used by the registration form (e.g. `/api/auth/register`).  
+5.2. Inside `scripts/`, add a small Node script, e.g. `scripts/test-email-verification.ts` that:
+    – uses `fetch` (built-in in Next.js 14 / Node 18+) or existing polyfill;
+    – sends POST requests to the running app (e.g. `http://localhost:3000/api/auth/register`) OR, if simpler inside Replit, imports the route handler directly and invokes it with a mock `Request`;
+    – creates test users with unique emails, like:
+      – `agent-test+company@suverse.dev`
+      – `agent-test+broker@suverse.dev`
+    – For each request:
+      – logs status + body;
+      – prints markers like `[TEST] Registration complete for ...`.
+
+Prefer to call the same logic as the real route so the flow is identical to UI registration.
+
+5.3. Run this script in Replit:
+    – confirm that registrations succeed;
+    – confirm in console logs that `[EMAIL] Sending verification email to ...` appears for every created user.
+
+Add a short note with results into `EMAIL_VERIFICATION_AUDIT.md`.
+
+================================================================
+6. Final manual UI verification
+================================================================
+6.1. Run the app as usual.  
+6.2. Through the frontend:
+    – Register a NEW user with an iCloud email, e.g. `agip32+test@icloud.com`, using the same flow that previously failed.
+6.3. Check Replit logs:
+    – `[EMAIL] Sending verification email to agip32+test@icloud.com ...` must appear;
+    – there must be no Resend errors.
+
+================================================================
+7. Report
+================================================================
+At the end of `EMAIL_VERIFICATION_AUDIT.md`, add a short summary:
+    – which files/routes you changed;
+    – what the root cause was (for example: “COMPANY and ACCOUNTANT registration routes never called the verification email helper; only BROKER did”, or the actual reason you discovered);
+    – how the flow works now (for every role/domain, Resend is always called after successful registration);
+    – what the human user should do to validate (3–4 step instruction).
+
+Keep all changes precise and localized. If you discover anything that might affect the existing login/registration flow, first document it in `EMAIL_VERIFICATION_AUDIT.md`, then fix it as surgically as possible.

@@ -2,14 +2,14 @@
  * Email Verification Workflow
  * 
  * Handles creation and verification of email verification tokens for user registration.
- * Integrates with SendGrid for sending verification emails.
+ * Integrates with Resend for sending verification emails.
  * 
  * TODO: Future enhancement - reuse this pattern for password reset workflow.
  */
 
 export const runtime = 'nodejs';
 import { prisma } from '@/lib/db';
-import { sendTransactionalEmail } from '@/lib/email/sendgrid';
+import { resend, fromAddress as getFromAddress } from '@/lib/email/resend';
 import crypto from 'crypto';
 
 /**
@@ -131,16 +131,27 @@ If you didn't create an account with SuVerse, you can safely ignore this email.
 © ${new Date().getFullYear()} SuVerse. All rights reserved.
   `.trim();
 
+  const fromAddr = getFromAddress() || 'noreply@suverse.io';
+  
+  console.log(`[EMAIL] Sending verification email to ${email}, userId=${userId}`);
+  
   try {
-    await sendTransactionalEmail({
+    const result = await resend.emails.send({
+      from: fromAddr,
       to: email,
       subject: 'Verify your email for SuVerse Dashboard',
       html,
       text,
     });
-    console.log(`[emailVerification] Sent verification email to ${email}`);
+    
+    if ('error' in result && result.error) {
+      console.error(`[EMAIL] Resend API error for ${email}:`, result.error);
+    } else {
+      const emailId = (result as any).data?.id || (result as any).id;
+      console.log(`[EMAIL] Verification email sent successfully to ${email}, id=${emailId}`);
+    }
   } catch (error) {
-    console.error('[emailVerification] Failed to send verification email:', error);
+    console.error(`[EMAIL] Resend API exception for ${email}:`, error);
     // Don't throw - token is already created in DB, user can request resend
   }
 }
