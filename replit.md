@@ -4,17 +4,19 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
-**December 22, 2025** - Email Verification Complete Audit & Fix
-- Root cause identified: `RESEND_FROM` set to `onboarding@resend.dev` (sandbox mode)
-- Sandbox mode only allows sending to the Resend account owner's email
-- Fix: `RESEND_FROM` must be set to a verified domain email (e.g., `info@suverse.io`)
-- Enhanced `lib/auth/emailVerification.ts` with:
-  - Sandbox mode detection and warnings
-  - Detailed `[EMAIL]` logging for all operations
-  - Helpful error messages with fix suggestions
+**December 22, 2025** - Email Verification Final Fix
+- Root cause: Code was reading `RESEND_FROM` at module load time and falling back to sandbox address
+- Fix: Changed all email code to read env vars at **request time** (inside functions)
+- Removed ALL fallbacks to `onboarding@resend.dev` - if not configured, email won't send (with clear error)
+- `RESEND_FROM` now properly reads as `no-reply@suverse.io` from verified domain
+- Test script updated to accept CLI argument: `npm run test:resend-email -- user@example.com`
+- Created `RESEND_SETUP_STATUS.md` with full configuration documentation
+
+**December 22, 2025** - Email Verification Audit
 - Created `scripts/test-resend-email.ts` for testing Resend configuration
-- Created `EMAIL_VERIFICATION_STATUS.md` documentation
+- Created `EMAIL_VERIFICATION_STATUS.md` documentation  
 - Created `scripts/cleanup-test-users.ts` for cleaning up test accounts by email
+- Enhanced `lib/auth/emailVerification.ts` with detailed `[EMAIL]` logging
 
 **December 22, 2025** - Email Verification Resend Fix
 - Fixed email verification not appearing in Resend logs for some users

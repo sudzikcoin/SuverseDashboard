@@ -113,14 +113,14 @@ export const clientEnv = env;
 export function getEmailEnv() {
   const parsed = EmailEnvSchema.safeParse({
     RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+    RESEND_FROM: process.env.RESEND_FROM,
   });
 
   if (!parsed.success) {
     console.error('[env] Email validation failed:', parsed.error.flatten().fieldErrors);
     return {
       RESEND_API_KEY: process.env.RESEND_API_KEY || '',
-      RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+      RESEND_FROM: process.env.RESEND_FROM || '',
       isValid: false,
     };
   }
@@ -153,7 +153,7 @@ export function getEnv() {
   return {
     ...DEFAULTS,
     RESEND_API_KEY: process.env.RESEND_API_KEY || '',
-    RESEND_FROM: process.env.RESEND_FROM || 'onboarding@resend.dev',
+    RESEND_FROM: process.env.RESEND_FROM || '',
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
     ENABLE_TELEGRAM: process.env.ENABLE_TELEGRAM === 'true' || process.env.ENABLE_TELEGRAM === '1',

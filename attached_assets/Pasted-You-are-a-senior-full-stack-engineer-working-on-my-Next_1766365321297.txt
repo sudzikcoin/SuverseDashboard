@@ -1,0 +1,84 @@
+You are a senior full-stack engineer working on my Next.js 14 + TypeScript project in this Replit. The goal is to make email verification work reliably with Resend using my verified domain **suverse.io**.
+
+Current situation:
+- Resend domain **suverse.io** is verified.
+- In Replit Secrets I have:
+  - RESEND_API_KEY = my valid Resend API key
+  - RESEND_FROM = "no-reply@suverse.io"
+- However, when I register a new user, the Replit console still shows logs like:
+  - "[EMAIL] SANDBOX MODE: Email will only be delivered if recipient is the Resend account owner"
+  - The Resend API error 403:
+    "You can only send testing emails to your own email address (sudzikgroup@gmail.com). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain."
+- This means the code is still using the sandbox from address **onboarding@resend.dev** instead of my RESEND_FROM value.
+
+Your task:
+1. Locate all email-related code:
+   - Especially:
+     - `lib/email/resendClient.ts` (or similar)
+     - `lib/auth/emailVerification.ts`
+     - any files that send verification emails or use Resend
+     - any legacy SendGrid integration code
+   - Also open the documentation files:
+     - `EMAIL_VERIFICATION_STATUS.md`
+     - `EMAIL_VERIFICATION_AUDIT.md`
+     - any scripts in `scripts/` related to Resend, like `test-resend-email.ts`.
+
+2. Fix the **from address** logic:
+   - Make sure ALL Resend email calls explicitly set `from` to **process.env.RESEND_FROM**.
+   - Do NOT hard-code `onboarding@resend.dev` anywhere in the repo.
+   - If there is a variable like `EMAIL_FROM_ADDRESS`, either:
+     - make it read from `process.env.RESEND_FROM`, or
+     - remove it and use RESEND_FROM consistently.
+   - If RESEND_FROM is missing, log a clear error and never silently fall back to onboarding@resend.dev. Instead:
+     - log something like "[EMAIL] ERROR: RESEND_FROM not configured" and skip sending.
+
+3. Clean up legacy SendGrid usage:
+   - If there is still SendGrid-based mailer code that is no longer needed for this project, disable it or clearly separate it so that verification emails use ONLY Resend.
+   - Make sure the verification flow uses the Resend client you fixed, not old SendGrid functions.
+
+4. Improve logging for debugging:
+   - In the central Resend client, add detailed but safe logs:
+     - When sending an email, log:
+       - the recipient (`to`)
+       - the **from** address being used
+       - the email type (e.g. "verification")
+     - On Resend API error, log:
+       - status code
+       - error name
+       - error message
+   - Do NOT log the API key or any secrets.
+
+5. Add or fix a small test script:
+   - In `scripts/test-resend-email.ts` (or create it if missing), implement a simple Node script that:
+     - reads `RESEND_API_KEY` and `RESEND_FROM` from env
+     - sends a plain text test email to a target address
+   - Make the script accept recipient email from a CLI argument or env var, for example:
+     - `npm run test:resend-email -- sudzikgroup@gmail.com`
+   - Add / update an npm script in package.json:
+     - `"test:resend-email": "ts-node scripts/test-resend-email.ts"`
+   - Ensure the script logs success or the full Resend error.
+
+6. Verify end-to-end in dev:
+   - Restart the dev server after changes.
+   - Register a NEW test user with an email like `agip32@icloud.com`.
+   - Watch the Replit console:
+     - Confirm the log shows **from: no-reply@suverse.io** and NOT onboarding@resend.dev.
+   - Then:
+     - Check the Resend dashboard → Emails:
+       - Confirm an email to the test address appears.
+     - Confirm that the verification email is actually delivered to the inbox (or at least to spam).
+
+7. Final report:
+   - When you finish, write a short summary in README or a new markdown file named `RESEND_SETUP_STATUS.md` with:
+     - Which files were changed and why.
+     - What env vars are required:
+       - RESEND_API_KEY
+       - RESEND_FROM (must be an email on a verified domain, e.g. no-reply@suverse.io)
+     - How to run the test script:
+       - exact npm command
+     - How to read and interpret the new logs.
+
+Be careful to:
+- Not break any existing auth or dashboard flows.
+- Not leak secrets in logs.
+- Keep all changes minimal and focused on making email verification work reliably with Resend and my verified domain.

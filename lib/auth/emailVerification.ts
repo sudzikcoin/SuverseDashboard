@@ -13,19 +13,31 @@ import { prisma } from '@/lib/db';
 import { Resend } from 'resend';
 import crypto from 'crypto';
 
-// Initialize Resend client directly with better logging
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-
-// Check configuration at startup
-const isSandboxMode = RESEND_FROM.includes('resend.dev');
-if (isSandboxMode) {
-  console.warn('[EMAIL] WARNING: Using sandbox from address (onboarding@resend.dev)');
-  console.warn('[EMAIL] Emails can only be sent to the account owner email.');
-  console.warn('[EMAIL] To send to any recipient, set RESEND_FROM to a verified domain email.');
+// Initialize Resend client - reads env vars at request time for reliability
+function getResendConfig() {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.RESEND_FROM;
+  
+  if (!apiKey) {
+    console.error('[EMAIL] ERROR: RESEND_API_KEY not configured');
+    return { isConfigured: false, apiKey: '', fromAddress: '' };
+  }
+  
+  if (!fromAddress) {
+    console.error('[EMAIL] ERROR: RESEND_FROM not configured - cannot send emails');
+    console.error('[EMAIL] Set RESEND_FROM to an email from your verified domain (e.g., no-reply@suverse.io)');
+    return { isConfigured: false, apiKey, fromAddress: '' };
+  }
+  
+  const isSandboxMode = fromAddress.includes('resend.dev');
+  if (isSandboxMode) {
+    console.warn('[EMAIL] WARNING: RESEND_FROM uses sandbox domain (resend.dev)');
+    console.warn('[EMAIL] Emails can only be sent to the Resend account owner email.');
+    console.warn('[EMAIL] To send to any recipient, set RESEND_FROM to a verified domain email.');
+  }
+  
+  return { isConfigured: true, apiKey, fromAddress, isSandboxMode };
 }
-
-const resend = new Resend(RESEND_API_KEY);
 
 /**
  * Get the base URL for the application.
@@ -146,16 +158,25 @@ If you didn't create an account with SuVerse, you can safely ignore this email.
 © ${new Date().getFullYear()} SuVerse. All rights reserved.
   `.trim();
 
-  console.log(`[EMAIL] Sending verification email to ${email}, userId=${userId}`);
-  console.log(`[EMAIL] From address: ${RESEND_FROM}`);
+  // Get Resend configuration at request time
+  const config = getResendConfig();
   
-  if (isSandboxMode) {
+  console.log(`[EMAIL] Sending verification email to ${email}, userId=${userId}`);
+  console.log(`[EMAIL] From address: ${config.fromAddress || 'NOT CONFIGURED'}`);
+  
+  if (!config.isConfigured) {
+    console.error(`[EMAIL] Cannot send email - Resend not properly configured`);
+    return;
+  }
+  
+  if (config.isSandboxMode) {
     console.warn(`[EMAIL] SANDBOX MODE: Email will only be delivered if ${email} is the Resend account owner email.`);
   }
   
   try {
+    const resend = new Resend(config.apiKey);
     const result = await resend.emails.send({
-      from: RESEND_FROM,
+      from: config.fromAddress,
       to: email,
       subject: 'Verify your email for SuVerse Dashboard',
       html,
@@ -173,8 +194,8 @@ If you didn't create an account with SuVerse, you can safely ignore this email.
       
       // Provide helpful hints for common errors
       if (error.message?.includes('only send testing emails')) {
-        console.error(`[EMAIL] ⚠️  FIX: Set RESEND_FROM to a verified domain email (e.g., info@suverse.io)`);
-        console.error(`[EMAIL]     The sandbox address (onboarding@resend.dev) only sends to account owner.`);
+        console.error(`[EMAIL] ⚠️  FIX: Set RESEND_FROM to a verified domain email (e.g., no-reply@suverse.io)`);
+        console.error(`[EMAIL]     The sandbox address only sends to account owner.`);
       }
     } else {
       const emailId = (result as any).data?.id || (result as any).id;
