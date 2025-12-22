@@ -17,7 +17,8 @@
     "reset:users": "tsx scripts/resetUsers.ts",
     "link:accountant": "tsx scripts/linkAccountantToCompany.ts",
     "restore:admin": "tsx scripts/restoreAdmin.ts",
-    "test:notify": "tsx scripts/dev-notifier-test.ts"
+    "test:notify": "tsx scripts/dev-notifier-test.ts",
+    "cleanup:test-users": "tsx scripts/cleanup-test-users.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.926.0",

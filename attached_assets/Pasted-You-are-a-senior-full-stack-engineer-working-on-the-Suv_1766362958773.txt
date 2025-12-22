@@ -1,0 +1,56 @@
+You are a senior full-stack engineer working on the SuverseDashboard (Next.js + Prisma) project.
+
+Goal:
+I need to reuse some email addresses that were already used for testing (e.g. account signups). Please create a safe developer-only cleanup script that deletes specific test users from the database by their email addresses, so I can register them again.
+
+Project context:
+- The project uses Prisma and a SQL database (as already configured in this repo).
+- There is already a working Prisma setup (schema and client).
+- This cleanup is ONLY for my dev/test environment on Replit, never for production.
+
+Requirements:
+
+1. Create a new TypeScript file:
+   - `scripts/cleanup-test-users.ts`
+
+2. In this script:
+   - Import the Prisma client used in the project (exactly the same way other scripts in `scripts/` folder do it).
+   - Define an array of test emails that should be cleaned up, for example:
+     - `agip31@gmail.com`
+     - `agip32@icloud.com`
+     - `sudzikcoin@gmail.com`
+     - And you MUST leave a clear place in the code where I can easily add/remove more emails later.
+   - In an `async` function, run a Prisma transaction that does:
+     - Deletes any related records that would block user deletion (sessions, verification tokens, etc.) if such models exist. Use the actual model names from `prisma/schema.prisma`.
+     - Deletes users with `email` in that array:
+       `await prisma.user.deleteMany({ where: { email: { in: testEmails } } })`
+   - Log to console:
+     - How many users were deleted
+     - For which emails
+   - Make sure the script calls `prisma.$disconnect()` in a `finally` block.
+
+3. Add an npm script in `package.json`:
+   - `"cleanup:test-users": "ts-node scripts/cleanup-test-users.ts"`
+   - If ts-node is not yet configured in this project, either:
+     - Use whatever script runner is already used for other TypeScript scripts in the repo, OR
+     - Add a small note in a comment explaining what dependency is needed.
+   - Prefer to reuse the existing pattern used by other `scripts/*.ts` files.
+
+4. Make sure the script is idempotent and safe:
+   - If a user with a given email doesn’t exist, the script should not throw — it should just log something like “No user found for X”.
+   - Do NOT hardcode anything dangerous (like deleting all users). Only delete by the list of emails.
+
+5. After implementing:
+   - Briefly summarize in a new Markdown file:
+     - `TEST_USER_CLEANUP.md`
+   - In this file, explain:
+     - What the script does
+     - How to run it on Replit (for example: `npm run cleanup:test-users` in the Shell)
+     - That it is for DEV/TEST only.
+
+6. Run a quick self-check:
+   - Ensure the imports match the existing Prisma client usage.
+   - Ensure there are no TypeScript errors.
+   - If possible, run the script once against the current dev DB (with at least one of the emails that already exists) and confirm in a comment that it completed successfully.
+
+Do NOT change any auth logic, forms, or UI. Only add the cleanup script, npm script, and the small documentation file.
