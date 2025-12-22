@@ -2,15 +2,30 @@
  * Email Verification Workflow
  * 
  * Handles creation and verification of email verification tokens for user registration.
- * Integrates with Resend for sending verification emails.
+ * Uses Resend for sending verification emails.
  * 
- * TODO: Future enhancement - reuse this pattern for password reset workflow.
+ * IMPORTANT: RESEND_FROM must be set to a verified domain email (not onboarding@resend.dev)
+ * to send emails to any recipient. The sandbox address only sends to the account owner.
  */
 
 export const runtime = 'nodejs';
 import { prisma } from '@/lib/db';
-import { resend, fromAddress as getFromAddress } from '@/lib/email/resend';
+import { Resend } from 'resend';
 import crypto from 'crypto';
+
+// Initialize Resend client directly with better logging
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
+
+// Check configuration at startup
+const isSandboxMode = RESEND_FROM.includes('resend.dev');
+if (isSandboxMode) {
+  console.warn('[EMAIL] WARNING: Using sandbox from address (onboarding@resend.dev)');
+  console.warn('[EMAIL] Emails can only be sent to the account owner email.');
+  console.warn('[EMAIL] To send to any recipient, set RESEND_FROM to a verified domain email.');
+}
+
+const resend = new Resend(RESEND_API_KEY);
 
 /**
  * Get the base URL for the application.
@@ -131,27 +146,42 @@ If you didn't create an account with SuVerse, you can safely ignore this email.
 © ${new Date().getFullYear()} SuVerse. All rights reserved.
   `.trim();
 
-  const fromAddr = getFromAddress() || 'noreply@suverse.io';
-  
   console.log(`[EMAIL] Sending verification email to ${email}, userId=${userId}`);
+  console.log(`[EMAIL] From address: ${RESEND_FROM}`);
+  
+  if (isSandboxMode) {
+    console.warn(`[EMAIL] SANDBOX MODE: Email will only be delivered if ${email} is the Resend account owner email.`);
+  }
   
   try {
     const result = await resend.emails.send({
-      from: fromAddr,
+      from: RESEND_FROM,
       to: email,
       subject: 'Verify your email for SuVerse Dashboard',
       html,
       text,
     });
     
+    console.log(`[EMAIL] Resend API response for ${email}:`, JSON.stringify(result));
+    
     if ('error' in result && result.error) {
-      console.error(`[EMAIL] Resend API error for ${email}:`, result.error);
+      const error = result.error as any;
+      console.error(`[EMAIL] Resend API error for ${email}:`);
+      console.error(`[EMAIL]   Status: ${error.statusCode || 'unknown'}`);
+      console.error(`[EMAIL]   Name: ${error.name || 'unknown'}`);
+      console.error(`[EMAIL]   Message: ${error.message || JSON.stringify(error)}`);
+      
+      // Provide helpful hints for common errors
+      if (error.message?.includes('only send testing emails')) {
+        console.error(`[EMAIL] ⚠️  FIX: Set RESEND_FROM to a verified domain email (e.g., info@suverse.io)`);
+        console.error(`[EMAIL]     The sandbox address (onboarding@resend.dev) only sends to account owner.`);
+      }
     } else {
       const emailId = (result as any).data?.id || (result as any).id;
-      console.log(`[EMAIL] Verification email sent successfully to ${email}, id=${emailId}`);
+      console.log(`[EMAIL] ✓ Verification email sent successfully to ${email}, id=${emailId}`);
     }
-  } catch (error) {
-    console.error(`[EMAIL] Resend API exception for ${email}:`, error);
+  } catch (error: any) {
+    console.error(`[EMAIL] Resend API exception for ${email}:`, error.message || error);
     // Don't throw - token is already created in DB, user can request resend
   }
 }

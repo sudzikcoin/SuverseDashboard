@@ -1,0 +1,114 @@
+You are a senior full-stack engineer working on my SuverseDashboard project (Next.js + Prisma).  
+
+Problem:
+The email verification screen shows “We’ve sent a verification link to <email>”, but:
+- No emails appear in my Resend dashboard for that address.
+- The same Resend API key is working fine in another project (PingPoint).
+So this project is either not calling Resend at all, or using it with wrong config/env vars.
+
+Your job:
+Find the real root cause and fix email verification so that:
+1) verification emails are actually sent via Resend,
+2) they appear in the Resend dashboard,
+3) they arrive in the inbox.
+
+Important constraints:
+- Do NOT ask me any questions.
+- Do NOT leave TODOs for me.
+- Make all changes yourself inside this Replit project and then explain what you did.
+- Keep the fix minimal and safe: do not break existing auth logic.
+
+Step-by-step tasks:
+
+1. Locate current email verification logic
+   - Find the file that sends verification emails (for example `lib/auth/emailVerification.ts`, `lib/email/*`, or similar).
+   - Confirm whether it currently uses:
+     - SendGrid, or
+     - Resend, or
+     - something else.
+   - If there is an `EMAIL_VERIFICATION_AUDIT.md` or similar doc in the repo, read it and align with the current code.
+
+2. Standardize the Resend client
+   - Create (or reuse if it exists) a single wrapper for Resend, for example:
+     - `lib/email/resendClient.ts`
+   - In this file:
+     - Import `Resend` from `"resend"`.
+     - Initialize it with `process.env.RESEND_API_KEY`.
+     - If `process.env.RESEND_API_KEY` is missing or empty:
+       - Log a clear error in the console: `[EMAIL] Missing RESEND_API_KEY, cannot send emails`.
+       - Export a safe no-op function so the rest of the app does not crash.
+
+3. Implement a clear verification-email sender
+   - Create (or update) a function like:
+     - `sendVerificationEmail({ email, token }: { email: string; token: string })`
+     - Location: `lib/auth/emailVerification.ts` (or another appropriate existing file).
+   - This function must:
+     - Build the correct verification URL used by the app (same as the current flow).
+     - Call the Resend client wrapper and send an email with:
+       - `from`: use the same verified “from” address that works in my PingPoint project.
+       - `to`: the user’s email.
+       - A clear subject like “Verify your SuVerse account”.
+       - A simple HTML body containing the verification link.
+     - Log:
+       - `[EMAIL] Sending verification email to <email>`
+       - On success, log `[EMAIL] Verification email sent successfully to <email>, id=<resendMessageId>`
+       - On error, log `[EMAIL] Resend API error for <email>: <error message>`.
+
+4. Wire it into the registration flow
+   - Find where new users are created (COMPANY, BROKER, ACCOUNTANT etc.) and a verification email is triggered:
+     - For example in `app/api/auth/register/route.ts` or a similar server action.
+   - Make sure that:
+     - After creating the user and the verification token, your code calls `sendVerificationEmail(...)` that uses Resend.
+     - Any old SendGrid-specific code is removed or disabled for verification emails (no double-sending).
+   - Ensure that, if Resend fails, the error is logged but the server does not crash; the user should see a generic error message if necessary.
+
+5. Add a manual Resend test script
+   - Create a dev-only script:
+     - `scripts/test-resend-email.ts`
+   - This script should:
+     - Import the same Resend client wrapper.
+     - Define a constant test email (for example `const TEST_EMAIL = "agip31@gmail.com";`).
+     - Send a very simple test email: subject “Resend Test from SuverseDashboard”.
+     - Log to console:
+       - Whether `RESEND_API_KEY` is present.
+       - The Resend response or error.
+     - Call `prisma.$disconnect()` if you import Prisma for any reason, and `process.exit(0)` at the end.
+
+6. Add an npm script
+   - In `package.json`, add:
+     - `"test:resend-email": "ts-node scripts/test-resend-email.ts"`
+     - If another tool is already used for TypeScript scripts in this repo, reuse that tool instead of ts-node.
+   - Make sure the script runs without TypeScript errors.
+
+7. Perform a full self-check (very important)
+   - Run `npm run test:resend-email` from the Replit Shell.
+   - Confirm in the console that:
+     - `RESEND_API_KEY` is detected (do NOT print the full key, only print something like its length or first 4 characters).
+     - Resend returns a successful response with a message ID.
+   - After running the script, check in the Resend dashboard that this test email appears in the logs for `agip31@gmail.com`.
+
+8. Validate the real verification flow
+   - Register a NEW test user (with a fresh email) through the normal Sign Up form.
+   - Watch the Replit console logs:
+     - You must see `[EMAIL] Sending verification email to ...` and the success log with the Resend message ID.
+   - Check the Resend dashboard again:
+     - You should see the verification email for that address.
+   - If something still fails, adjust the code until both:
+     - The console logs show a successful send via Resend.
+     - The email appears in the Resend dashboard.
+
+9. Final documentation
+   - Update or create a short markdown file:
+     - `EMAIL_VERIFICATION_STATUS.md`
+   - In this file, briefly explain:
+     - Which file sends verification emails now.
+     - That Resend is used (not SendGrid).
+     - Which env variable is required (`RESEND_API_KEY`).
+     - How to manually test with `npm run test:resend-email`.
+
+Deliverables:
+- All necessary code changes implemented.
+- `lib/email/resendClient.ts` (or equivalent) working.
+- `sendVerificationEmail` using Resend.
+- `scripts/test-resend-email.ts` + npm script.
+- A short summary in `EMAIL_VERIFICATION_STATUS.md` describing what you fixed and how to test it.

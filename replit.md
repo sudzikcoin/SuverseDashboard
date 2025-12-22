@@ -4,6 +4,18 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**December 22, 2025** - Email Verification Complete Audit & Fix
+- Root cause identified: `RESEND_FROM` set to `onboarding@resend.dev` (sandbox mode)
+- Sandbox mode only allows sending to the Resend account owner's email
+- Fix: `RESEND_FROM` must be set to a verified domain email (e.g., `info@suverse.io`)
+- Enhanced `lib/auth/emailVerification.ts` with:
+  - Sandbox mode detection and warnings
+  - Detailed `[EMAIL]` logging for all operations
+  - Helpful error messages with fix suggestions
+- Created `scripts/test-resend-email.ts` for testing Resend configuration
+- Created `EMAIL_VERIFICATION_STATUS.md` documentation
+- Created `scripts/cleanup-test-users.ts` for cleaning up test accounts by email
+
 **December 22, 2025** - Email Verification Resend Fix
 - Fixed email verification not appearing in Resend logs for some users
 - Root cause: Email verification was using SendGrid instead of Resend
