@@ -1,0 +1,135 @@
+You are a senior Next.js 14 + App Router + TypeScript + Tailwind CSS engineer working inside this existing project: SuverseDashboard.
+
+Global constraints (VERY IMPORTANT):
+- Make only minimal, localized changes. Do NOT break or refactor existing auth, database, payments, broker/company logic, or API routes.
+- Do NOT change Prisma schema, migrations, env/secret names, or any business logic.
+- Focus ONLY on:
+  1) Mobile layout/responsiveness for phones.
+  2) Basic PWA support so the app can be installed / “Add to Home Screen”.
+- Keep all existing styles, colors, and UX patterns unless a change is strictly needed for mobile.
+
+------------------------------------------------
+TASK 1 — Improve Mobile Layout (Phone First)
+------------------------------------------------
+
+Goal: The dashboard and all main screens must look good and be easy to use on a typical phone (e.g. 390×844). No horizontal scrolling and no squashed cards.
+
+1. Identify the main dashboard layout files:
+   - The root layout(s) under `app/` and `app/(dashboard)/`.
+   - The main pages and components that render:
+     - The left sidebar (navigation).
+     - The top header with logo / “SuVerse”.
+     - The dashboard “cards” (Clients, Client Purchases, Marketplace, Tax Credit Calculator, etc.).
+   Typical files to inspect/update (do NOT create big refactors):
+   - `app/(dashboard)/layout.tsx` or similar.
+   - `app/(dashboard)/page.tsx` and other main dashboard pages.
+   - Components under `components/` that render the dashboard cards and sidebar/header.
+
+2. Make the dashboard cards responsive:
+   - Wherever we use Tailwind grid for the cards, ensure we use responsive breakpoints, for example:
+     - `grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3`
+   - On very small screens, there must be exactly one card per row, full width with proper padding.
+   - Check all dashboard-style card grids (admin, broker, company, accountant) and apply the same pattern.
+
+3. Fix container widths and paddings:
+   - Ensure main content containers use something like:
+     - `max-w-full` and `px-4 sm:px-6 lg:px-8`
+     - Avoid `max-w-4xl` centered layouts on phone if they cause big side margins; keep content comfortably readable.
+   - Make sure we have `min-h-screen` on main wrappers so content stretches vertically without weird gaps.
+
+4. Sidebar and header behavior on mobile:
+   - Confirm that the existing hamburger / mobile menu works. If needed:
+     - Hide the persistent left sidebar on `sm:` or below (e.g. `hidden lg:flex`).
+     - Show the hamburger button + slide-in menu for small screens if that’s already implemented; if not, implement a minimal mobile nav using existing components and styles.
+   - Ensure the main content is not hidden under the fixed header on small screens (add `pt-16` or similar if needed).
+
+5. Typography and buttons:
+   - Keep the current design but ensure:
+     - Large titles like “Welcome, Das” do not overflow on small screens (wrap text, possibly `text-2xl sm:text-3xl`).
+     - Primary buttons (Connect Wallet, Checklist, etc.) are full-width or at least easy to tap on mobile.
+   - Fix any obvious overflow/ellipsis issues.
+
+6. Test:
+   - Run `npm run dev` (or the existing dev script).
+   - Use Replit’s mobile preview / dev tools, test at ~375–400px width.
+   - Manually check:
+     - Main dashboard.
+     - Clients / Client Purchases.
+     - Marketplace.
+     - Company and Broker dashboards.
+   - Make sure there is no horizontal scrolling on any of these pages.
+
+Document briefly in a new markdown file at project root (e.g. `MOBILE_LAYOUT_UPDATE.md`) what files you changed and what you adjusted.
+
+------------------------------------------------
+TASK 2 — Add Basic PWA / “Add to Home Screen” Support
+------------------------------------------------
+
+Goal: Turn the app into a simple PWA so users on Android (Chrome) can install it, and on iOS they can “Add to Home Screen” with a nice icon. Keep this minimal and safe.
+
+1. Create or update `public/manifest.json`:
+   - If it already exists, update it; otherwise, create it.
+   - Use something like:
+     - `name`: "SuVerse Tax Credit Dashboard"
+     - `short_name`: "SuVerse"
+     - `start_url`: "/"
+     - `display`: "standalone"
+     - `background_color`: match the current background (e.g. "#020617" or the actual used color)
+     - `theme_color`: match the brand accent color currently used for the logo / primary buttons.
+   - Define icons reusing existing assets:
+     - If we only have `favicon.ico`, reference it as:
+       - `{ "src": "/favicon.ico", "sizes": "any", "type": "image/x-icon" }`
+     - If there are existing PNG icons in `public/` (e.g. logo), use them as well with proper sizes (192x192, 512x512) but DO NOT add external images or big generation logic.
+
+2. Register the manifest and meta tags in the root layout:
+   - In the main layout file used at the top of the app (likely `app/layout.tsx` or `app/(dashboard)/layout.tsx`), ensure:
+     - `<link rel="manifest" href="/manifest.json" />`
+     - `<meta name="theme-color" content="#<BRAND_COLOR>" />`
+   - Add iOS specific meta tags to support a good icon and standalone mode, for example:
+     - `<meta name="apple-mobile-web-app-capable" content="yes" />`
+     - `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />`
+   - Point `apple-touch-icon` to an existing PNG in `public/` (if none, you may create a simple square icon based on the current favicon, but keep it minimal and local):
+     - `<link rel="apple-touch-icon" href="/apple-touch-icon.png" />`
+
+3. Add a minimal service worker for installability:
+   - Create `public/sw.js` with a very small, safe service worker that:
+     - Listens to `install` and `activate` events.
+     - Optionally caches a small shell (root page + CSS/JS) but keep this logic very simple.
+   - In the client side (for example in a small component or within a `useEffect` in the root layout or a dedicated `components/PwaInit.tsx`):
+     - Register the service worker only in the browser:
+       - Check `if ('serviceWorker' in navigator)` and register `/sw.js` once on mount.
+     - Guard with `typeof window !== 'undefined'`.
+
+4. Do NOT:
+   - Do NOT change any auth or business logic when adding PWA functionality.
+   - Do NOT introduce heavy PWA libraries unless absolutely necessary; prefer a lightweight, hand-written `sw.js`.
+
+5. Test PWA behavior:
+   - Build/run the app in dev.
+   - Open the app in a mobile-sized browser.
+   - Use Chrome devtools “Application → Manifest” to confirm:
+     - Manifest is detected.
+     - Service worker is registered and active.
+   - Confirm:
+     - On Android Chrome, the app is recognized as installable (or shows the “Install app” option in the browser menu).
+     - On iOS Safari, “Add to Home Screen” uses the custom icon and opens in a standalone view.
+
+6. Documentation:
+   - Create `PWA_SETUP_NOTES.md` at project root with:
+     - Files you created/modified for PWA.
+     - Any caveats (e.g. “offline support is minimal; shell only”).
+     - Simple steps for me to change app name, icons, colors later.
+
+------------------------------------------------
+FINAL CHECK
+------------------------------------------------
+
+Before you finish:
+- Ensure the app still builds and runs without TypeScript errors.
+- Ensure login, registration, and key dashboards (admin, broker, company, accountant) still work.
+- Confirm there are no console errors in mobile view related to the new PWA or layout changes.
+
+Once complete, summarize:
+- Which files you touched.
+- What you changed for mobile.
+- What you added for PWA and how to change the app name/icon in manifest later.

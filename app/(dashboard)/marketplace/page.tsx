@@ -202,15 +202,15 @@ export default function MarketplacePage() {
     <div className="flex min-h-screen bg-[#0B1220]">
       <Sidebar role={session.user.role} />
       
-      <main className="flex-1 p-8">
-        <h1 className="text-3xl font-bold mb-8 text-white">Tax Credit Marketplace</h1>
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-20 md:pt-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-white">Tax Credit Marketplace</h1>
 
         {inventory.length === 0 ? (
           <div className="bg-[#0F172A] border border-white/5 rounded-xl p-8 text-center">
             <p className="text-gray-300">No credits available at this time.</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {inventory.map((item) => {
               const discount = 1 - Number(item.pricePerDollar)
               

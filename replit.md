@@ -4,6 +4,15 @@
 SuVerse is an MVP web application serving as a centralized marketplace for U.S. businesses and accountants to discover, reserve, purchase, and track transferable tax credits (ITC, PTC, 45Q, 48E). The project's core purpose is to streamline complex tax credit transactions, aiming to become the premier platform for managing and trading tax credits efficiently.
 
 ## Recent Changes
+**December 22, 2025** - Mobile Layout & PWA Support
+- Made all dashboard pages mobile-responsive (tested at 375-400px width)
+- Card grids now single column on mobile, 2 columns on tablet, 3-4 on desktop
+- Responsive padding and typography throughout
+- Added PWA support for "Add to Home Screen" functionality
+- Created manifest.json, service worker, and app icons
+- iOS and Android installation supported
+- Documentation: MOBILE_LAYOUT_UPDATE.md, PWA_SETUP_NOTES.md
+
 **December 22, 2025** - Email Verification Final Fix
 - Root cause: Code was reading `RESEND_FROM` at module load time and falling back to sandbox address
 - Fix: Changed all email code to read env vars at **request time** (inside functions)

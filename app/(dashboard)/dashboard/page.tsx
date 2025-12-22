@@ -80,7 +80,7 @@ export default async function DashboardPage() {
 
         {session.user.role === "COMPANY" && (
           <div className="space-y-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Link href="/marketplace" className="block">
                 <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
                   <h2 className="text-xl font-bold mb-2 text-gray-100">Marketplace</h2>
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
 
         {session.user.role === "ACCOUNTANT" && (
           <div className="space-y-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Link href="/clients" className="block">
                 <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
                   <h2 className="text-xl font-bold mb-2 text-gray-100">Clients</h2>
@@ -155,7 +155,7 @@ export default async function DashboardPage() {
 
         {session.user.role === "ADMIN" && (
           <div className="space-y-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Link href="/admin/inventory" className="block">
                 <div className="glass halo rounded-2xl p-6 hover:border-su-emerald/50 transition cursor-pointer">
                   <h2 className="text-xl font-bold mb-2 text-gray-100">Inventory</h2>
